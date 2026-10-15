@@ -28,7 +28,7 @@ rest are pick and choose. Optional extras from other authors make some of them b
 ### Minimap King: one minimap button for all of them
 ![Minimap King](screenshots/Minimap_King.png)
 
-Puts every addon's minimap button, King addons and any others, into one crown with a drop-down.
+Puts every addon's minimap button into one crown with a drop-down, King addons first and the rest under their own heading.
 Each button still works exactly as before; shift-right-click one in the menu to leave it on the
 minimap. `/mmk` · `/mmk icon` picks a different crown · `/mmk release` puts every button back.
 

@@ -3,7 +3,8 @@
 One crown on the minimap for every minimap button. Minimap King moves the King addons' buttons, and
 any other addon's minimap button, into a drop-down under a crown.
 
-- Click the crown for the menu. Each line is the addon's real button with its name next to it, so
+- Click the crown for the menu. The King addons come first under their own heading, then every
+  other addon under "Other Addons". Each line is the addon's real button with its name next to it, so
   everything works as before: left-click, right-click, tooltips and menus.
 - Clicking a name does the same as clicking its button.
 - **Shift-right-click** a name to leave that button on the minimap instead. `/mmk unignore` takes

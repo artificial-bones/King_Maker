@@ -73,6 +73,8 @@ function ns.NameOf(btn)
     return s
 end
 
+function ns.IsKing(btn) return ns.KINGS[btn:GetName() or ""] ~= nil end
+
 local function isBlizzard(name)
     for _, p in ipairs(BLIZZARD) do if name:match(p) then return true end end
     return false
@@ -146,7 +148,11 @@ function ns.Gather()
             hooksecurefunc(btn, "SetShown", function(self) if gathered[self] and not laying then ns.Layout() end end)
         end
     end
-    table.sort(order, function(a, b) return ns.NameOf(a):lower() < ns.NameOf(b):lower() end)
+    table.sort(order, function(a, b)
+        local ka, kb = ns.IsKing(a), ns.IsKing(b)
+        if ka ~= kb then return ka end -- the King addons first
+        return ns.NameOf(a):lower() < ns.NameOf(b):lower()
+    end)
     ns.Layout()
 end
 
@@ -222,25 +228,47 @@ local function label(i)
     return l
 end
 
+local HEADER_H = 18
+
+-- The menu: the King addons under one heading, every other addon under another.
 function ns.Layout()
     if not menu then return end
     laying = true
     local shown = ns.Shown()
+    local kings, others = 0, 0
+    for _, btn in ipairs(shown) do if ns.IsKing(btn) then kings = kings + 1 else others = others + 1 end end
+    local y = -8
+    local function heading(fs, text, show)
+        fs:SetShown(show)
+        if not show then return end
+        fs:ClearAllPoints()
+        fs:SetPoint("TOPLEFT", menu, "TOPLEFT", 10, y - 2)
+        fs:SetText(text)
+        y = y - HEADER_H
+    end
+    heading(menu.kingsHeader, "King Addons", kings > 0)
     for i, btn in ipairs(shown) do
+        if i == kings + 1 then
+            if kings > 0 then y = y - 6 end
+            heading(menu.othersHeader, "Other Addons", true)
+        end
         btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", menu, "TOPLEFT", 8, -8 - (i - 1) * LINE_H)
+        btn:SetPoint("TOPLEFT", menu, "TOPLEFT", 8, y)
         btn:SetFrameStrata("DIALOG")
         btn:SetFrameLevel(menu:GetFrameLevel() + 5)
         local l = label(i)
         l:ClearAllPoints()
-        l:SetPoint("TOPLEFT", menu, "TOPLEFT", 42, -8 - (i - 1) * LINE_H)
+        l:SetPoint("TOPLEFT", menu, "TOPLEFT", 42, y)
         l.button = btn
         l.text:SetText(ns.NameOf(btn))
         l:Show()
+        y = y - LINE_H
     end
+    if others == 0 then menu.othersHeader:Hide() end
     for i = #shown + 1, #labels do labels[i]:Hide(); labels[i].button = nil end
     menu.empty:SetText(#shown == 0 and "No minimap buttons to show." or "")
-    menu:SetSize(MENU_W, 16 + math.max(#shown, 1) * LINE_H)
+    if #shown == 0 then y = y - LINE_H end
+    menu:SetSize(MENU_W, -y + 8)
     laying = false
 end
 
@@ -257,6 +285,8 @@ function ns.EnsureMenu()
     end
     menu.empty = menu:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     menu.empty:SetPoint("TOPLEFT", 12, -12)
+    menu.kingsHeader = menu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    menu.othersHeader = menu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     -- a click out in the world closes it (clicks on other windows, or on a
     -- menu one of the buttons opened, leave it open)
     menu:SetScript("OnEvent", function(self)
