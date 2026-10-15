@@ -1,6 +1,6 @@
 # The King Addons
 
-A suite of addons for **World of Warcraft: Forever**: price scanning, trading, farming, gathering,
+A suite of addons for **World of Warcraft: Forever**: price scanning, price history, trading, farming, gathering,
 gold tracking, dungeon quests and profession leveling, all sharing one set of auction house prices.
 
 **[Download the latest release](../../releases/latest)** (`King_Addons.zip`).
@@ -25,12 +25,12 @@ rest are pick and choose. Optional extras from other authors make some of them b
 
 ## The addons
 
-### Crown King: one minimap button for all of them
-![Crown King](screenshots/Crown_King.png)
+### Minimap King: one minimap button for all of them
+![Minimap King](screenshots/Minimap_King.png)
 
-Puts every King addon's minimap button into a single crown with a drop-down. Click a line to open
-that addon; right-click does what right-clicking its own button did.
-`/crown` · `/crown icon` picks a different crown · `/crown release` brings the separate buttons back.
+Puts every addon's minimap button, King addons and any others, into one crown with a drop-down.
+Each button still works exactly as before; shift-right-click one in the menu to leave it on the
+minimap. `/mmk` · `/mmk icon` picks a different crown · `/mmk release` puts every button back.
 
 ### Scanner King: auction house prices (needed by the others)
 ![Scanner King](screenshots/Scanner_King.png)
@@ -45,6 +45,13 @@ prices, and shows them in item tooltips. Shares prices with your guild.
 For every item your professions make: sell the materials raw, craft and sell, or craft and
 disenchant. Ranked by profit at today's prices. Needs Scanner King.
 `/mk`
+
+### Econ King: long-term price history
+![Econ King](screenshots/Econ_King.png)
+
+Keeps the price and supply history of every item on the auction house, with graphs, favorites and
+deals. Needs Scanner King.
+`/ek`
 
 ### Farm King: which mobs are worth farming
 ![Farm King](screenshots/Farm_King.png)

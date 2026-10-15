@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: Econ King
+## Notes: Long-term price and supply history for every item on the auction house, with graphs, favorites and deals. Needs Scanner King.
+## Author: BearBones
+## Version: 1.1.0
+## Dependencies: Scanner_King
+## SavedVariables: EconKingDB
+## IconTexture: Interface\Icons\INV_Misc_Spyglass_03
+
+Core.lua
+History.lua
+Categories.lua
+Graph.lua
+Item.lua
+UI.lua
+Tooltip.lua
