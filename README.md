@@ -92,7 +92,8 @@ by item, day and strategy, and your stock across every character.
 ![Quest King](screenshots/Quest_King.png)
 
 Every Horde dungeon quest from 13 to 60, with each chain laid out step by step: what you've done,
-what's next, the levels that matter, and a map pin to every quest giver. Also marks quest items in
+what's next, the XP each quest is worth at your level, the levels that matter, and a map pin to
+every quest giver. Also marks quest items in
 your bags that are safe to delete.
 `/qk`
 

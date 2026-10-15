@@ -2,7 +2,7 @@
 ## Title: Quest King
 ## Notes: Every Horde dungeon quest on Forever: what you've done, what's next and where to go. Also marks quest items you can delete.
 ## Author: BearBones
-## Version: 1.2.0
+## Version: 1.3.0
 ## OptionalDeps: QuestieDB, TomTom
 ## SavedVariables: QuestKingDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_02

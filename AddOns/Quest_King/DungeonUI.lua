@@ -30,17 +30,36 @@ local function grey(t) return "|cff808080" .. t .. "|r" end
 local function gold(t) return "|cffffd100" .. t .. "|r" end
 
 local COLS = {
-    { label = "Status", w = 80 },
-    { label = "Quest", w = 200 },
+    { label = "Status", w = 72 },
+    { label = "Quest", w = 190 },
     { label = "Level", w = 40, justify = "RIGHT", tip = "The quest's level." },
     { label = "Pick up", w = 50, justify = "RIGHT", tip = "The level you can take it at. ~ means an estimate (QuestieDB gives the exact level)." },
     { label = "Full XP to", w = 64, justify = "RIGHT", tip = "Up to this level the quest gives full XP; after that, less each level." },
-    { label = "Giver", w = 160 },
+    { label = "XP", w = 56, justify = "RIGHT", tip = "XP at your level (from QuestieDB). Grey: less than full, you've outlevelled it." },
+    { label = "Giver", w = 142 },
 }
 
 ---------------------------------------------------------------------------
 -- Refresh
 ---------------------------------------------------------------------------
+
+local function commas(n)
+    local s = tostring(math.floor(n))
+    while true do
+        local t, k = s:gsub("^(%d+)(%d%d%d)", "%1,%2")
+        s = t
+        if k == 0 then return s end
+    end
+end
+ns.Commas = commas
+
+-- An XP cell: at your level, grey when that's less than full.
+local function xpText(full, now, done)
+    if not full then return grey("?") end
+    if done then return grey(commas(full)) end
+    if now == 0 then return grey("0") end
+    return now < full and grey(commas(now)) or commas(now)
+end
 
 local function detailFor(d, q)
     local lines = {}
@@ -50,6 +69,10 @@ local function detailFor(d, q)
     local min, guess = ns.MinLevel(q)
     table.insert(lines, "Level " .. (ns.QuestLevel(q) or "?") .. ", pick up at " .. (min and ((guess and "~" or "") .. min) or "?")
         .. ", full XP to " .. (ns.FullXPUntil(q) or "?") .. (id and grey("   quest " .. id) or ""))
+    local full, now = ns.QuestXP(q)
+    if full then
+        table.insert(lines, "XP: " .. commas(full) .. (now ~= full and (" (" .. commas(now) .. " at your level)") or ""))
+    end
     table.insert(lines, "Giver: " .. q.giver)
     if q.goal and q.goal ~= "" then table.insert(lines, "Goal: " .. q.goal) end
     if q.reward then table.insert(lines, "Reward: " .. q.reward) end
@@ -59,11 +82,19 @@ local function detailFor(d, q)
     return table.concat(lines, "\n")
 end
 
+-- "     XP left: 12,300" (with a note when some quests have no XP data).
+function ns.DungeonXPText(d)
+    local xp, known, total = ns.DungeonXP(d)
+    if total == 0 or known == 0 then return "" end
+    return "     XP left: " .. gold(commas(xp)) .. (known < total and grey(" (" .. known .. " of " .. total .. " quests known)") or "")
+end
+
 local function refreshDungeon(d)
     title:SetText(d.name .. (d.new and grey("  new in Forever") or ""))
     local p = d.progress or ns.Progress(d)
     levelLine:SetText("Level " .. d.min .. (d.max ~= d.min and ("-" .. d.max) or "") .. "     Entrance: " .. d.at
-        .. "     " .. (p.total > 0 and (p.done .. " of " .. p.total .. " done") or grey("no quests known yet")))
+        .. "     " .. (p.total > 0 and (p.done .. " of " .. p.total .. " done") or grey("no quests known yet"))
+        .. ns.DungeonXPText(d))
     local from, to, n, total = ns.BestLevels(d)
     local level = ns.Level()
     if from then
@@ -108,7 +139,9 @@ local function refreshDungeon(d)
             r.cells[4]:SetText(min and ((lowNow and "|cffff6060" or "") .. (guess and "~" or "") .. min .. (lowNow and "|r" or "")) or grey("?"))
             local full = ns.FullXPUntil(q)
             r.cells[5]:SetText(full and ((level > full and "|cff808080" or "") .. full .. (level > full and "|r" or "")) or grey("?"))
-            r.cells[6]:SetText(q.giver)
+            local full, now = ns.QuestXP(q)
+            r.cells[6]:SetText(xpText(full, now, q.state == "done"))
+            r.cells[7]:SetText(q.giver)
             r.pin:SetShown(ns.GiverPoint(q) ~= nil)
             r.bg:SetShown(true)
             if q == selectedQuest then r:LockHighlight() else r:UnlockHighlight() end
@@ -126,7 +159,9 @@ local function refreshDungeon(d)
             local color = s == "done" and "|cff808080" or line.next and "|cffffd100" or "|cffffffff"
             r.cells[2]:SetText(grey("- ") .. color .. name .. "|r" .. (step.this and grey("  (the dungeon)") or ""))
             r.cells[3]:SetText(""); r.cells[4]:SetText(""); r.cells[5]:SetText("")
-            r.cells[6]:SetText(what and (s == "done" and grey(what) or what) or "")
+            local full, now = ns.StepXP(q, step)
+            r.cells[6]:SetText(full and xpText(full, now, s == "done") or "")
+            r.cells[7]:SetText(what and (s == "done" and grey(what) or what) or "")
             r.pin:SetShown(ns.StepPoint(q, step, line.index) ~= nil)
             r.bg:SetShown(false)
             r:UnlockHighlight()

@@ -97,6 +97,74 @@ function ns.FullXPUntil(q)
     return lv and lv + FULL_XP
 end
 
+-- Quest XP, from QuestieDB's table: { [questID] = { questLevel, xp } }.
+local xpdb
+local function xpTable()
+    if not xpdb and LibQuestieDB and LibQuestieDB.Support and LibQuestieDB.Support.Get then
+        local ok, t = pcall(LibQuestieDB.Support.Get, "QuestXP")
+        if ok and type(t) == "table" and type(t.db) == "table" then xpdb = t.db end
+    end
+    return xpdb
+end
+function ns.ResetXP() xpdb = nil end
+
+ns.MAX_LEVEL = 60
+
+-- What a quest of this level and full XP gives at your level (the game's own rule:
+-- full XP up to 5 levels above it, then 80%, 60%, 40%, 20%, and 10% from 10 levels on;
+-- nothing at max level), rounded the way the game rounds it.
+function ns.AdjustXP(xp, qLevel, level)
+    if level >= ns.MAX_LEVEL then return 0 end
+    local factor = math.max(1, math.min(10, 2 * (qLevel - level) + 20))
+    xp = xp * factor / 10
+    if xp <= 100 then return 5 * math.floor((xp + 2) / 5)
+    elseif xp <= 500 then return 10 * math.floor((xp + 5) / 10)
+    elseif xp <= 1000 then return 25 * math.floor((xp + 12) / 25) end
+    return 50 * math.floor((xp + 25) / 50)
+end
+
+-- A quest ID's XP: full, and at your level (nil when unknown).
+function ns.XPForID(id)
+    local t = xpTable()
+    local e = t and id and t[id]
+    if not (e and e[2]) then return nil end
+    return e[2], ns.AdjustXP(e[2], e[1] or 1, ns.Level())
+end
+
+function ns.QuestXP(q) return ns.XPForID(ns.QuestID(q)) end
+
+function ns.StepXP(q, step)
+    local id = (step.ids and step.ids[1]) or (step.this and ns.QuestID(q))
+    return ns.XPForID(id)
+end
+
+-- The XP still to get from a dungeon's quests and their chains, at your level:
+-- (xp, known, total) where known of total quests not done have XP data.
+function ns.DungeonXP(d)
+    local sum, known, total, seen = 0, 0, 0, {}
+    local function add(id, full, now)
+        if id and seen[id] then return end
+        if id then seen[id] = true end
+        total = total + 1
+        if full then sum, known = sum + now, known + 1 end
+    end
+    for _, q in ipairs(ns.VisibleQuests(d)) do
+        if q.state ~= "done" then
+            if q.chain then
+                for _, step in ipairs(q.chain) do
+                    if ns.StepState(q, step) ~= "done" then
+                        local id = (step.ids and step.ids[1]) or (step.this and ns.QuestID(q))
+                        add(id, ns.StepXP(q, step))
+                    end
+                end
+            else
+                add(ns.QuestID(q), ns.QuestXP(q))
+            end
+        end
+    end
+    return sum, known, total
+end
+
 ---------------------------------------------------------------------------
 -- Status
 ---------------------------------------------------------------------------

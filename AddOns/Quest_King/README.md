@@ -32,6 +32,9 @@ right for your level now; green means you've done them all.
 - Each quest: your status, the quest's level, the level you can pick it up at, the last level it
   gives full XP, and who gives it. The map pin sets a waypoint to the giver (TomTom's arrow when you
   have TomTom, and the game's own map pin).
+- XP for every quest and chain step at your level, and how much XP a dungeon's quests still have
+  left (from QuestieDB). Grey XP means you've outlevelled it and get less. Quests give full XP up
+  to 5 levels above them, then 80%, 60%, 40%, 20%, and 10% from 10 levels on.
 - Chains sit right under their quest. The last step is on top and each earlier step is indented
   one more, so the step indented furthest is where you start: work your way up. Each step shows
   Done, In your log, or **Next >** for the one to do now, and has its own map pin.
