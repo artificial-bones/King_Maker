@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: Scanner King
+## Notes: Auction house price scanner: Trade Goods, professions, or the whole auction house (Deep Scan). Prices in item tooltips. Shares prices with Gather King, Market King and your guild.
+## Author: BearBones
+## Version: 1.6.0
+## SavedVariables: ScannerKingDB
+## IconTexture: Interface\Icons\INV_Misc_Coin_02
+
+Core.lua
+Scan.lua
+DeepScan.lua
+Sync.lua
+MarketScan.lua
+Tooltip.lua
+Browser.lua

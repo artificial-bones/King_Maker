@@ -1,0 +1,29 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for the release, like v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build King_Addons.zip
+        run: ./build.sh
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          gh release create "$VERSION" King_Addons.zip \
+            --title "King Addons $VERSION" \
+            --notes "Download King_Addons.zip, unzip it, and copy every folder into your Interface\\AddOns folder. See the README for what each addon does."

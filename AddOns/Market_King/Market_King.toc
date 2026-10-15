@@ -1,0 +1,17 @@
+## Interface: 16001
+## Title: Market King
+## Notes: Finds the most profitable crafts for your professions: sell raw, craft, or disenchant. Needs Scanner King.
+## Author: BearBones
+## Version: 1.5.0
+## Dependencies: Scanner_King
+## SavedVariables: MarketKingDB
+## IconTexture: Interface\Icons\INV_Misc_Bag_10
+
+Data\Recipes.lua
+Data\Patterns.lua
+Data\Disenchant.lua
+Data\Vendor.lua
+Core.lua
+Profit.lua
+Events.lua
+UI.lua

@@ -1,0 +1,23 @@
+## Interface: 16001
+## Title: Gather King
+## Notes: Mark mining, herb and fishing spots on your world map and minimap with /gt.
+## Author: BearBones
+## Version: 2.0.1
+## SavedVariables: GatherKingDB
+## OptionalDeps: Scanner_King
+## IconTexture: Interface\Icons\Trade_Mining
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\HereBeDragons\HereBeDragons-2.0.lua
+Libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
+
+Data.lua
+Core.lua
+Pins.lua
+Recorder.lua
+Sync.lua
+Button.lua
+Prices.lua
+Ledger.lua
+Options.lua

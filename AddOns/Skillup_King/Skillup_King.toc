@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: Skillup King
+## Notes: The cheapest way to level a profession: what to craft at every skill, at today's auction house prices.
+## Author: BearBones
+## Version: 1.0.0
+## Dependencies: Scanner_King
+## SavedVariables: SkillupKingDB
+## IconTexture: Interface\Icons\INV_Misc_Book_11
+
+Data\Recipes.lua
+Data\Patterns.lua
+Data\Disenchant.lua
+Data\Vendor.lua
+Core.lua
+Plan.lua
+UI.lua
