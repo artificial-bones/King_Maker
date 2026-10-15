@@ -17,13 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build King_Addons.zip
+      - name: Build King_Maker.zip
         run: ./build.sh
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.event.inputs.version || github.ref_name }}
         run: |
-          gh release create "$VERSION" King_Addons.zip \
-            --title "King Addons $VERSION" \
-            --notes "Download King_Addons.zip, unzip it, and copy every folder into your Interface\\AddOns folder. See the README for what each addon does."
+          gh release create "$VERSION" King_Maker.zip \
+            --title "King Maker $VERSION" \
+            --notes "Download King_Maker.zip, unzip it, and copy every folder into your Interface\\AddOns folder. See the README for what each addon does."

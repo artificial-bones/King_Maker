@@ -1,13 +1,13 @@
-# The King Addons
+# King Maker
 
-A suite of addons for **World of Warcraft: Forever**: price scanning, price history, trading, farming, gathering,
+Every King addon in one download. The King addons are a suite of addons for **World of Warcraft: Forever**: price scanning, price history, trading, farming, gathering,
 gold tracking, dungeon quests and profession leveling, all sharing one set of auction house prices.
 
-**[Download the latest release](../../releases/latest)** (`King_Addons.zip`).
+**[Download the latest release](../../releases/latest)** (`King_Maker.zip`).
 
 ## Install
 
-1. Download `King_Addons.zip` from the [latest release](../../releases/latest).
+1. Download `King_Maker.zip` from the [latest release](../../releases/latest).
 2. Unzip it. You get a folder for each addon (`Scanner_King`, `Market_King`, and so on).
 3. Copy all of those folders into your AddOns folder. On the Forever client it is
    `World of Warcraft\_classic_beta_\Interface\AddOns\`
@@ -19,9 +19,23 @@ To update, download the new release and copy the folders over the old ones (say 
 Your settings and data are kept: they live in `WTF`, not in the addon folders.
 
 You don't have to install everything. Scanner King is the one the others lean on, so keep it; the
-rest are pick and choose. Optional extras from other authors make some of them better:
-[Questie](https://github.com/Questie/Questie) (QuestieDB) for Farm King and Quest King, and
-[TomTom](https://www.curseforge.com/wow/addons/tomtom) for Quest King's waypoint arrow.
+rest are pick and choose.
+
+### For the best experience, also install Questie and QuestieDB
+
+[Questie](https://github.com/Questie/Questie) and its database,
+[QuestieDB](https://github.com/Questie/QuestieDB/releases), aren't part of King Maker but make it
+much better. Install both the same way (each is its own folder in AddOns):
+
+- **Quest King** reads exact pickup levels, quest IDs and quest giver locations from QuestieDB, so
+  its waypoints and levels are exact instead of estimated.
+- **Farm King** gets every mob in the game from QuestieDB, with levels, zones, spawn points and
+  drops, instead of only the mobs you've seen yourself.
+- **Questie** itself marks quests on your map and tracks objectives, which pairs well with Quest
+  King's dungeon chains.
+
+[TomTom](https://www.curseforge.com/wow/addons/tomtom) is optional too: Quest King uses its arrow
+for waypoints when it's installed.
 
 ## The addons
 
@@ -93,5 +107,5 @@ Needs Scanner King.
 ## For maintainers
 
 Each addon lives in `AddOns/<folder>`. To publish a release, run the **Release** workflow from the
-Actions tab (or push a tag like `v1.0.0`): it zips the `AddOns` folders into `King_Addons.zip` and
+Actions tab (or push a tag like `v1.0.0`): it zips the `AddOns` folders into `King_Maker.zip` and
 attaches it to a new release. `./build.sh` makes the same zip locally.
