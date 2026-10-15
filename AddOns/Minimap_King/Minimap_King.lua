@@ -129,7 +129,19 @@ local function candidates()
     return out
 end
 
+ns.known = {} -- every addon minimap button seen: name -> button (in the crown or not)
+
+local function closeSoon()
+    -- after the click has run, so whatever it opened opens first
+    C_Timer.After(0, function() if menu then menu:Hide() end end)
+end
+
 function ns.Gather()
+    for _, btn in ipairs(candidates()) do
+        local name = btn:GetName()
+        if name and not ns.known[name] and (gathered[btn] or ns.IsAddonButton(btn)) then ns.known[name] = btn end
+    end
+    if ns.RefreshSettings then ns.RefreshSettings() end
     if not ns.db.gather then return end
     ns.EnsureMenu()
     for _, btn in ipairs(candidates()) do
@@ -146,6 +158,10 @@ function ns.Gather()
             hooksecurefunc(btn, "Show", function(self) if gathered[self] then ns.Layout() end end)
             hooksecurefunc(btn, "Hide", function(self) if gathered[self] and not laying then ns.Layout() end end)
             hooksecurefunc(btn, "SetShown", function(self) if gathered[self] and not laying then ns.Layout() end end)
+            if not btn.minimapKingHooked then
+                btn.minimapKingHooked = true
+                btn:HookScript("OnClick", function(self) if gathered[self] then closeSoon() end end)
+            end
         end
     end
     table.sort(order, function(a, b)
@@ -179,9 +195,22 @@ end
 function ns.Ignore(btn)
     ns.db.ignore[btn:GetName()] = true
     for i, b in ipairs(order) do if b == btn then table.remove(order, i) end end
-    giveBack(btn)
+    if gathered[btn] then giveBack(btn) end
     ns.Layout()
+    if ns.RefreshSettings then ns.RefreshSettings() end
 end
+
+-- In the crown (true) or on the minimap (false).
+function ns.SetInCrown(btn, on)
+    if on then
+        ns.db.ignore[btn:GetName()] = nil
+        ns.Gather()
+    else
+        ns.Ignore(btn)
+    end
+end
+
+function ns.InCrown(btn) return not ns.db.ignore[btn:GetName()] and ns.db.gather end
 
 -- The buttons on show in the menu (an addon may have its own button turned off).
 function ns.Shown()
@@ -214,7 +243,7 @@ local function label(i)
             ns.Ignore(self.button)
             return
         end
-        self.button:Click(which)
+        self.button:Click(which) -- its own OnClick hook closes the menu
     end)
     l:SetScript("OnEnter", function(self)
         local onEnter = self.button and self.button:GetScript("OnEnter")
@@ -345,7 +374,15 @@ local function createCrown()
     border:SetPoint("TOPLEFT")
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
-    crown:SetScript("OnClick", function() GameTooltip:Hide(); ns.ToggleMenu() end)
+    crown:SetScript("OnClick", function(_, which)
+        GameTooltip:Hide()
+        if which == "RightButton" then
+            if menu then menu:Hide() end
+            ns.OpenSettings()
+        else
+            ns.ToggleMenu()
+        end
+    end)
     crown:SetScript("OnDragStart", function(self)
         if menu then menu:Hide() end
         self:SetScript("OnUpdate", function()
@@ -364,11 +401,127 @@ local function createCrown()
         local names = {}
         for _, btn in ipairs(ns.Shown()) do table.insert(names, ns.NameOf(btn)) end
         GameTooltip:AddLine(#names > 0 and table.concat(names, ", ") or "No minimap buttons gathered yet.", 1, 1, 1, true)
-        GameTooltip:AddLine("Click: the menu. Drag: move this button.", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine("Click: the menu. Right-click: settings. Drag: move this button.", 0.8, 0.8, 0.8)
         GameTooltip:AddLine("In the menu, shift-right-click a name to leave that button on the minimap.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end)
     crown:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
+---------------------------------------------------------------------------
+-- Settings: which buttons go in the crown
+---------------------------------------------------------------------------
+
+local panel = CreateFrame("Frame")
+panel.name = "Minimap King"
+local category, checks, master = nil, {}, nil
+local list -- the scroll child holding a checkbox per button
+
+local function makeCheck(parent)
+    local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    cb:SetSize(24, 24)
+    cb.label = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    cb.label:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+    return cb
+end
+
+local function build()
+    local t = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    t:SetPoint("TOPLEFT", 16, -16)
+    t:SetText("Minimap King")
+    local sub = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    sub:SetPoint("TOPLEFT", t, "BOTTOMLEFT", 0, -6)
+    sub:SetWidth(560)
+    sub:SetJustifyH("LEFT")
+    sub:SetText("Ticked addons go in the crown's menu. Untick one to keep its button on the minimap.")
+    master = makeCheck(panel)
+    master:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", -2, -10)
+    master.label:SetText("Gather buttons into the crown")
+    master:SetScript("OnClick", function(self)
+        ns.db.gather = self:GetChecked() and true or false
+        if ns.db.gather then ns.Gather() else ns.Release() end
+        ns.RefreshSettings()
+    end)
+    local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", master, "BOTTOMLEFT", 0, -10)
+    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -32, 16)
+    list = CreateFrame("Frame", nil, scroll)
+    list:SetSize(540, 10)
+    scroll:SetScrollChild(list)
+    list.headers = { list:CreateFontString(nil, "OVERLAY", "GameFontNormal"), list:CreateFontString(nil, "OVERLAY", "GameFontNormal") }
+    list.empty = list:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    list.empty:SetPoint("TOPLEFT", 4, -4)
+end
+
+-- The buttons for the settings list: King addons first, then the rest, by name.
+function ns.KnownButtons()
+    local out = {}
+    for _, btn in pairs(ns.known) do table.insert(out, btn) end
+    table.sort(out, function(a, b)
+        local ka, kb = ns.IsKing(a), ns.IsKing(b)
+        if ka ~= kb then return ka end
+        return ns.NameOf(a):lower() < ns.NameOf(b):lower()
+    end)
+    return out
+end
+
+function ns.RefreshSettings()
+    if not list or not ns.db then return end
+    master:SetChecked(ns.db.gather)
+    local buttons = ns.KnownButtons()
+    local y, kings = 0, 0
+    for _, btn in ipairs(buttons) do if ns.IsKing(btn) then kings = kings + 1 end end
+    local function heading(i, text)
+        local h = list.headers[i]
+        h:ClearAllPoints()
+        h:SetPoint("TOPLEFT", 4, y - 4)
+        h:SetText(text)
+        h:Show()
+        y = y - 22
+    end
+    list.headers[1]:Hide(); list.headers[2]:Hide()
+    if kings > 0 then heading(1, "King Addons") end
+    for i, btn in ipairs(buttons) do
+        if i == kings + 1 then
+            if kings > 0 then y = y - 6 end
+            heading(2, "Other Addons")
+        end
+        local cb = checks[i] or makeCheck(list)
+        checks[i] = cb
+        cb:ClearAllPoints()
+        cb:SetPoint("TOPLEFT", 4, y)
+        cb.button = btn
+        cb.label:SetText(ns.NameOf(btn))
+        cb:SetChecked(not ns.db.ignore[btn:GetName()])
+        cb:SetEnabled(ns.db.gather)
+        cb:SetScript("OnClick", function(self) ns.SetInCrown(self.button, self:GetChecked()) end)
+        cb:Show()
+        y = y - 26
+    end
+    for i = #buttons + 1, #checks do checks[i]:Hide() end
+    list.empty:SetText(#buttons == 0 and "No addon minimap buttons found yet." or "")
+    list:SetHeight(math.max(10, -y))
+end
+
+panel:SetScript("OnShow", function(self)
+    if not self.built then build(); self.built = true end
+    ns.Gather() -- pick up anything new
+    ns.RefreshSettings()
+end)
+
+if Settings and Settings.RegisterCanvasLayoutCategory then
+    category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
+    Settings.RegisterAddOnCategory(category)
+elseif InterfaceOptions_AddCategory then
+    InterfaceOptions_AddCategory(panel)
+end
+
+function ns.OpenSettings()
+    if category and Settings.OpenToCategory then
+        Settings.OpenToCategory(category:GetID())
+    elseif InterfaceOptionsFrame_OpenToCategory then
+        InterfaceOptionsFrame_OpenToCategory(panel)
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -411,6 +564,8 @@ SlashCmdList.MINIMAPKING = function(msg)
         wipe(ns.db.ignore)
         ns.Gather()
         ns.Print("Every button goes in the crown again.")
+    elseif cmd == "settings" or cmd == "config" or cmd == "options" then
+        ns.OpenSettings()
     elseif cmd == "icon" then
         local have, n = ns.Crowns(), tonumber(rest)
         if not n then
@@ -430,7 +585,7 @@ SlashCmdList.MINIMAPKING = function(msg)
     elseif cmd == "" or cmd == "menu" then
         ns.ShowMenu()
     else
-        ns.Print("/mmk opens the menu. /mmk icon changes the crown. /mmk release puts every button back on the minimap, /mmk gather takes them in again. Shift-right-click a name in the menu to leave that button on the minimap; /mmk unignore undoes that.")
+        ns.Print("/mmk opens the menu, /mmk settings the settings. /mmk icon changes the crown. /mmk release puts every button back on the minimap, /mmk gather takes them in again. Shift-right-click a name in the menu to leave that button on the minimap; /mmk unignore undoes that.")
     end
 end
 

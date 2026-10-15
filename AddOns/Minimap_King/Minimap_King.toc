@@ -2,7 +2,7 @@
 ## Title: Minimap King
 ## Notes: One crown on the minimap for every minimap button: the King addons and any other addon's buttons go into its drop-down.
 ## Author: BearBones
-## Version: 2.0.0
+## Version: 2.1.0
 ## OptionalDeps: Scanner_King, Market_King, Econ_King, Farm_King, gather_king, Mail_King, Quest_King, Skillup_King, LibDBIcon-1.0
 ## SavedVariables: MinimapKingDB
 ## IconTexture: Interface\Icons\INV_Crown_01

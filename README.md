@@ -44,7 +44,8 @@ for waypoints when it's installed.
 
 Puts every addon's minimap button into one crown with a drop-down, King addons first and the rest under their own heading.
 Each button still works exactly as before; shift-right-click one in the menu to leave it on the
-minimap. `/mmk` · `/mmk icon` picks a different crown · `/mmk release` puts every button back.
+minimap. Right-click the crown to choose which addons go in it.
+`/mmk` · `/mmk icon` picks a different crown · `/mmk release` puts every button back.
 
 ### Scanner King: auction house prices (needed by the others)
 ![Scanner King](screenshots/Scanner_King.png)
