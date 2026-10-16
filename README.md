@@ -27,8 +27,9 @@ rest are pick and choose.
 [QuestieDB](https://github.com/Questie/QuestieDB/releases), aren't part of King Maker but make it
 much better. Install both the same way (each is its own folder in AddOns):
 
-- **Quest King** reads exact pickup levels, quest IDs and quest giver locations from QuestieDB, so
-  its waypoints and levels are exact instead of estimated.
+- **Quest King** reads exact pickup levels, quest IDs, quest giver locations, dungeon entrances
+  and each quest's XP from QuestieDB, so its waypoints, levels and XP are exact instead of
+  estimated or missing.
 - **Farm King** gets every mob in the game from QuestieDB, with levels, zones, spawn points and
   drops, instead of only the mobs you've seen yourself.
 - **Questie** itself marks quests on your map and tracks objectives, which pairs well with Quest
@@ -73,6 +74,7 @@ deals. Needs Scanner King.
 
 Gold per kill for every mob, from the coin and drops you, your guild and QuestieDB have seen, priced
 by Scanner King. Tracks your farming sessions in gold per hour. Needs Scanner King.
+Works best with **Questie and QuestieDB**, which give it every mob in the game.
 `/fk`
 
 ### Gather King: mark gathering spots
@@ -94,8 +96,8 @@ by item, day and strategy, and your stock across every character.
 
 Every Horde dungeon quest from 13 to 60, with each chain laid out step by step: what you've done,
 what's next, the XP each quest is worth at your level, the levels that matter, and a map pin to
-every quest giver. Also marks quest items in
-your bags that are safe to delete.
+every quest giver. Also marks quest items in your bags that are safe to delete.
+Works best with **Questie and QuestieDB**, which give it exact levels, giver locations and quest XP.
 `/qk`
 
 ### Skillup King: level professions for the least gold
@@ -105,6 +107,17 @@ Works out what to craft at every skill point to max out a profession for the lea
 today's prices and what you can sell or disenchant along the way, plus the shopping list.
 Needs Scanner King.
 `/suk`
+
+## Credits
+
+Thank you to the [Questie](https://github.com/Questie/Questie) team for Questie and
+[QuestieDB](https://github.com/Questie/QuestieDB). Their quest, NPC and item database is what lets
+Quest King and Farm King know every quest, mob, spawn point and quest reward in the game. King
+Maker only reads that data; it doesn't include or change any of it, so install Questie and QuestieDB
+from their own pages and support their authors.
+
+Thanks also to the author of [TomTom](https://www.curseforge.com/wow/addons/tomtom), whose arrow
+Quest King uses for waypoints.
 
 ## For maintainers
 
