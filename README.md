@@ -3,11 +3,11 @@
 Every King addon in one download. The King addons are a suite of addons for **World of Warcraft: Forever**: price scanning, price history, trading, farming, gathering,
 gold tracking, dungeon quests and profession leveling, all sharing one set of auction house prices.
 
-**[Download the latest release](../../releases/latest)** (`King_Maker.zip`).
+**[Download the latest release](https://github.com/artificial-bones/King_Maker/releases/latest)** (`King_Maker.zip`).
 
 ## Install
 
-1. Download `King_Maker.zip` from the [latest release](../../releases/latest).
+1. Download `King_Maker.zip` from the [latest release](https://github.com/artificial-bones/King_Maker/releases/latest).
 2. Unzip it. You get a folder for each addon (`Scanner_King`, `Market_King`, and so on).
 3. Copy all of those folders into your AddOns folder. On the Forever client it is
    `World of Warcraft\_classic_beta_\Interface\AddOns\`
