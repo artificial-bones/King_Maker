@@ -2,7 +2,7 @@
 ## Title: Mail King
 ## Notes: A ledger of your auction house money, read from your mail: profit by strategy, item and day.
 ## Author: BearBones
-## Version: 1.1.1
+## Version: 1.1.2
 ## OptionalDeps: Scanner_King, Farm_King
 ## SavedVariables: MailKingDB
 ## IconTexture: Interface\Icons\INV_Letter_15

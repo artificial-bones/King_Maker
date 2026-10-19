@@ -70,9 +70,6 @@ end
 -- Postings: the deposit each auction cost
 ---------------------------------------------------------------------------
 
-local quote        -- the last item the auction house priced a deposit for: { id, name }
-local quoting = false
-
 local function itemAt(loc)
     if not (loc and C_Item and C_Item.GetItemID) then return nil end
     local ok, id = pcall(C_Item.GetItemID, loc)
@@ -83,9 +80,7 @@ end
 
 local function deposit(fn, ...)
     if not (C_AuctionHouse and C_AuctionHouse[fn]) then return nil end
-    quoting = true
     local ok, d = pcall(C_AuctionHouse[fn], ...)
-    quoting = false
     return ok and d or nil
 end
 
@@ -99,39 +94,60 @@ local function post(id, name, n, dep, each)
     table.insert(ns.db.posts, { id = id, name = name, n = n or 1, dep = dep, each = each, t = ns.Now(), c = ns.Char() })
 end
 
-local function hookPosting()
-    if not (C_AuctionHouse and hooksecurefunc) then return end
-    -- The sell window asks for the deposit while the item is still in your bags.
-    if C_AuctionHouse.CalculateCommodityDeposit then
-        hooksecurefunc(C_AuctionHouse, "CalculateCommodityDeposit", function(id)
-            if not quoting and id then quote = { id = id } end
-        end)
-    end
-    if C_AuctionHouse.CalculateItemDeposit then
-        hooksecurefunc(C_AuctionHouse, "CalculateItemDeposit", function(loc)
-            if quoting then return end
-            local id, name = itemAt(loc)
-            if id then quote = { id = id, name = name } end
-        end)
-    end
-    if C_AuctionHouse.PostCommodity then
-        hooksecurefunc(C_AuctionHouse, "PostCommodity", function(loc, duration, quantity, unitPrice)
-            if not ns.db then return end
-            local id, name = itemAt(loc)
-            if not id and quote then id, name = quote.id, quote.name end
-            pcall(post, id, name, quantity, id and deposit("CalculateCommodityDeposit", id, duration, quantity), unitPrice)
-        end)
-    end
-    if C_AuctionHouse.PostItem then
-        hooksecurefunc(C_AuctionHouse, "PostItem", function(loc, duration, quantity, bid, buyout)
-            if not ns.db then return end
-            local id, name = itemAt(loc)
-            local dep = id and deposit("CalculateItemDeposit", loc, duration, quantity)
-            if not id and quote then id, name = quote.id, quote.name end
-            pcall(post, id, name, quantity, dep, buyout and quantity and quantity > 0 and buyout / quantity or nil)
-        end)
-    end
+-- Watching the sell window's Post button, not the auction house functions:
+-- hooking C_AuctionHouse.PostItem (even with hooksecurefunc) taints it, and the
+-- game then blocks the real post and blames Mail King. A script hook on the
+-- button is safe. The window is read as you press the button (before it
+-- clears), and the post is noted when the click goes through.
+
+local function call(frame, method)
+    if type(frame[method]) ~= "function" then return nil end
+    local ok, v = pcall(frame[method], frame)
+    if ok then return v end
 end
+
+local function snapshot(frame, commodity)
+    local btn = frame.PostButton
+    if btn and btn.IsEnabled and not btn:IsEnabled() then return nil end
+    local loc = call(frame, "GetItem")
+    local id, name = itemAt(loc)
+    if not id then return nil end
+    local n = call(frame, "GetQuantity") or 1
+    local duration = call(frame, "GetDuration") or 1
+    local dep = call(frame, "GetDepositAmount")
+    local each
+    if commodity then
+        each = call(frame, "GetUnitPrice")
+        dep = dep or deposit("CalculateCommodityDeposit", id, duration, n)
+    else
+        local buyout = call(frame, "GetBuyout")
+        each = buyout and n > 0 and buyout / n or nil
+        dep = dep or deposit("CalculateItemDeposit", loc, duration, n)
+    end
+    return { id = id, name = name, n = n, dep = dep, each = each }
+end
+
+local watched = {}
+local function watch(frame, commodity)
+    local btn = frame and frame.PostButton
+    if not btn or watched[btn] or not btn.HookScript then return end
+    watched[btn] = true
+    local pendingPost
+    btn:HookScript("OnMouseDown", function() pendingPost = snapshot(frame, commodity) end)
+    btn:HookScript("OnClick", function()
+        local p = pendingPost or snapshot(frame, commodity)
+        pendingPost = nil
+        if p and ns.db then pcall(post, p.id, p.name, p.n, p.dep, p.each) end
+    end)
+end
+
+function ns.WatchPosting()
+    local ah = AuctionHouseFrame
+    if not ah then return end
+    watch(ah.CommoditiesSellFrame, true)
+    watch(ah.ItemSellFrame, false)
+end
+
 
 -- The posting an expired or cancelled auction came from: the oldest of that item,
 -- the same size if there is one. It's taken off the list.
@@ -271,15 +287,17 @@ end
 ---------------------------------------------------------------------------
 
 local f = CreateFrame("Frame")
-for _, e in ipairs({ "PLAYER_LOGIN", "MAIL_SHOW", "MAIL_INBOX_UPDATE", "MAIL_CLOSED", "PLAYER_MONEY" }) do
+for _, e in ipairs({ "PLAYER_LOGIN", "MAIL_SHOW", "MAIL_INBOX_UPDATE", "MAIL_CLOSED", "PLAYER_MONEY", "AUCTION_HOUSE_SHOW", "ADDON_LOADED" }) do
     if not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid(e) then pcall(f.RegisterEvent, f, e) end
 end
 local pending = false
-f:SetScript("OnEvent", function(_, event)
+f:SetScript("OnEvent", function(_, event, arg)
     if not ns.db then return end
     if event == "PLAYER_LOGIN" then
-        pcall(hookPosting)
+        pcall(ns.WatchPosting)
         ns.NoteGold()
+    elseif event == "AUCTION_HOUSE_SHOW" or (event == "ADDON_LOADED" and arg == "Blizzard_AuctionHouseUI") then
+        pcall(ns.WatchPosting)
     elseif event == "PLAYER_MONEY" then
         ns.NoteGold()
     elseif event == "MAIL_SHOW" or event == "MAIL_INBOX_UPDATE" then
