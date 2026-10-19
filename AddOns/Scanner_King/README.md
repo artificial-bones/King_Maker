@@ -1,5 +1,7 @@
 # Scanner King
 
+![Scanner King](../../screenshots/Scanner_King.png)
+
 The auction house scanner for the King suite on WoW Forever:
 
 - **Gather King** marks gathering nodes and tracks what you farm.
@@ -10,7 +12,16 @@ The auction house scanner for the King suite on WoW Forever:
 Scanner King works by itself, but Gather King and Market King read their
 prices from it, so install it next to them.
 
+## Requirements
+
+- **Needs:** Nothing. Scanner King works on its own.
+- **Works with:**
+  - Market King, Econ King, Farm King, Gather King, Mail King and Skillup King all read their prices from it.
+  - Guildmates running Scanner King share prices with you automatically.
+
 ## Install
+
+The easiest way: download [King Maker](https://github.com/artificial-bones/King_Maker), which has every King addon in one zip. To install just this one:
 
 1. Download this repo (Code, then Download ZIP) and unzip it.
 2. Rename the folder from `Scanner_King-main` to `Scanner_King`. The folder

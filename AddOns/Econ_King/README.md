@@ -1,16 +1,26 @@
 # Econ King
 
+![Econ King](../../screenshots/Econ_King.png)
+
 The long-term memory of the auction house, for the King suite on WoW Forever.
 Econ King keeps every scan Scanner King makes, so for any item you can see how
 its price and supply have moved over days, weeks and months, and spot what's
 cheap right now, what's drying up and what's flooding the market.
 
-Needs **[Scanner King](https://github.com/base-reality-ai/Scanner_King)** 1.5
+Needs **[Scanner King](https://github.com/artificial-bones/Scanner_King)** 1.5
 or newer, which does the scanning. See its
-[API.md](https://github.com/base-reality-ai/Scanner_King/blob/main/API.md) for
+[API.md](https://github.com/artificial-bones/Scanner_King/blob/main/API.md) for
 how the addons connect.
 
+## Requirements
+
+- **Needs:** **Scanner King** 1.5 or newer. Econ King records every scan it makes and won't load without it.
+- **Works with:**
+  - Guildmates running Scanner King answer **Ask guild**, filling the gaps between your own scans.
+
 ## Install
+
+The easiest way: download [King Maker](https://github.com/artificial-bones/King_Maker), which has every King addon in one zip. To install just this one:
 
 1. Download this repo (Code, then Download ZIP) and unzip it.
 2. The folder must be named `Econ_King` (rename `Econ_King-main`).

@@ -1,5 +1,7 @@
 # Skillup King
 
+![Skillup King](../../screenshots/Skillup_King.png)
+
 The cheapest way to level a profession on WoW Forever. Part of the King suite, next to Scanner King,
 Market King, Gather King, Farm King, Mail King and Quest King.
 
@@ -8,9 +10,17 @@ grey. It prices the materials and what you make with Scanner King's auction hous
 skill (and your level), it works out what to craft at every point to the top, for the least gold. A
 plan can even make money when what you craft sells or disenchants for more than its materials.
 
-Needs **[Scanner King](https://github.com/base-reality-ai/Scanner_King)** for prices.
+Needs **[Scanner King](https://github.com/artificial-bones/Scanner_King)** for prices.
+
+## Requirements
+
+- **Needs:** **Scanner King**, for material and crafted item prices. Skillup King won't load without it.
+- **Works with:**
+  - Uses the same disenchant tables as Market King to count what disenchanting gives back.
 
 ## Install
+
+The easiest way: download [King Maker](https://github.com/artificial-bones/King_Maker), which has every King addon in one zip. To install just this one:
 
 1. Unzip it into `_classic_beta_\Interface\AddOns\`. The folder must be named `Skillup_King`.
 2. Open it with `/suk` (or `/skillup`, or the minimap button). `/suk tailoring` opens straight on a

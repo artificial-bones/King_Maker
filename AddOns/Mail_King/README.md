@@ -1,10 +1,19 @@
 # Mail King
 
+![Mail King](../../screenshots/Mail_King.png)
+
 The money side of the King suite. Every auction house mail you open goes into a ledger, so you can
 see what you actually made, where it came from, and which of your farms and strategies pay off.
 
 - **Gather King** finds the nodes, **Farm King** finds the mobs, **Scanner King** prices it all.
 - **Mail King** tells you what it turned into.
+
+## Requirements
+
+- **Needs:** Nothing. Mail King reads your mail on its own.
+- **Better with** (optional):
+  - **Scanner King** adds today's market price on the Items page and what your stock is worth.
+  - **Farm King** puts items mobs drop under the Mob drops strategy.
 
 ## What it records
 

@@ -1,5 +1,7 @@
 # Quest King
 
+![Quest King](../../screenshots/Quest_King.png)
+
 Two things for questing on WoW Forever, part of the King suite:
 
 - **Dungeon quests.** Every dungeon quest a Horde character can take, level 13 to 60, with the chain
@@ -8,7 +10,17 @@ Two things for questing on WoW Forever, part of the King suite:
 - **Bag cleanup.** Marks the quest items in your bags that no quest in your log needs, so you can
   see what's safe to delete when your bags are full.
 
+## Requirements
+
+- **Needs:** Nothing. The dungeon log is built in, so every dungeon, quest and chain works without other addons.
+- **Better with** (optional):
+  - **[QuestieDB](https://github.com/Questie/QuestieDB/releases)** makes it exact: pickup levels, quest IDs, quest giver spawn points, dungeon entrances and **each quest's XP**. Without it pickup levels are estimates (marked ~), waypoints use the log's coordinates and the XP column shows ?.
+  - **[Questie](https://github.com/Questie/Questie)** marks quests on your map and tracks objectives, alongside Quest King's chains.
+  - **[TomTom](https://www.curseforge.com/wow/addons/tomtom)** gives waypoints an arrow. Without it Quest King uses the game's own map pin.
+
 ## Install
+
+The easiest way: download [King Maker](https://github.com/artificial-bones/King_Maker), which has every King addon in one zip. To install just this one:
 
 1. Download this repo (Code, then Download ZIP) and unzip it.
 2. Rename the folder from `Quest_King-main` to `Quest_King`. The folder name

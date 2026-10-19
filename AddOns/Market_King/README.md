@@ -1,5 +1,7 @@
 # Market King
 
+![Market King](../../screenshots/Market_King.png)
+
 The trading addon of the King suite on WoW Forever. Pick the professions you
 care about and Market King tells you, for every item they can make, whether
 you're better off:
@@ -8,12 +10,20 @@ you're better off:
 - **crafting the item and selling it**, or
 - **crafting it, disenchanting it and selling the enchanting materials**.
 
-Needs **[Scanner King](https://github.com/base-reality-ai/Scanner_King)**, which
+Needs **[Scanner King](https://github.com/artificial-bones/Scanner_King)**, which
 does the auction house scanning. See its
-[API.md](https://github.com/base-reality-ai/Scanner_King/blob/main/API.md) for
+[API.md](https://github.com/artificial-bones/Scanner_King/blob/main/API.md) for
 how the addons connect.
 
+## Requirements
+
+- **Needs:** **Scanner King**, for every price it uses. Market King won't load without it.
+- **Works with:**
+  - Scanner King's **Market Scan** button prices everything your professions make and use, then opens Market King.
+
 ## Install
+
+The easiest way: download [King Maker](https://github.com/artificial-bones/King_Maker), which has every King addon in one zip. To install just this one:
 
 1. Download this repo (Code, then Download ZIP) and unzip it, or
    `gh repo clone base-reality-ai/Market_King` in your AddOns folder.

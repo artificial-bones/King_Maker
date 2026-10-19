@@ -1,16 +1,25 @@
 # Farm King
 
+![Farm King](../../screenshots/Farm_King.png)
+
 Which mobs are worth farming, for the King suite on WoW Forever. Farm King
 ranks mobs by the **average gold a kill is worth**: the coin they drop plus
 each drop's chance times what it sells for, priced by
-**[Scanner King](https://github.com/base-reality-ai/Scanner_King)**.
+**[Scanner King](https://github.com/artificial-bones/Scanner_King)**.
 
-- **Scanner King** (required) prices the drops.
-- **[QuestieDB](https://github.com/Questie/QuestieDB/releases)** (optional)
-  adds every mob in the game, with levels, zones, spawn points and what they
-  can drop. Without it, Farm King lists the mobs you've seen yourself.
+## Requirements
+
+- **Needs:** **Scanner King**, which prices every drop. Farm King won't load without it.
+- **Better with** (optional):
+  - **[QuestieDB](https://github.com/Questie/QuestieDB/releases)** adds every mob in the game, with levels, zones, spawn points and what they drop, plus **Track on map**. Without it Farm King only knows the mobs you've seen yourself.
+  - **[Questie](https://github.com/Questie/Questie)** itself isn't read by Farm King, but it's the addon QuestieDB is made for, and the two are best installed together.
+- **Works with:**
+  - Mail King files the items your mobs drop under its Mob drops strategy.
+  - Guildmates running Farm King share their drop data when you **Ask guild**.
 
 ## Install
+
+The easiest way: download [King Maker](https://github.com/artificial-bones/King_Maker), which has every King addon in one zip. To install just this one:
 
 1. Download this repo (Code, then Download ZIP) and unzip it.
 2. The folder must be named `Farm_King` (rename `Farm_King-main`).

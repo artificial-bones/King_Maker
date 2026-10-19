@@ -1,10 +1,23 @@
 # Gather King
 
-Part of the King suite: **Gather King** (this addon), **[Scanner King](https://github.com/base-reality-ai/Scanner_King)** (auction prices) and **[Market King](https://github.com/base-reality-ai/Market_King)** (trading). See [how they connect](https://github.com/base-reality-ai/Scanner_King/blob/main/API.md).
+![Gather King](../../screenshots/Gather_King.png)
+
+Part of the King suite: **Gather King** (this addon), **[Scanner King](https://github.com/artificial-bones/Scanner_King)** (auction prices) and **[Market King](https://github.com/artificial-bones/Market_King)** (trading). See [how they connect](https://github.com/artificial-bones/Scanner_King/blob/main/API.md).
 
 A small World of Warcraft: Forever addon for marking gathering spots on your map. Type `/gt mine thorium` while standing at a node and a Thorium icon appears at that spot on your world map and minimap. It works with Leatrix Maps, since Leatrix draws on top of the normal world map, and the coordinates match the ones Leatrix shows.
 
+## Requirements
+
+- **Needs:** Nothing. Gather King marks and tracks nodes on its own.
+- **Better with** (optional):
+  - **Scanner King** prices what you gather: worth per harvest on each marker and gold in the farming ledger. Without it prices only come from Auctionator, if you have it.
+- **Works with:**
+  - Works with Leatrix Maps: the markers and coordinates line up with it.
+  - Markers are shared with guildmates running Gather King.
+
 ## Install
+
+The easiest way: download [King Maker](https://github.com/artificial-bones/King_Maker), which has every King addon in one zip. To install just this one:
 
 1. Find your AddOns folder. On the Forever beta it is:
    `World of Warcraft\_classic_beta_\Interface\AddOns\`
@@ -81,7 +94,7 @@ The % is how often each item dropped at that spot, and avg is how many you got w
 
 ### Auction prices
 
-Price scanning lives in **[Scanner King](https://github.com/base-reality-ai/Scanner_King)**, a separate addon in the same suite. Install it next to Gather King (folder name `Scanner_King`). Gather King works without it, but then prices only come from Auctionator if you have it.
+Price scanning lives in **[Scanner King](https://github.com/artificial-bones/Scanner_King)**, a separate addon in the same suite. Install it next to Gather King (folder name `Scanner_King`). Gather King works without it, but then prices only come from Auctionator if you have it.
 
 Open the auction house and click **Material Scan** (top right, from Scanner King), or type `/gt scan` (same as `/sk scan`). Scanner King scans every Trade Goods item, plus anything Gather King asks for that isn't Trade Goods, like Forever's herb seeds. Scanner King also shares prices with your guild.
 

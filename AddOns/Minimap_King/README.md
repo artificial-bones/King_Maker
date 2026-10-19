@@ -1,5 +1,7 @@
 # Minimap King
 
+![Minimap King](../../screenshots/Minimap_King.png)
+
 One crown on the minimap for every minimap button. Minimap King moves the King addons' buttons, and
 any other addon's minimap button, into a drop-down under a crown.
 
@@ -18,6 +20,12 @@ any other addon's minimap button, into a drop-down under a crown.
 Picks up the King addons (Scanner, Market, Econ, Farm, Gather, Mail, Quest and Skillup King), any
 addon that uses LibDBIcon (Questie, DBM, Details and most others), and other buttons sitting around
 the edge of the minimap. If it takes something it shouldn't, shift-right-click it.
+
+## Requirements
+
+- **Needs:** Nothing.
+- **Works with:**
+  - Gathers every King addon's button, and any addon that uses LibDBIcon (Questie, DBM, Details and most others), plus other buttons around the minimap's edge.
 
 ## Commands
 
