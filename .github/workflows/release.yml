@@ -15,6 +15,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Build King_Maker.zip
@@ -27,3 +29,22 @@ jobs:
           gh release create "$VERSION" King_Maker.zip \
             --title "King Maker $VERSION" \
             --notes "Download King_Maker.zip, unzip it, and copy every folder into your Interface\\AddOns folder. See the README for what each addon does."
+      - name: Upload to CurseForge
+        if: env.CF_API_TOKEN != ''
+        env:
+          CF_PROJECT_ID: "PROJECT_ID"
+          CF_GAME_VERSION: "1.60.1"
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          api=https://wow.curseforge.com/api
+          versions=$(curl -sf -H "X-Api-Token: $CF_API_TOKEN" "$api/game/versions")
+          ids=$(echo "$versions" | jq -c --arg v "$CF_GAME_VERSION" '[.[] | select(.name == $v) | .id]')
+          echo "CurseForge game version ids for $CF_GAME_VERSION: $ids"
+          if [ "$ids" = "[]" ]; then
+            echo "CurseForge has no game version named $CF_GAME_VERSION"; exit 1
+          fi
+          metadata=$(jq -nc --arg name "King Maker $VERSION" --argjson ids "$ids" \
+            '{displayName: $name, changelog: "See the GitHub release notes.", changelogType: "markdown", releaseType: "release", gameVersions: $ids}')
+          curl -sf -H "X-Api-Token: $CF_API_TOKEN" \
+            -F "metadata=$metadata" -F "file=@King_Maker.zip" \
+            "$api/projects/$CF_PROJECT_ID/upload-file"
