@@ -32,7 +32,7 @@ jobs:
       - name: Upload to CurseForge
         if: env.CF_API_TOKEN != ''
         env:
-          CF_PROJECT_ID: "PROJECT_ID"
+          CF_PROJECT_ID: "1759872"
           CF_GAME_VERSION: "1.60.1"
           VERSION: ${{ github.event.inputs.version || github.ref_name }}
         run: |
