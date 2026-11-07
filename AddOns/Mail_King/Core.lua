@@ -3,13 +3,13 @@ local _, ns = ...
 -- Mail King: the money side of the King suite. Every auction house mail you
 -- open (sales, purchases, expired and cancelled auctions) goes in a ledger,
 -- so you can see what you actually made, where it came from, and which of
--- your farms and strategies are paying off.
+-- your farms and strategies are paying off, who your best customers are, and
+-- what isn't selling. What you own (and your net worth) is Inventory King's.
 --
 -- Files:
 --   Core.lua     saved data, money and item helpers, strategies, slash command
---   Mail.lua     reads the mailbox, auction postings (for deposits) and your gold
---   Ledger.lua   adds it all up: periods, strategies, items
---   Stock.lua    what's in every character's bags, bank, mail and auctions, and its worth
+--   Mail.lua     reads the mailbox, and auction postings (for deposits and prices)
+--   Ledger.lua   adds it all up: periods, strategies, items, buyers, what isn't selling
 --   UI.lua       the window and the minimap button
 
 MailKing = { API_VERSION = 1 }
@@ -142,14 +142,13 @@ f:SetScript("OnEvent", function(_, _, name)
     if name ~= "Mail_King" then return end
     MailKingDB = MailKingDB or {}
     local db = MailKingDB
-    db.entries = db.entries or {}   -- the ledger (Mail.lua): { t, k, item, name, n, g, cut, dep, who, c }
+    db.entries = db.entries or {}   -- the ledger (Mail.lua): { t, k, item, name, n, g, cut, dep, each, who, c }
     db.seen = db.seen or {}         -- mail key -> when it was recorded, so a mail counts once
     db.posts = db.posts or {}       -- your auctions still up: what they cost to post
     db.names = db.names or {}       -- item name -> itemID
     db.strategy = db.strategy or {} -- itemID (or name) -> your strategy for it
     db.custom = db.custom or {}     -- strategies you made up
-    db.gold = db.gold or {}         -- "Name-Realm" -> { m = copper, t = when }
-    db.stock = db.stock or {}       -- "Name-Realm" (or "Warband") -> { bags, bank, mail, ah = { itemID = n }, bagsT... }
+    -- 1.1 kept gold and stock here (db.gold, db.stock): Inventory King brings them over and clears them.
     db.ui = db.ui or {}
     if db.ui.button == nil then db.ui.button = true end
     db.ui.period = db.ui.period or 7

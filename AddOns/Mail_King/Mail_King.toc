@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: Mail King
-## Notes: A ledger of your auction house money, read from your mail: profit by strategy, item and day.
+## Notes: A ledger of your auction house money, read from your mail: profit by strategy, item and day, who buys from you and what isn't selling.
 ## Author: BearBones
-## Version: 1.1.2
+## Version: 1.2.0
 ## OptionalDeps: Scanner_King, Farm_King
 ## SavedVariables: MailKingDB
 ## IconTexture: Interface\Icons\INV_Letter_15
@@ -10,5 +10,4 @@
 Core.lua
 Mail.lua
 Ledger.lua
-Stock.lua
 UI.lua

@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: Inventory King
+## Notes: Everything you own on every character, what it's worth, and your net worth: gold plus items.
+## Author: BearBones
+## Version: 1.0.0
+## OptionalDeps: Scanner_King, Mail_King
+## SavedVariables: InventoryKingDB
+## IconTexture: Interface\Icons\INV_Misc_Bag_08
+
+Core.lua
+Scan.lua
+Worth.lua
+History.lua
+Tooltip.lua
+UI.lua

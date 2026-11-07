@@ -8,7 +8,8 @@ local API = ns.API
 --   spent    = what you bought on the auction house
 --   lost     = deposits on auctions that expired or were cancelled
 --   profit   = income - spent - lost
--- broken down by strategy (Core.lua says how an item gets one) and by item.
+-- broken down by strategy (Core.lua says how an item gets one) and by item,
+-- by who bought from you (or sold to you), and what isn't selling.
 --
 -- Flips: an item you bought and then sold is a flip, so what you paid and what
 -- it sold for land in the same row and its profit is the margin. Something you
@@ -55,7 +56,7 @@ local function row(t, k)
     local r = t[k]
     if not r then
         r = { key = k, sales = 0, units = 0, gross = 0, cut = 0, income = 0, spent = 0, bought = 0, lost = 0,
-              expired = 0, profit = 0 }
+              expired = 0, profit = 0, listSum = 0, listN = 0 }
         t[k] = r
     end
     return r
@@ -66,10 +67,13 @@ local function add(r, e)
         r.sales, r.units = r.sales + 1, r.units + (e.n or 1)
         r.gross, r.cut = r.gross + (e.g or 0), r.cut + (e.cut or 0)
         r.income = r.income + (e.g or 0) - (e.cut or 0)
+        r.lastSale = math.max(r.lastSale or 0, e.t or 0)
     elseif e.k == "buy" then
         r.bought, r.spent = r.bought + (e.n or 1), r.spent + (e.g or 0)
     else
         r.expired, r.lost = r.expired + 1, r.lost + (e.dep or 0)
+        r.lastExpired = math.max(r.lastExpired or 0, e.t or 0)
+        if e.each then r.listSum, r.listN = r.listSum + e.each * (e.n or 1), r.listN + (e.n or 1) end
     end
     r.profit = r.income - r.spent - r.lost
 end
@@ -128,22 +132,127 @@ function ns.Daily(n, onlyChar)
     return days
 end
 
--- Gold on every character, and the total.
-function ns.Gold()
-    local list, total = {}, 0
-    for who, g in pairs(ns.db.gold) do
-        table.insert(list, { who = who, m = g.m or 0, t = g.t })
-        total = total + (g.m or 0)
+local function market(id)
+    if not (id and ScannerKing and ScannerKing.GetMarketPrice) then return nil end
+    return (ScannerKing.GetMarketPrice(id))
+end
+ns.Market = market
+
+---------------------------------------------------------------------------
+-- Buyers: who buys from you (and who you buy from)
+---------------------------------------------------------------------------
+
+-- kind "sale": the people who bought from you; "buy": the people you bought from.
+-- Returns { rows = { { who, mails, units, gold, first, last, share, goldShare, regular,
+--   fav = { item, name, mails, units, gold }, items = { [key] = {...} } } } (most mails first),
+--   mails, gold, unknown = mails with no name on them }.
+ns.REGULAR = 3 -- this many mails or more makes someone a regular
+function ns.Buyers(since, onlyChar, kind)
+    kind = kind or "sale"
+    local s = ns.Summary(since, onlyChar)
+    local by, out = {}, { rows = {}, mails = 0, gold = 0, unknown = 0 }
+    for _, e in ipairs(s.entries) do
+        if e.k == kind then
+            if not e.who or e.who == "" then
+                out.unknown = out.unknown + 1
+            else
+                local r = by[e.who]
+                if not r then
+                    r = { who = e.who, mails = 0, units = 0, gold = 0, first = e.t, last = e.t, items = {} }
+                    by[e.who] = r
+                end
+                r.mails, r.units, r.gold = r.mails + 1, r.units + (e.n or 1), r.gold + (e.g or 0)
+                r.first, r.last = math.min(r.first, e.t), math.max(r.last, e.t)
+                local k = key(e) or "?"
+                local it = r.items[k]
+                if not it then it = { item = e.item, name = e.name, mails = 0, units = 0, gold = 0 }; r.items[k] = it end
+                it.mails, it.units, it.gold = it.mails + 1, it.units + (e.n or 1), it.gold + (e.g or 0)
+                out.mails, out.gold = out.mails + 1, out.gold + (e.g or 0)
+            end
+        end
     end
-    table.sort(list, function(a, b) return a.m > b.m end)
-    return total, list
+    for _, r in pairs(by) do
+        r.share = out.mails > 0 and r.mails / out.mails or 0
+        r.goldShare = out.gold > 0 and r.gold / out.gold or 0
+        r.each = r.mails > 0 and r.gold / r.mails or 0
+        r.regular = r.mails >= ns.REGULAR
+        local n = 0
+        for _, it in pairs(r.items) do
+            n = n + 1
+            if not r.fav or it.gold > r.fav.gold or (it.gold == r.fav.gold and it.mails > r.fav.mails) then r.fav = it end
+        end
+        r.kinds = n
+        r.name = r.fav and r.fav.name -- for sorting by favourite
+        table.insert(out.rows, r)
+    end
+    table.sort(out.rows, function(a, b)
+        if a.mails ~= b.mails then return a.mails > b.mails end
+        if a.gold ~= b.gold then return a.gold > b.gold end
+        return a.who < b.who
+    end)
+    return out
+end
+
+-- A buyer's items, best first: { { item, name, mails, units, gold } }.
+function ns.BuyerItems(r)
+    local list = {}
+    for _, it in pairs(r.items) do table.insert(list, it) end
+    table.sort(list, function(a, b)
+        if a.gold ~= b.gold then return a.gold > b.gold end
+        return (a.name or "") < (b.name or "")
+    end)
+    return list
+end
+
+---------------------------------------------------------------------------
+-- What isn't selling
+---------------------------------------------------------------------------
+
+-- Every item that came back expired or cancelled in the period, worst first (most deposits lost):
+-- the item rows of ns.Summary plus
+--   through   sell-through: of the auctions that ended, how many sold
+--   listEach  your average asking price each on the ones that came back (known for auctions
+--             posted while Mail King was running)
+--   soldEach  average price each when it did sell
+--   market    Scanner King's market price today
+--   vsMarket  listEach against the market: 0.25 = asking 25% over it
+--   why       "over" (asking 10%+ over the market), "never" (none sold), "slow" (under half sold), or nil
+--   held      how many you still have (Inventory King)
+function ns.NotSelling(since, onlyChar)
+    local s = ns.Summary(since, onlyChar)
+    local out = {}
+    for _, r in ipairs(s.items) do
+        if r.expired > 0 then
+            local ended = r.sales + r.expired
+            r.through = r.sales / ended
+            r.listEach = r.listN > 0 and r.listSum / r.listN or nil
+            r.soldEach = r.units > 0 and r.gross / r.units or nil
+            r.market = market(r.item)
+            r.vsMarket = (r.listEach and r.market and r.market > 0) and (r.listEach / r.market - 1) or nil
+            if r.vsMarket and r.vsMarket >= 0.1 then r.why = "over"
+            elseif r.sales == 0 then r.why = "never"
+            elseif r.through < 0.5 then r.why = "slow"
+            else r.why = nil end
+            if r.item and InventoryKing and InventoryKing.GetCount then
+                local ok, n = pcall(InventoryKing.GetCount, r.item)
+                r.held = ok and n or nil
+            end
+            table.insert(out, r)
+        end
+    end
+    table.sort(out, function(a, b)
+        if a.lost ~= b.lost then return a.lost > b.lost end
+        if a.expired ~= b.expired then return a.expired > b.expired end
+        return tostring(a.key) < tostring(b.key)
+    end)
+    return out
 end
 
 ---------------------------------------------------------------------------
 -- For other addons
 ---------------------------------------------------------------------------
 
--- Copies of the ledger entries: { t, k = "sale"|"buy"|"expired"|"cancelled", item, name, n, g, cut, dep, who, c }
+-- Copies of the ledger entries: { t, k = "sale"|"buy"|"expired"|"cancelled", item, name, n, g, cut, dep, each, who, c }
 function API.GetEntries()
     local out = {}
     for i, e in ipairs(ns.db and ns.db.entries or {}) do
@@ -161,3 +270,18 @@ function API.Summary(since)
 end
 
 function API.StrategyOf(itemID) return (ns.ItemStrategy(itemID)) end
+
+-- Who bought from you since a server time (0 = all): { { who, mails, units, gold, last } }, most mails first.
+function API.Buyers(since)
+    local out = {}
+    for i, r in ipairs(ns.Buyers(since or 0).rows) do
+        out[i] = { who = r.who, mails = r.mails, units = r.units, gold = r.gold, last = r.last }
+    end
+    return out
+end
+
+-- Stock moved to Inventory King: how many you hold across every character, when it's installed.
+function API.Stock(itemID)
+    if InventoryKing and InventoryKing.GetCount then return (InventoryKing.GetCount(itemID)) end
+    return 0
+end

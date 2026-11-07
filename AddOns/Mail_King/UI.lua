@@ -1,14 +1,17 @@
 local _, ns = ...
 
 -- The Mail King window.
---   Top:     the tabs (Summary, Sales, Purchases, Expired, Items), the period
---            (Today, 7 days, 30 days, All) and whose mail (all characters or this one).
---   Summary: profit, income, the auction house cut, spent, deposits lost and
---            your gold on every character; profit per day for the last two weeks;
---            and every strategy, best first. Click a strategy for its items.
+--   Top:     the tabs (Summary, Sales, Purchases, Expired, Items, Not selling, Buyers),
+--            the period (Today, 7 days, 30 days, All) and whose mail (all characters or this one).
+--   Summary: profit, income, the auction house cut, spent, deposits lost; your best
+--            buyer and (with Inventory King) your net worth; profit per day for the
+--            last two weeks; and every strategy, best first. Click a strategy for its items.
 --   Lists:   every sale, purchase and expired auction, newest first.
 --   Items:   every item you've traded: sold, average price, sell-through and
 --            today's market price from Scanner King. Click a column to sort.
+--   Not selling: what came back unsold, worst first, and why it might be.
+--   Buyers:  who buys from you (or who you buy from): how often, how much, what.
+--            Click one for their sales.
 -- Right-click any item to choose its strategy (or make a new one).
 
 local WIDTH, HEIGHT = 860, 560
@@ -16,13 +19,17 @@ local ROWS, ROW_H = 20, 18
 local MAX_COLS = 11
 local DAYS = 14
 local PERIODS = { { 1, "Today" }, { 7, "7 days" }, { 30, "30 days" }, { 0, "All" } }
-local TABS = { { "summary", "Summary" }, { "sale", "Sales" }, { "buy", "Purchases" }, { "expired", "Expired" }, { "items", "Items" }, { "stock", "Stock" } }
+local TABS = { { "summary", "Summary" }, { "sale", "Sales" }, { "buy", "Purchases" }, { "expired", "Expired" }, { "items", "Items" },
+    { "unsold", "Not selling" }, { "buyers", "Buyers" } }
 
-local frame, tabButtons, periodButtons, charBtn, footer
+local frame, tabButtons, periodButtons, charBtn, sideBtn, footer
 local summaryView, tiles, goldText, bars, stratTable
 local listView, listTable
-local tab, offset, strategyFilter = "summary", 0, nil
-local sorts = { items = { key = "profit", desc = true }, stock = { key = "value", desc = true } } -- by column, per page
+local tab, offset, strategyFilter, whoFilter = "summary", 0, nil, nil
+local sellers = false -- the Buyers page shows who you bought from instead
+local sorts = { items = { key = "profit", desc = true }, unsold = { key = "lost", desc = true },
+    buyers = { key = "mails", desc = true } } -- by column, per page
+local buyerCount = {} -- buyer -> sale mails, all time, for the Sales tooltips
 local current = {} -- the rows on show in the list
 
 local function grey(t) return "|cff808080" .. t .. "|r" end
@@ -178,10 +185,15 @@ local function refreshSummary()
     tiles.spent:SetText(ns.Money(s.spent))
     tiles.lost:SetText(ns.Money(s.lost))
     tiles.sales:SetText(s.sales .. (s.expired > 0 and ("  " .. grey("(" .. s.expired .. " expired)")) or ""))
-    local gold = ns.Gold()
-    local stock = ns.Stock()
-    goldText:SetText("Gold on your characters: " .. ns.Money(gold) .. "     Stock worth: " .. ns.Money(stock.value)
-        .. "     Together: " .. ns.Money(gold + stock.value))
+    local bits = {}
+    local b = ns.Buyers(since(), onlyChar()).rows[1]
+    if b then
+        table.insert(bits, "Best buyer: " .. b.who .. ", " .. b.mails .. " sale" .. (b.mails == 1 and "" or "s")
+            .. string.format(" (%.0f%%)", b.share * 100) .. " for " .. ns.Money(b.gold))
+    end
+    local w = InventoryKing and InventoryKing.NetWorth and InventoryKing.NetWorth()
+    if w then table.insert(bits, "Net worth: " .. ns.Money(w.total)) end
+    goldText:SetText(table.concat(bits, "     "))
 
     -- Profit per day
     local days = ns.Daily(DAYS, onlyChar())
@@ -271,23 +283,33 @@ local LIST_COLS = {
         { key = "market", label = "Market now", w = 80, justify = "RIGHT", tip = "Scanner King's market price today, per unit." },
         { key = "profit", label = "Profit", w = 80, justify = "RIGHT" },
     },
-    stock = {
-        { key = "name", label = "Item", w = 210 },
-        { key = "strategy", label = "Strategy", w = 100 },
-        { key = "bags", label = "Bags", w = 55, justify = "RIGHT" },
-        { key = "bank", label = "Bank", w = 55, justify = "RIGHT", tip = "Seen when you last opened each character's bank (and the warband bank)." },
-        { key = "mail", label = "Mail", w = 55, justify = "RIGHT", tip = "Still attached to mail in your mailbox." },
-        { key = "ah", label = "On AH", w = 55, justify = "RIGHT", tip = "Your auctions still up, as of when you last looked at them." },
-        { key = "total", label = "Total", w = 60, justify = "RIGHT" },
-        { key = "each", label = "Market each", w = 95, justify = "RIGHT", tip = "Scanner King's market price today." },
-        { key = "value", label = "Worth", w = 105, justify = "RIGHT" },
+    unsold = {
+        { key = "name", label = "Item", w = 160 },
+        { key = "strategy", label = "Strategy", w = 80 },
+        { key = "units", label = "Sold", w = 42, justify = "RIGHT", tip = "Units sold." },
+        { key = "expired", label = "Expired", w = 50, justify = "RIGHT", tip = "Auctions that came back, expired or cancelled." },
+        { key = "through", label = "Sell-thru", w = 58, justify = "RIGHT", tip = "Of the auctions that ended, how many sold." },
+        { key = "lost", label = "Deposits lost", w = 85, justify = "RIGHT" },
+        { key = "listEach", label = "You asked", w = 80, justify = "RIGHT", tip = "Your average price each on the auctions that came back. Known for auctions posted while Mail King was running." },
+        { key = "market", label = "Market now", w = 80, justify = "RIGHT", tip = "Scanner King's market price today, per unit." },
+        { key = "lastSale", label = "Last sold", w = 70, justify = "RIGHT" },
+        { key = "why", label = "Why", w = 115, tip = "Over market: you asked 10% or more over today's market price. Never sold: none sold in this period. Slow: under half sold." },
+    },
+    buyers = {
+        { key = "who", label = "Buyer", w = 130 },
+        { key = "mails", label = "Sales", w = 50, justify = "RIGHT", tip = "How many of your auctions they bought (one mail each)." },
+        { key = "units", label = "Units", w = 50, justify = "RIGHT" },
+        { key = "gold", label = "Paid you", w = 105, justify = "RIGHT", tip = "What they paid, before the auction house cut." },
+        { key = "each", label = "Avg sale", w = 90, justify = "RIGHT" },
+        { key = "share", label = "Share", w = 55, justify = "RIGHT", tip = "Of your sales in this period." },
+        { key = "kinds", label = "Items", w = 45, justify = "RIGHT", tip = "How many different items." },
+        { key = "name", label = "Favourite", w = 175, tip = "What they've spent the most on." },
+        { key = "last", label = "Last", w = 90 },
     },
 }
 
-local function market(id)
-    if not (id and ScannerKing and ScannerKing.GetMarketPrice) then return nil end
-    return (ScannerKing.GetMarketPrice(id))
-end
+local market = ns.Market
+local WHY = { over = "|cffff6060over market|r", never = "|cffff6060never sold|r", slow = "|cffffd100slow|r" }
 
 local function build()
     local s = ns.Summary(since(), onlyChar())
@@ -302,19 +324,27 @@ local function build()
             end
         end
         table.sort(current, ns.Sorter("items"))
-    elseif tab == "stock" then
-        local st = ns.Stock(onlyChar())
-        for _, r in ipairs(st.items) do
-            if not strategyFilter or r.strategy == strategyFilter then
-                r.name = r.name or ((C_Item and C_Item.GetItemInfo or GetItemInfo)(r.item))
-                table.insert(current, r)
-            end
+    elseif tab == "unsold" then
+        for _, r in ipairs(ns.NotSelling(since(), onlyChar())) do
+            if not strategyFilter or r.strategy == strategyFilter then table.insert(current, r) end
         end
-        current.stock = st
-        table.sort(current, ns.Sorter("stock"))
+        table.sort(current, ns.Sorter("unsold"))
+    elseif tab == "buyers" then
+        local b = ns.Buyers(since(), onlyChar(), sellers and "buy" or "sale")
+        for _, r in ipairs(b.rows) do table.insert(current, r) end
+        current.unknown = b.unknown
+        table.sort(current, ns.Sorter("buyers"))
     else
         for _, e in ipairs(s.entries) do
-            if e.k == tab or (tab == "expired" and e.k == "cancelled") then table.insert(current, e) end
+            if (e.k == tab or (tab == "expired" and e.k == "cancelled")) and (not whoFilter or e.who == whoFilter) then
+                table.insert(current, e)
+            end
+        end
+        if tab == "sale" then
+            wipe(buyerCount)
+            for _, e in ipairs(ns.db.entries) do
+                if e.k == "sale" and e.who then buyerCount[e.who] = (buyerCount[e.who] or 0) + 1 end
+            end
         end
     end
 end
@@ -323,7 +353,7 @@ function ns.Sorter(page)
     local sort = sorts[page]
     return function(a, b)
         local x, y = a[sort.key], b[sort.key]
-        if sort.key == "name" or sort.key == "strategy" then x, y = a[sort.key] or "", b[sort.key] or "" end
+        if sort.key == "name" or sort.key == "strategy" or sort.key == "who" or sort.key == "why" then x, y = a[sort.key] or "", b[sort.key] or "" end
         if x == nil or y == nil then
             if x ~= nil or y ~= nil then return x ~= nil end
             return (a.name or "") < (b.name or "")
@@ -337,12 +367,27 @@ end
 local function cell(e, key)
     if key == "t" then return when(e.t) end
     if key == "name" then return ns.ItemText(e.item, e.name) end
-    if key == "strategy" then return (tab == "items" or tab == "stock") and e.strategy or (ns.strategyOf[e] or "") end
-    if tab == "stock" then
-        if key == "each" or key == "value" then return e[key] and ns.Money(e[key]) or grey("no price") end
-        if key == "total" then return tostring(e.total) end
-        local v = e[key]
-        if v then return v > 0 and tostring(v) or grey("-") end
+    if key == "strategy" then return (tab == "items" or tab == "unsold") and e.strategy or (ns.strategyOf[e] or "") end
+    if tab == "buyers" then
+        if key == "who" then return e.regular and ("|cffffd100" .. e.who .. "|r") or e.who end
+        if key == "gold" or key == "each" then return ns.Money(e[key]) end
+        if key == "share" then return pct(e.share) end
+        if key == "name" then return e.fav and (ns.ItemText(e.fav.item, e.fav.name) .. grey(" x" .. e.fav.units)) or grey("-") end
+        if key == "last" then return when(e.last) end
+        return tostring(e[key] or 0)
+    end
+    if tab == "unsold" then
+        if key == "listEach" then
+            if not e.listEach then return grey("unknown") end
+            local over = e.vsMarket and e.vsMarket >= 0.1
+            return (over and "|cffff6060" or "") .. ns.Money(e.listEach) .. (over and "|r" or "")
+        end
+        if key == "lastSale" then return e.lastSale and date and date("%m-%d", e.lastSale) or grey("never") end
+        if key == "lost" then return e.lost > 0 and ns.Money(e.lost) or grey("-") end
+        if key == "why" then
+            if e.why == "over" and e.vsMarket then return WHY.over .. string.format(" +%.0f%%", e.vsMarket * 100) end
+            return WHY[e.why] or ""
+        end
     end
     if key == "n" then return tostring(e.n or 1) end
     if key == "each" then
@@ -372,11 +417,12 @@ local function refreshList()
     for i, r in ipairs(listTable.rows) do
         local e = current[i + offset]
         if e then
-            r.item, r.name, r.chars = e.item, e.name, e.chars
+            r.item, r.name, r.buyer, r.entry = e.item, e.name, tab == "buyers" and e or nil, e
+            if tab == "buyers" then r.item, r.name = nil, nil end
             for c, col in ipairs(cols) do r.cells[c]:SetText(cell(e, col.key)) end
             r:Show()
         else
-            r.item, r.name, r.chars = nil, nil, nil
+            r.item, r.name, r.buyer, r.entry = nil, nil, nil, nil
             r:Hide()
         end
     end
@@ -386,13 +432,21 @@ local function refreshList()
             listTable.headers[i]:SetText(col.label .. (sort.key == col.key and (sort.desc and " v" or " ^") or ""))
         end
     end
-    local what = tab == "sale" and "sales" or tab == "buy" and "purchases" or tab == "expired" and "expired or cancelled auctions" or tab == "stock" and "items in stock" or "items"
+    local what = tab == "sale" and "sales" or tab == "buy" and "purchases" or tab == "expired" and "expired or cancelled auctions"
+        or tab == "unsold" and "items that came back unsold" or tab == "buyers" and (sellers and "sellers" or "buyers") or "items"
     listView.empty:SetText(#current == 0 and ("No " .. what .. " in this period.") or "")
+    local hint
+    if tab == "buyers" then
+        hint = "Gold: " .. ns.REGULAR .. "+ " .. (sellers and "purchases" or "sales") .. ". Click one for their "
+            .. (sellers and "purchases." or "sales.")
+            .. ((current.unknown or 0) > 0 and ("  " .. current.unknown .. " with no name on the mail.") or "")
+    else
+        hint = "Right-click an item to choose its strategy."
+    end
     footer:SetText((#current > 0 and ((offset + 1) .. "-" .. (offset + math.min(#current, ROWS)) .. " of " .. #current .. " " .. what .. ".  ") or "")
-        .. (strategyFilter and (tab == "items" or tab == "stock") and ("Strategy: " .. strategyFilter .. " (click the tab again for all).  ") or "")
-        .. (tab == "stock" and current.stock and ("Worth " .. ns.Money(current.stock.value) .. ".  "
-            .. (ns.StockSeen().bank and "" or "Open your bank once to add it.  ")) or "")
-        .. "Right-click an item to choose its strategy.")
+        .. (strategyFilter and (tab == "items" or tab == "unsold") and ("Strategy: " .. strategyFilter .. " (click the tab again for all).  ") or "")
+        .. (whoFilter and (tab == "sale" or tab == "buy") and ((tab == "sale" and "Buyer: " or "Seller: ") .. whoFilter .. " (click the tab again for all).  ") or "")
+        .. hint)
 end
 
 function ns.Refresh()
@@ -400,15 +454,20 @@ function ns.Refresh()
     for _, b in ipairs(tabButtons) do if b.key == tab then b:LockHighlight() else b:UnlockHighlight() end end
     for _, b in ipairs(periodButtons) do if b.days == ns.db.ui.period then b:LockHighlight() else b:UnlockHighlight() end end
     charBtn:SetText(ns.db.ui.mine and "This character" or "All characters")
+    sideBtn:SetShown(tab == "buyers")
+    sideBtn:SetText(sellers and "Sellers" or "Buyers")
     summaryView:SetShown(tab == "summary")
     listView:SetShown(tab ~= "summary")
     if tab == "summary" then refreshSummary() else refreshList() end
 end
 
-function ns.SelectTab(key, strategy)
-    if key == tab and sorts[key] and not strategy then strategyFilter = nil end
+-- strategy: only that strategy's items (Items, Not selling). who: only that buyer or seller (Sales, Purchases).
+function ns.SelectTab(key, strategy, who)
+    if key == tab and not strategy and not who then strategyFilter, whoFilter = nil, nil end
     if key ~= tab and not strategy then strategyFilter = nil end
+    if key ~= tab and not who then whoFilter = nil end
     if strategy then strategyFilter = strategy end
+    if who then whoFilter = who end
     tab, offset = key, 0
     ns.Refresh()
 end
@@ -425,24 +484,64 @@ local function button(parent, text, w, onClick)
     return b
 end
 
+-- A buyer (or seller): what they bought, best first.
+local function buyerTip(b)
+    GameTooltip:AddLine(b.who .. (b.regular and "  |cffffd100regular|r" or ""))
+    GameTooltip:AddDoubleLine(b.mails .. (sellers and " purchases, " or " sales, ") .. b.units .. " units", ns.Money(b.gold), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddDoubleLine("First / last", when(b.first) .. "  /  " .. when(b.last), 0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
+    GameTooltip:AddLine(" ")
+    for i, it in ipairs(ns.BuyerItems(b)) do
+        if i > 10 then GameTooltip:AddLine("...", 0.6, 0.6, 0.6); break end
+        GameTooltip:AddDoubleLine(ns.ItemText(it.item, it.name) .. "  x" .. it.units .. "  (" .. it.mails .. ")", ns.Money(it.gold), 1, 1, 1, 1, 1, 1)
+    end
+    GameTooltip:AddLine(sellers and "Click: their purchases." or "Click: their sales.", 0.6, 0.6, 0.6)
+end
+
+-- Why an item isn't selling, in words.
+local function unsoldTip(e)
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddDoubleLine("Sold / came back", e.sales .. " / " .. e.expired, 1, 1, 1, 1, 1, 1)
+    if e.soldEach then GameTooltip:AddDoubleLine("Sold for, each", ns.Money(e.soldEach), 1, 1, 1, 1, 1, 1) end
+    if e.listEach then GameTooltip:AddDoubleLine("You asked, each", ns.Money(e.listEach), 1, 1, 1, 1, 1, 1) end
+    if e.market then GameTooltip:AddDoubleLine("Market now", ns.Money(e.market), 1, 1, 1, 1, 1, 1) end
+    if e.held then GameTooltip:AddDoubleLine("You still have", tostring(e.held), 1, 1, 1, 1, 1, 1) end
+    if e.why == "over" then
+        GameTooltip:AddLine(string.format("You're asking %.0f%% over the market: try nearer %s.", e.vsMarket * 100, ns.Money(e.market)), 1, 0.4, 0.4, true)
+    elseif e.why == "never" then
+        GameTooltip:AddLine("None sold in this period. Check the price, or whether anyone's buying.", 1, 0.4, 0.4, true)
+    elseif e.why == "slow" then
+        GameTooltip:AddLine("Under half of these sell. A little cheaper, or fewer at once, may help.", 1, 0.82, 0, true)
+    end
+end
+
 local function rowScripts(r)
     r:SetScript("OnEnter", function(self)
+        if self.buyer then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            buyerTip(self.buyer)
+            GameTooltip:Show()
+            return
+        end
         if not self.item then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if GameTooltip.SetItemByID then GameTooltip:SetItemByID(self.item) end
-        if self.chars then
-            local list = {}
-            for who, n in pairs(self.chars) do table.insert(list, { who, n }) end
-            table.sort(list, function(a, b) return a[2] > b[2] end)
+        local e = self.entry
+        if tab == "unsold" and e then unsoldTip(e) end
+        if tab == "sale" and e and e.who and buyerCount[e.who] then
+            local n = buyerCount[e.who]
             GameTooltip:AddLine(" ")
-            for _, c in ipairs(list) do GameTooltip:AddDoubleLine(c[1], c[2], 1, 1, 1, 1, 1, 1) end
+            GameTooltip:AddLine(e.who .. " has bought from you " .. n .. " time" .. (n == 1 and "" or "s") .. ".", 1, 0.82, 0)
         end
         GameTooltip:AddLine("Right-click: choose its strategy.", 0.6, 0.6, 0.6)
         GameTooltip:Show()
     end)
     r:SetScript("OnLeave", function() GameTooltip:Hide() end)
     r:SetScript("OnClick", function(self, which)
-        if which == "RightButton" then ns.StrategyMenu(self, self.item, self.name) end
+        if self.buyer then
+            ns.SelectTab(sellers and "buy" or "sale", nil, self.buyer.who)
+        elseif which == "RightButton" then
+            ns.StrategyMenu(self, self.item, self.name)
+        end
     end)
 end
 
@@ -502,6 +601,15 @@ local function create()
         GameTooltip:Show()
     end)
     charBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    sideBtn = button(frame, "Buyers", 90, function() sellers = not sellers; offset = 0; ns.Refresh() end)
+    sideBtn:SetPoint("LEFT", charBtn, "RIGHT", 4, 0)
+    sideBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Buyers or sellers")
+        GameTooltip:AddLine("The people who buy from you, or the people you buy from. Click to switch.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    sideBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- Summary
     summaryView = CreateFrame("Frame", nil, frame)
@@ -520,17 +628,31 @@ local function create()
     end
     local goldHolder = CreateFrame("Frame", nil, summaryView)
     goldHolder:SetPoint("TOPLEFT", 0, -40)
-    goldHolder:SetSize(400, 16)
+    goldHolder:SetSize(700, 16)
     goldText = goldHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     goldText:SetPoint("LEFT")
     goldHolder:EnableMouse(true)
     goldHolder:SetScript("OnEnter", function(self)
-        local total, list = ns.Gold()
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:AddDoubleLine("Gold on your characters", ns.Money(total))
-        for _, g in ipairs(list) do GameTooltip:AddDoubleLine(g.who, ns.Money(g.m), 1, 1, 1, 1, 1, 1) end
+        local top = ns.Buyers(since(), onlyChar()).rows
+        GameTooltip:AddLine("Your best buyers")
+        for i = 1, math.min(5, #top) do
+            GameTooltip:AddDoubleLine(top[i].who .. "  (" .. top[i].mails .. ")", ns.Money(top[i].gold), 1, 1, 1, 1, 1, 1)
+        end
+        if #top == 0 then GameTooltip:AddLine("No sales in this period.", 0.6, 0.6, 0.6) end
+        local w = InventoryKing and InventoryKing.NetWorth and InventoryKing.NetWorth()
+        if w then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddDoubleLine("Net worth (Inventory King)", ns.Money(w.total))
+            GameTooltip:AddDoubleLine("Gold", ns.Money(w.gold + w.mail), 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("Items", ns.Money(w.assets), 1, 1, 1, 1, 1, 1)
+        else
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Install Inventory King for your gold, items and net worth.", 0.6, 0.6, 0.6, true)
+        end
         GameTooltip:Show()
     end)
+    goldHolder:SetScript("OnMouseUp", function() ns.SelectTab("buyers") end)
     goldHolder:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     local barsLabel = summaryView:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -588,7 +710,7 @@ local function create()
     listTable = makeTable(listView, ROWS, function(key)
         local sort = sorts[tab]
         if not sort then return end
-        if sort.key == key then sort.desc = not sort.desc else sort.key, sort.desc = key, key ~= "name" and key ~= "strategy" end
+        if sort.key == key then sort.desc = not sort.desc else sort.key, sort.desc = key, key ~= "name" and key ~= "strategy" and key ~= "who" and key ~= "why" end
         offset = 0
         ns.Refresh()
     end)
@@ -727,8 +849,8 @@ function ns.UpdateMinimapButton()
             GameTooltip:SetOwner(self, "ANCHOR_LEFT")
             GameTooltip:AddLine("Mail King")
             GameTooltip:AddDoubleLine("Profit, last 7 days", ns.Money(week.profit), 1, 1, 1, 1, 1, 1)
-            GameTooltip:AddDoubleLine("Gold on your characters", ns.Money((ns.Gold())), 1, 1, 1, 1, 1, 1)
-            GameTooltip:AddDoubleLine("Stock worth", ns.Money(ns.Stock().value), 1, 1, 1, 1, 1, 1)
+            local w = InventoryKing and InventoryKing.NetWorth and InventoryKing.NetWorth()
+            if w then GameTooltip:AddDoubleLine("Net worth", ns.Money(w.total), 1, 1, 1, 1, 1, 1) end
             GameTooltip:AddLine("Click: open. Drag: move this button.", 0.8, 0.8, 0.8)
             GameTooltip:Show()
         end)

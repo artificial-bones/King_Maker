@@ -1,7 +1,7 @@
 # King Maker
 
 Every King addon in one download. The King addons are a suite of addons for **World of Warcraft: Forever**: price scanning, price history, trading, farming, gathering,
-gold tracking, dungeon quests and profession leveling, all sharing one set of auction house prices.
+gold tracking, net worth, dungeon quests and profession leveling, all sharing one set of auction house prices.
 
 **[Download the latest release](https://github.com/artificial-bones/King_Maker/releases/latest)** (`King_Maker.zip`).
 
@@ -49,7 +49,8 @@ Which addons need or use which, at a glance:
 | Econ King | Scanner King | - |
 | Farm King | Scanner King | Questie, QuestieDB |
 | Gather King | - | Scanner King |
-| Mail King | - | Scanner King, Farm King |
+| Mail King | - | Scanner King, Farm King, Inventory King |
+| Inventory King | - | Scanner King, Mail King |
 | Quest King | - | Questie, QuestieDB, TomTom |
 | Skillup King | Scanner King | - |
 | Minimap King | - | - |
@@ -73,7 +74,7 @@ King addon reads.
 
 - **Needs:** Nothing. Scanner King works on its own.
 - **Works with:**
-  - Market King, Econ King, Farm King, Gather King, Mail King and Skillup King all read their prices from it.
+  - Market King, Econ King, Farm King, Gather King, Mail King, Inventory King and Skillup King all read their prices from it.
   - Guildmates running Scanner King share prices with you automatically.
 
 Open it with `/sk` or its minimap button. [Full guide](https://github.com/artificial-bones/King_Maker/tree/main/AddOns/Scanner_King#readme)
@@ -178,24 +179,46 @@ Open it with `/gt` or its minimap button. [Full guide](https://github.com/artifi
 
 ![Mail King](screenshots/Mail_King.png)
 
-Reads your auction house mail into a ledger, so you can see what you actually made and where it
-came from.
+Reads your auction house mail into a ledger, so you can see what you actually made, where it
+came from, who's buying and what isn't selling.
 
 - **Every sale, purchase, expired and cancelled auction**, recorded once and dated when it happened, not when you read the mail.
 - **Summary**: profit, income, the auction house cut, spent and deposits lost, for today, 7 days, 30 days or all time, with a profit-per-day chart.
 - **Strategies** (Herbalism, Mining, Cloth, Mob drops...) so you see which of your farms pay off, with sell-through for each.
 - **Items page**: units sold, average price, income and sell-through per item.
-- **Stock**: everything you hold on every character (bags, bank, warband bank, mail and your auctions) and what it's worth.
-- **Gold across all your characters**, and **Export** to a spreadsheet.
+- **Not selling**: what came back unsold, deposits lost, what you asked against today's market, and why it might be stuck (over market, never sold, slow).
+- **Buyers**: who buys from you, how many of your auctions, what they paid, their favourite items and their share of your sales, with your regulars picked out. Switch to **Sellers** for who you buy from.
+- **Export** to a spreadsheet.
 
 **Requirements**
 
 - **Needs:** Nothing. Mail King reads your mail on its own.
 - **Better with** (optional):
-  - **Scanner King** adds today's market price on the Items page and what your stock is worth.
+  - **Scanner King** adds today's market price on the Items and Not selling pages.
   - **Farm King** puts items mobs drop under the Mob drops strategy.
+  - **Inventory King** adds your net worth to the Summary, and how many you still hold to Not selling.
 
 Open it with `/mlk` or its minimap button. [Full guide](https://github.com/artificial-bones/King_Maker/tree/main/AddOns/Mail_King#readme)
+
+### Inventory King: everything you own, and your net worth
+
+Everything on every character (bags, bank, warband bank, mailbox and your auctions still up), what
+it's worth, and your net worth: gold plus items.
+
+- **Overview**: net worth, gold on your characters, gold waiting in their mailboxes and what your items are worth, with net worth for the last 30 days and every character ranked by net worth.
+- **Items page**: categories down the left the way the auction house sorts them (and Mail King's strategies), filter by character and by where (bags, bank, mail, auction house), search, and sort any column.
+- **Item tooltips** show how many you own and on which characters.
+- Items are valued at Scanner King's market price or lowest buyout, with vendor prices for anything the auction house has none for.
+- **Export** to a spreadsheet. Mail King 1.1's stock and gold come over automatically.
+
+**Requirements**
+
+- **Needs:** Nothing. Inventory King reads your bags, bank and mail on its own.
+- **Better with** (optional):
+  - **Scanner King** prices your items. Without it only vendor prices are known.
+  - **Mail King** sorts your items into its strategies.
+
+Log in on each character and open each bank once. Open it with `/ik` or its minimap button. [Full guide](https://github.com/artificial-bones/King_Maker/tree/main/AddOns/Inventory_King#readme)
 
 ### Quest King: dungeon quests
 

@@ -12,11 +12,9 @@ local _, ns = ...
 -- Auction house mail lasts 30 days, so the time left on a mail tells when it was
 -- sent: a sale is dated when it sold, even if you only check your mail days later.
 --
--- Postings: when you put something up, Mail King notes what the deposit was,
--- so an auction that comes back expired shows what it cost you.
---
--- Your gold: each character's gold is noted whenever it changes, for the total
--- across your characters.
+-- Postings: when you put something up, Mail King notes the deposit and your
+-- price, so an auction that comes back expired shows what it cost you and what
+-- you were asking (to compare with the market).
 
 local KEEP_SEEN = 35 * 86400   -- mail keys kept (mail lasts 30 days)
 local KEEP_POSTS = 3 * 86400   -- postings kept (auctions last at most 48 hours)
@@ -232,7 +230,7 @@ function ns.ReadMail(i)
 
     if kind == "expired" or kind == "cancelled" then
         local p = takePost(e.item, e.name, e.n)
-        e.dep = p and p.dep
+        e.dep, e.each = p and p.dep, p and p.each
     end
     local sent = (daysLeft and daysLeft > 0) and (expiry - MAIL_DAYS * 86400) or now
     e.t = math.floor(math.max(now - MAIL_DAYS * 86400, math.min(now, sent)))
@@ -256,7 +254,6 @@ function ns.ReadInbox()
         local ok, e = pcall(ns.ReadMail, i)
         if ok and e then added = added + 1 end
     end
-    if ns.ReadMailItems then pcall(ns.ReadMailItems) end
     if ns.Refresh then ns.Refresh() end
     return added
 end
@@ -274,20 +271,11 @@ local function sayVisit()
 end
 
 ---------------------------------------------------------------------------
--- Your gold
----------------------------------------------------------------------------
-
-function ns.NoteGold()
-    if not ns.db or not GetMoney then return end
-    ns.db.gold[ns.Char()] = { m = GetMoney(), t = ns.Now() }
-end
-
----------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------
 
 local f = CreateFrame("Frame")
-for _, e in ipairs({ "PLAYER_LOGIN", "MAIL_SHOW", "MAIL_INBOX_UPDATE", "MAIL_CLOSED", "PLAYER_MONEY", "AUCTION_HOUSE_SHOW", "ADDON_LOADED" }) do
+for _, e in ipairs({ "PLAYER_LOGIN", "MAIL_SHOW", "MAIL_INBOX_UPDATE", "MAIL_CLOSED", "AUCTION_HOUSE_SHOW", "ADDON_LOADED" }) do
     if not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid(e) then pcall(f.RegisterEvent, f, e) end
 end
 local pending = false
@@ -295,11 +283,8 @@ f:SetScript("OnEvent", function(_, event, arg)
     if not ns.db then return end
     if event == "PLAYER_LOGIN" then
         pcall(ns.WatchPosting)
-        ns.NoteGold()
     elseif event == "AUCTION_HOUSE_SHOW" or (event == "ADDON_LOADED" and arg == "Blizzard_AuctionHouseUI") then
         pcall(ns.WatchPosting)
-    elseif event == "PLAYER_MONEY" then
-        ns.NoteGold()
     elseif event == "MAIL_SHOW" or event == "MAIL_INBOX_UPDATE" then
         -- The inbox updates several times as it fills: read it once things settle.
         if not pending then
