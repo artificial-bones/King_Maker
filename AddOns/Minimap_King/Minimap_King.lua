@@ -14,6 +14,7 @@ ns.KINGS = {
     EconKingMinimapButton = "Econ King", FarmKingMinimapButton = "Farm King",
     GatherKingMinimapButton = "Gather King", MailKingMinimapButton = "Mail King",
     QuestKingMinimapButton = "Quest King", SkillupKingMinimapButton = "Skillup King",
+    RestedKingMinimapButton = "Rested King",
 }
 
 -- Blizzard's minimap frames, which stay where they are.

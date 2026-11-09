@@ -17,7 +17,7 @@ any other addon's minimap button, into a drop-down under a crown.
 - Blizzard's own minimap buttons (tracking, calendar, mail and so on) and map pins stay where they
   are.
 
-Picks up the King addons (Scanner, Market, Econ, Farm, Gather, Mail, Quest and Skillup King), any
+Picks up the King addons (Scanner, Market, Econ, Farm, Gather, Mail, Quest, Skillup and Rested King), any
 addon that uses LibDBIcon (Questie, DBM, Details and most others), and other buttons sitting around
 the edge of the minimap. If it takes something it shouldn't, shift-right-click it.
 

@@ -1,7 +1,7 @@
 # King Maker
 
 Every King addon in one download. The King addons are a suite of addons for **World of Warcraft: Forever**: price scanning, price history, trading, farming, gathering,
-gold tracking, dungeon quests and profession leveling, all sharing one set of auction house prices.
+gold tracking, dungeon quests and profession leveling, all sharing one set of auction house prices, plus a rested XP tracker for every character.
 
 **[Download the latest release](https://github.com/artificial-bones/King_Maker/releases/latest)** (`King_Maker.zip`).
 
@@ -53,6 +53,7 @@ Which addons need or use which, at a glance:
 | Quest King | - | Questie, QuestieDB, TomTom |
 | Skillup King | Scanner King | - |
 | Minimap King | - | - |
+| Rested King | - | Minimap King |
 
 ### Scanner King: auction house prices
 
@@ -261,6 +262,25 @@ Puts every addon's minimap button into one crown with a drop-down, so your minim
   - Gathers every King addon's button, and any addon that uses LibDBIcon (Questie, DBM, Details and most others), plus other buttons around the minimap's edge.
 
 Open it with `/mmk` or its minimap button. [Full guide](https://github.com/artificial-bones/King_Maker/tree/main/AddOns/Minimap_King#readme)
+
+### Rested King: every character's rested XP
+
+Shows all your characters in one window with how much rested XP each one has right now, so you
+know who to play before their rest goes to waste.
+
+- **Log in on each character once.** After that, every login updates it with the game's real numbers.
+- **Worked out while you're logged out**, with the game's rules: 5% of a level every 8 hours in an
+  inn or city, a quarter of that anywhere else, up to 150% of a level.
+- **When each one is full**, or a red **FULL** with how long it's been capped and wasting rest.
+- Right-click a character to set its **Well Rested** legacy perk rank, or to forget it.
+
+**Requirements**
+
+- **Needs:** Nothing.
+- **Works with:**
+  - Minimap King puts its button in the crown with the other King addons.
+
+Open it with `/rk` or its minimap button. [Full guide](https://github.com/artificial-bones/King_Maker/tree/main/AddOns/Rested_King#readme)
 
 ## Credits
 
