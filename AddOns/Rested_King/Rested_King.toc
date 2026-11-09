@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: Rested King
+## Notes: Every character's rested XP in one window, worked out from when you logged out, so you know who to play before their rest is wasted.
+## Author: BearBones
+## Version: 1.0.0
+## SavedVariables: RestedKingDB
+## IconTexture: Interface\Icons\Spell_Nature_Sleep
+
+Core.lua
+UI.lua
