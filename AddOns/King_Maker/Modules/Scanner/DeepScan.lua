@@ -17,9 +17,10 @@ local C = UI.C
 -- When it's done, callbacks get "SCAN_RESULTS" (results, "deep", method) with
 -- every item it saw (see API.md), then "SCAN_FINISHED" and "PRICES_UPDATED".
 --
--- The Deep Scan button opens a small King Maker dialog (like Market Scan's) that says
--- which kind of scan you'll get, starts it with one click, and shows it working
--- through every step with a progress bar until it's done.
+-- This is the "full scan" half of King Maker's one Scan button (Scan.lua, ScannerKing.SmartScan): a click
+-- runs it when the full dump is off cooldown (ns.FullScanWait() == 0) and shows its progress on the button.
+-- /sk deep and ScannerKing.OpenDeepScan(true) force it (browsing every category while the dump is on
+-- cooldown) and open a small King Maker dialog that follows it with a progress bar until it's done.
 
 local REPLICATE_COOLDOWN = 15 * 60
 local REPLICATE_TIMEOUT = 60  -- seconds to wait for the auction dump
@@ -36,7 +37,15 @@ local results = {}
 
 function ns.DeepRunning() return running end
 
-local function button() return ns.DeepButton and ns.DeepButton() end
+local function button() return ns.ScanButton and ns.ScanButton() end
+
+-- Seconds until the game allows the next full dump (0 = now), or nil when this client has no ReplicateItems.
+function ns.FullScanWait()
+    if not (C_AuctionHouse and C_AuctionHouse.ReplicateItems) then return nil end
+    local since = ns.db and ns.db.lastReplicate and (ns.Now() - ns.db.lastReplicate) or math.huge
+    return math.max(0, math.ceil(REPLICATE_COOLDOWN - since))
+end
+API.FullScanReadyIn = ns.FullScanWait
 
 -- frac: 0 to 1 for the progress bar, or nil when there's no telling how far along it is.
 local function show(text, frac)
@@ -87,7 +96,7 @@ end
 
 local function resetButton()
     local b = button()
-    if b then b:SetEnabled2(true); b:SetLabel(b.caption or "Deep Scan") end
+    if b then b:SetEnabled2(true); b:SetLabel(b.caption or "Scan") end
 end
 
 local function isShared(id, watched)
@@ -293,7 +302,7 @@ end
 function API.DeepScan()
     if not ns.db then return end
     if not (ns.AHOpen and ns.AHOpen()) then
-        KM.Print(ns, "Open the auction house first, then click Deep Scan or type /sk deep.")
+        KM.Print(ns, "Open the auction house first, then click Scan or type /sk deep.")
         return
     end
     if not (C_AuctionHouse and (C_AuctionHouse.ReplicateItems or C_AuctionHouse.SendBrowseQuery)) then
@@ -308,8 +317,8 @@ function API.DeepScan()
     local b = button()
     if b then b:SetEnabled2(false) end
     ns.Fire("SCAN_STARTED")
-    local since = ns.db.lastReplicate and (ns.Now() - ns.db.lastReplicate) or math.huge
-    if C_AuctionHouse.ReplicateItems and since >= REPLICATE_COOLDOWN then
+    local wait = ns.FullScanWait()
+    if wait == 0 then
         method = "replicate"
         run = run + 1
         ns.db.lastReplicate = ns.Now()
@@ -324,8 +333,8 @@ function API.DeepScan()
             end
         end)
     else
-        if C_AuctionHouse.ReplicateItems then
-            KM.Print(ns, "The full auction list can be downloaded again in " .. math.ceil((REPLICATE_COOLDOWN - since) / 60)
+        if wait then
+            KM.Print(ns, "The full auction list can be downloaded again in " .. math.ceil(wait / 60)
                 .. " min. Browsing every category instead (lowest prices only).")
         end
         startBrowse()
@@ -344,13 +353,11 @@ local GREEN, GOLD, RED = UI.Hex(C.good), UI.Hex(C.accent), UI.Hex(C.bad)
 
 -- Which scan a click gives you right now.
 local function modeLine()
-    local since = ns.db.lastReplicate and (ns.Now() - ns.db.lastReplicate) or math.huge
-    if C_AuctionHouse and C_AuctionHouse.ReplicateItems and since >= REPLICATE_COOLDOWN then
+    local w = ns.FullScanWait()
+    if w == 0 then
         return GREEN .. "Full scan ready.|r Downloads every auction: market price, lowest buyout and how many are listed. About a minute."
     end
-    local wait = C_AuctionHouse and C_AuctionHouse.ReplicateItems
-        and ("Full scan ready again in " .. math.ceil((REPLICATE_COOLDOWN - since) / 60) .. " min (the game allows one every 15). ")
-        or ""
+    local wait = w and ("Full scan ready again in " .. math.ceil(w / 60) .. " min (the game allows one every 15). ") or ""
     return GOLD .. wait .. "|rScanning now browses every category instead: lowest prices only."
 end
 

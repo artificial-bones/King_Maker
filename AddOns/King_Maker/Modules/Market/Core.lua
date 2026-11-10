@@ -13,7 +13,7 @@ local ns = KM.Module("Market", { title = "Market King", short = "Market", legacy
 --
 -- In King Maker it has no window or minimap button of its own: the ranked list is the "crafting" page
 -- (Crafting > Crafting Profits, UI.lua), opened from the crown's quick actions, /mk or /km crafting. Market
--- Scan stays a Scanner scan provider (Events.lua): the Market Scan button and dialog are the Scanner's.
+-- It stays a Scanner scan provider (Events.lua): the Scanner's one Scan prices the ticked professions.
 
 ns.AH_CUT = 0.05 -- the auction house keeps 5% of every sale
 
@@ -237,7 +237,7 @@ SlashCmdList.MARKETKING = function(msg)
         KM.Print(ns, "The King Maker crown on the minimap replaces this button: /km button")
     else
         KM.Print(ns, "/mk   open Crafting Profits (or /km crafting)")
-        KM.Print(ns, "/mk scan   open Market Scan to pick professions and scan (auction house open)")
+        KM.Print(ns, "/mk scan   Scan at the auction house: prices the professions ticked on Crafting Profits")
         KM.Print(ns, "/mk mode [buy|farm]   count materials as bought (Yrgna Special) or farmed (Ethical Gaming)")
         KM.Print(ns, "/mk recipes [all|mine|missing]   which recipes to show; /mk recipes reset clears your marks")
     end

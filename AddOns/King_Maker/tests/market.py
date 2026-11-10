@@ -1,5 +1,5 @@
 # Market (was Market King), with Scanner: recipes, disenchant tables, profit math, ranking and the red line,
-# Market Scan as a Scanner scan provider, recipes learned from trade skill windows, have/don't-have marks,
+# a Scanner scan provider (the one Scan prices the ticked professions), recipes learned from trade skill windows, have/don't-have marks,
 # vendor prices, /mk and the Crafting Profits page.
 import os, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from km import fresh, last, outputs
@@ -64,33 +64,33 @@ for fn in ("Recipes", "Patterns", "Disenchant", "Vendor"):
     assert n > 5, (fn, n)
 print("DATA OK")
 
-# Pick Blacksmithing and First Aid, scan at the auction house
+# Tick Blacksmithing and First Aid on Crafting Profits, then Scan at the auction house
 L.execute("""
 AH_PRICES = { [2840] = 100, [2770] = 40, [2589] = 20, [2851] = 2000, [2852] = 300, [1251] = 30,
               [10940] = 150, [10939] = 600, [10978] = 800 }
 """)
 items = list(ns.ItemsToScan(L.eval("{ [2] = true, [1] = true }")).values())
 assert 2851 in items and 2840 in items and 10940 in items and 2880 not in items  # crafted, reagent, DE mat; flux is a vendor item
-# Scanner's title bar has Material Scan and Market Scan; Market Scan offers our professions
+# The Scanner's title bar has one Scan; with no full dump on this client it's a quick scan, and the quick scan
+# prices exactly the professions ticked on Crafting Profits (no picker dialog)
+L.execute("MarketKingDB.profs = { [2] = true, [1] = true }")
+assert L.eval("MarketKingDB.profs[2]") and L.eval("MarketKingDB.profs[1]") and not L.eval("MarketKingDB.profs[9]")
 L.execute('FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()')
 tb = KM.mods.Scanner.TitleButtons()
-ms = tb.market; assert ms and ms.shown and tb.mat.label.text == "Material Scan"
-click(ms)  # opens with every profession ticked
-checks = [f for f in L.eval("FRAMES").values() if f.key is not None and f.checked is not None]
-assert len(checks) == 9 and all(c.checked for c in checks)
-click(L.eval("BTN('None')"))
-assert not any(c.checked for c in checks)
-# tick Blacksmithing and First Aid only, then Scan
-for c, name in zip(checks, [p.name for p in ns.PROFESSIONS.values()]):
-    if name in ("Blacksmithing", "First Aid"): click(c)  # ticks it and enables Scan
-L.execute("SCANNED = nil; local real = ScannerKing.Scan; ScannerKing.Scan = function(o) SCANNED = o and #o.items; return real(o) end")
-click(L.eval("BTN('Scan')"))
+assert tb.scan.label.text == "Scan" and tb.market is None and tb.mat is None
+L.execute("GameTooltip.lines = {}"); tb.scan.RunScript(tb.scan, "OnEnter")
+tip = [str(x) for x in L.eval("GameTooltip.lines").values()]
+assert any("for the 2 profession(s) ticked on Crafting Profits" in x for x in tip), tip
+L.execute("SCANNED, KIND = nil, nil; local real = ScannerKing.Scan; ScannerKing.Scan = function(o) SCANNED = o and #o.items; return real(o) end")
+L.execute("ScannerKing.RegisterCallback('mtest', function(e, res, kind) if e == 'SCAN_RESULTS' then KIND = kind end end)")
+click(tb.scan)
 L.execute("RUN_TIMERS()")
-assert L.eval("SCANNED") == len(items)
+assert L.eval("ScannerKingMarketScan") is None, "no picker dialog"
+assert L.eval("SCANNED") == len(items) and L.eval("KIND") == "market"
 assert L.eval("ScannerKingDB.prices[2851].p") == 2000
-# Crafting Profits opened on exactly what was scanned
+# the selection is unchanged and the page isn't forced open over the auction house
 assert L.eval("MarketKingDB.profs[2]") and L.eval("MarketKingDB.profs[1]") and not L.eval("MarketKingDB.profs[9]")
-assert KM.IsShown("crafting") and not KM.errorShown, last(L)
+assert not KM.IsShown("crafting") and not KM.errorShown, last(L)
 
 # Copper Chain Belt: 6 Copper Bar -> green belt (sells 2000, DE ~ 0.75*2.5*150 + 0.2*1.5*600 + 0.05*800)
 belt = [r for r in recipes if r.spell == 2661][0]
@@ -130,6 +130,7 @@ assert rows[0].gain >= rows[1].gain and above >= 1
 assert all(r.gain > 0 for r in rows[:above]) and all((r.gain or 0) <= 0 for r in rows[above:])
 best, ab2 = ns.Rank(None, "buy"); assert len(list(best.values())) > len(rows)
 # the page draws it (headers are drawn in capitals)
+KM.Show("crafting")
 t = fonts()
 assert "Best" in t and "Blacksmithing" in t and "First Aid" in t and "PROFIT" in t, t[:60]
 assert any("above the red line" in str(x) for x in t), ns.footer.text
@@ -264,9 +265,12 @@ mk("button"); assert "crown" in last(L), last(L)
 mk("help"); assert any("/mk mode" in str(o) for o in outputs(L))
 mk("mode"); assert L.eval("MarketKingDB.mode") == "farm" and "Ethical Gaming" in last(L)
 mk("mode"); assert L.eval("MarketKingDB.mode") == "buy" and "Yrgna Special" in last(L)
-L.execute("SCAN_OPENED = false; local real = ScannerKing.OpenMarketScan; ScannerKing.OpenMarketScan = function() SCAN_OPENED = true end")
-mk("scan"); assert L.eval("SCAN_OPENED")
-click(L.eval("BTN('Market Scan')"))  # the page's own button (the title-bar one is the Scanner's)
+L.execute("SCAN_OPENED = 0; local real = ScannerKing.OpenMarketScan; ScannerKing.OpenMarketScan = function() SCAN_OPENED = SCAN_OPENED + 1 end")
+mk("scan"); assert L.eval("SCAN_OPENED") == 1
+KM.Show("crafting")
+L.globals().PG = ns.Page()
+click(L.eval("PBTN(PG, 'Scan')"))  # the page's own Scan button
+assert L.eval("SCAN_OPENED") == 2
 KM.Toggle(False)
 L.execute('KingMakerMinimapButton:Click("RightButton")')
 assert L.eval('MENU_ITEM("Crafting Profits") ~= nil')

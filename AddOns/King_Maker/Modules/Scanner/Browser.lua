@@ -5,11 +5,11 @@ local UI = KM.UI
 local C = UI.C
 
 -- The Prices page: every item Scanner King has a price for, grouped the way the auction house groups them
--- (Metal & Stone, Herb, Cloth, ...), with search, sortable columns and the three scans. Opened from the King
+-- (Metal & Stone, Herb, Cloth, ...), with search, sortable columns and the Scan button. Opened from the King
 -- Maker window (Auction House > Prices), the crown's quick actions, /sk or /km prices.
 --
---   tiles      prices known, last Deep Scan, last scan, guild sharing
---   toolbar    search box; Material Scan, Market Scan (when a provider registered), Deep Scan
+--   tiles      prices known (last quick scan), last full scan, market prices, guild sharing
+--   toolbar    search box; Scan (full when the game allows it, else quick: Scan.lua)
 --   left       categories (wheel scrolls them when a Deep Scan brings more than fit)
 --   right      the list: item, market price, lowest buyout, listed, scanned
 --
@@ -107,14 +107,15 @@ local function scanAge(t) return t and API.PriceAge(t) or "never" end
 
 local function refreshTiles(c)
     local n = count()
-    c.tiles[1]:Set("Prices known", KM.Commas(n), ns.db.lastScan and ("last scan " .. API.PriceAge(ns.db.lastScan)) or "no scan yet")
+    local quick = ns.db.lastQuick
+    c.tiles[1]:Set("Prices known", KM.Commas(n), quick and ("quick scan " .. API.PriceAge(quick)) or "no quick scan yet")
     local deep = ns.db.lastDeep
     local stale = not deep or ns.Now() - deep > 86400
-    c.tiles[2]:Set("Last Deep Scan", deep and API.PriceAge(deep) or "never", stale and "over a day old: scan at the auction house" or "market prices are fresh",
+    c.tiles[2]:Set("Last full scan", deep and API.PriceAge(deep) or "never", stale and "over a day old: scan at the auction house" or "market prices are fresh",
         stale and C.warn or C.good)
     local market = 0
     for _, pr in pairs(ns.db.prices) do if pr.m then market = market + 1 end end
-    c.tiles[3]:Set("Market prices", KM.Commas(market), "from full Deep Scans")
+    c.tiles[3]:Set("Market prices", KM.Commas(market), "from full scans")
     c.tiles[4]:Set("Guild sharing", ns.db.sync.guild and "On" or "Off",
         (IsInGuild and IsInGuild()) and "newest price wins" or "not in a guild", ns.db.sync.guild and C.text or C.dim)
 end
@@ -154,7 +155,7 @@ local function footerText(c)
     local shown = math.min(#list, tbl.visible or #list)
     c.footer:SetText((#list > 0 and ((tbl.offset + 1) .. "-" .. (tbl.offset + shown) .. " of " .. #list) or "No items")
         .. (#list ~= total and (" (" .. total .. " in all)") or "")
-        .. ".  Last full scan: " .. scanAge(ns.db.lastScan))
+        .. ".  Last full scan: " .. scanAge(ns.db.lastDeep) .. ".  Last quick scan: " .. scanAge(ns.db.lastQuick) .. ".")
 end
 
 local function refresh(c)
@@ -162,13 +163,11 @@ local function refresh(c)
     refreshTiles(c)
     refreshCategories(c)
     build(c.search:GetText(), c.table.sortKey, c.table.sortDesc)
-    c.table.emptyText = count() == 0 and "No prices yet. Open the auction house and click Deep Scan or Material Scan."
+    c.table.emptyText = count() == 0 and "No prices yet. Open the auction house and click Scan."
         or "Nothing matches. Names load as you browse; try again in a moment."
     c.table:SetRows(list, fillRow)
     local at = ns.AHOpen and ns.AHOpen()
-    c.mat:SetEnabled2(at and not API.IsScanning())
-    c.deep:SetEnabled2(not API.IsScanning())
-    c.market:SetShown(ns.HasScanProvider and ns.HasScanProvider())
+    c.scan:SetEnabled2(at and not API.IsScanning())
 end
 
 local function buildPage(c)
@@ -186,15 +185,9 @@ local function buildPage(c)
         if c.table then c.table.offset = 0; refresh(c) end
     end)
     c.search:SetPoint("TOPLEFT", 0, -(TILE_H + 12))
-    c.mat = UI.Button(c, "Material Scan", 120, 24, function() API.Scan(); refresh(c) end, "primary")
-    c.mat:SetPoint("TOPRIGHT", 0, -(TILE_H + 12))
-    UI.Tip(c.mat, "Prices every Trade Goods item plus what other modules watch. The auction house must be open.")
-    c.deep = UI.Button(c, "Deep Scan", 100, 24, function() API.OpenDeepScan() end, "primary")
-    c.deep:SetPoint("RIGHT", c.mat, "LEFT", -6, 0)
-    UI.Tip(c.deep, "Every item on the auction house, with market prices. Opens the Deep Scan dialog.")
-    c.market = UI.Button(c, "Market Scan", 110, 24, function() API.OpenMarketScan() end)
-    c.market:SetPoint("RIGHT", c.deep, "LEFT", -6, 0)
-    UI.Tip(c.market, "Pick professions and price everything they make and use.")
+    c.scan = UI.Button(c, "Scan", 120, 24, function() API.SmartScan(); refresh(c) end, "primary")
+    c.scan:SetPoint("TOPRIGHT", 0, -(TILE_H + 12))
+    UI.Tip(c.scan, function(tt) ns.ScanTooltip(tt) end)
 
     local top = -(TILE_H + 12 + 24 + 10)
 
@@ -259,7 +252,7 @@ KM.RegisterPage({
     title = "Prices",
     subtitle = function()
         if API.IsScanning() then return "Scanning the auction house..." end
-        return "Every auction price you or your guild have scanned. Market prices come from Deep Scans."
+        return "Every auction price you or your guild have scanned. Market prices come from full scans."
     end,
     build = buildPage, refresh = refresh,
 })
@@ -272,25 +265,25 @@ end)
 -- The crown (quick actions, tooltip), the sidebar status, Home and Settings
 ---------------------------------------------------------------------------
 
-KM.RegisterQuickAction({ id = "scanner-material", label = "Material Scan", order = 10,
-    func = function() API.Scan() end, shown = function() return ns.AHOpen and ns.AHOpen() end })
-KM.RegisterQuickAction({ id = "scanner-deep", label = "Deep Scan", order = 11, func = function() API.OpenDeepScan() end })
-KM.RegisterQuickAction({ id = "scanner-market", label = "Market Scan", order = 12, func = function() API.OpenMarketScan() end,
-    shown = function() return ns.HasScanProvider and ns.HasScanProvider() end })
+-- One Scan, only at the auction house (it can't scan anywhere else).
+KM.RegisterQuickAction({ id = "scanner-scan", label = "Scan", order = 10,
+    func = function() API.SmartScan() end, shown = function() return ns.AHOpen and ns.AHOpen() end })
 KM.RegisterQuickAction({ id = "scanner-prices", label = "Prices", order = 13, func = function() KM.Show("prices") end })
 
 KM.RegisterTooltip(function(tt)
     if not ns.db then return end
-    tt:AddLine(KM.Commas(count()) .. " prices. Last scan: " .. scanAge(ns.db.lastScan)
-        .. ". Deep Scan: " .. scanAge(ns.db.lastDeep) .. ".", 1, 1, 1)
+    tt:AddLine(KM.Commas(count()) .. " prices. Full scan: " .. scanAge(ns.db.lastDeep)
+        .. ". Quick scan: " .. scanAge(ns.db.lastQuick) .. ".", 1, 1, 1)
 end)
 
 KM.RegisterStatus(function()
     if not ns.db then return nil end
     if API.IsScanning() then return "Prices: scanning..." end
-    if not ns.db.lastDeep then return "Prices: no Deep Scan yet" end
-    local ago = KM.Ago(ns.db.lastDeep)
-    return "Prices: Deep Scan " .. (ago == "now" and "just now" or (ago .. " ago"))
+    local function ago(t) local a = KM.Ago(t); return a == "now" and "just now" or (a .. " ago") end
+    local deep, quick = ns.db.lastDeep, ns.db.lastQuick
+    local line = deep and ("Prices: full scan " .. ago(deep)) or "Prices: no full scan yet"
+    if quick and (not deep or quick > deep) then line = line .. ", quick " .. ago(quick) end
+    return line
 end)
 
 KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
@@ -302,8 +295,10 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
       get = function() return ns.db.sync.guild end, set = function(v) ns.db.sync.guild = v end },
     { type = "button", label = "Send my prices to the guild now", func = function() ns.SharePrices(true) end },
     { type = "header", label = "Commands" },
-    { type = "text", label = "/sk   open the Prices page\n/sk scan   Material Scan (at the auction house)\n/sk deep   Deep Scan\n"
-        .. "/sk market   Market Scan\n/sk tooltip on|off   prices in tooltips\n/sk sync [on|off]   share now, or turn sharing on/off\n/sk status   how many prices and how old" },
+    { type = "text", label = "/sk   open the Prices page\n/sk scan   Scan (at the auction house): full when the game allows it, else quick\n"
+        .. "/sk deep   force a full scan (progress window)\n/sk material   force a quick scan of Trade Goods and watched items\n"
+        .. "/sk market   the same plus Crafting Profits' ticked professions\n/sk tooltip on|off   prices in tooltips\n"
+        .. "/sk sync [on|off]   share now, or turn sharing on/off\n/sk status   how many prices and how old" },
 } })
 
 -- Home.lua loads after the modules, so the tile is added once the world is up. The auction house opening
@@ -322,7 +317,9 @@ f:SetScript("OnEvent", function(self, event)
         if not ns.db then return nil end
         local deep = ns.db.lastDeep
         local stale = not deep or ns.Now() - deep > 86400
-        return "Prices known", KM.Commas(count()), deep and ("Deep Scan " .. API.PriceAge(deep)) or "no Deep Scan yet",
-            stale and C.warn or C.text
+        local quick = ns.db.lastQuick
+        local sub = deep and ("full scan " .. API.PriceAge(deep)) or "no full scan yet"
+        if quick and (not deep or quick > deep) then sub = sub .. ", quick " .. API.PriceAge(quick) end
+        return "Prices known", KM.Commas(count()), sub, stale and C.warn or C.text
     end })
 end)

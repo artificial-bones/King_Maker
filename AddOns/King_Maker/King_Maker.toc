@@ -2,9 +2,9 @@
 ## Title: King Maker
 ## Notes: Every King addon in one: AH prices and history, crafting profits, skill-ups, gold ledger, inventory, farming, gathering, dungeon quests and rested XP. /km
 ## Author: BearBones
-## Version: 2.0.0
+## Version: 2.1.0
 ## IconTexture: Interface\Icons\INV_Crown_01
-## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB
+## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB, ShoppingKingDB, ProfessionKingDB
 ## OptionalDeps: QuestieDB, TomTom, LibDBIcon-1.0, Auctionator
 
 Libs\LibStub\LibStub.lua
@@ -104,6 +104,18 @@ Modules\Rested\UI.lua
 
 # Minimap
 Modules\Minimap\Minimap_King.lua
+
+# Shopping
+Modules\Shopping\Core.lua
+Modules\Shopping\Lists.lua
+Modules\Shopping\Buy.lua
+Modules\Shopping\Panel.lua
+Modules\Shopping\Page.lua
+
+# Profession
+Modules\Profession\Core.lua
+Modules\Profession\Data.lua
+Modules\Profession\Panel.lua
 
 Core\Home.lua
 Core\Boot.lua

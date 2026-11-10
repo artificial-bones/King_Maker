@@ -6,13 +6,14 @@ local ns = KM.Module("Scanner", { title = "Scanner King", short = "Scanner", leg
 --
 --   ScannerKing.GetPrice(itemID)       -> copper each, scanned at (server time), quantity listed
 --   ScannerKing.Watch(owner, itemIDs or function) -> also scan these, even if they aren't Trade Goods
---   ScannerKing.Scan([{ items = ids }]) -> start a scan (auction house must be open), optionally with extra items
+--   ScannerKing.SmartScan()            -> the one scan: the full dump when the game allows it, else a quick scan
+--   ScannerKing.Scan([{ items = ids }]) -> a Trade Goods + watched scan (auction house must be open), optionally with extra items
 --   ScannerKing.RegisterCallback(owner, fn)   fn(event, ...) for
 --       "SCAN_STARTED", "SCAN_PROGRESS" (text), "SCAN_FINISHED" (found), "PRICES_UPDATED"
 --
 -- In King Maker it has no window or minimap button of its own: the price list is the "prices" page
--- (Browser.lua), the scans are quick actions on the King Maker crown, and its settings are a section of
--- the Settings page. The auction house title-bar buttons and the Deep Scan / Market Scan dialogs stay.
+-- (Browser.lua), the Scan is a quick action on the King Maker crown, and its settings are a section of
+-- the Settings page. The auction house title bar has one Scan button; the Deep Scan dialog is for /sk deep.
 
 local API = { API_VERSION = 1 }
 ScannerKing = API
@@ -170,11 +171,17 @@ SlashCmdList.SCANNERKING = function(msg)
     if not ns.db then return end
     local cmd = (msg or ""):lower():match("^%s*(%S*)")
     if cmd == "scan" then
-        API.Scan()
-    elseif cmd == "deep" then
+        API.SmartScan()
+    elseif cmd == "deep" or cmd == "full" then
         API.OpenDeepScan(true)
+    elseif cmd == "material" then
+        API.Scan()
     elseif cmd == "market" then
-        API.OpenMarketScan()
+        if ns.AHOpen and not ns.AHOpen() then
+            KM.Print(ns, "Open the auction house first, then type /sk market.")
+        else
+            API.MarketScan()
+        end
     elseif cmd == "tooltip" then
         local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
         if arg == "on" then ns.db.ui.tooltip = true elseif arg == "off" then ns.db.ui.tooltip = false
@@ -195,13 +202,16 @@ SlashCmdList.SCANNERKING = function(msg)
     elseif cmd == "status" then
         local n = 0
         for _ in pairs(ns.db.prices) do n = n + 1 end
-        KM.Print(ns, n .. " prices stored. Last scan: " .. (ns.db.lastScan and API.PriceAge(ns.db.lastScan) or "never")
-            .. ". Last Deep Scan: " .. (ns.db.lastDeep and API.PriceAge(ns.db.lastDeep) or "never") .. ".")
+        local wait = ns.FullScanWait and ns.FullScanWait()
+        KM.Print(ns, n .. " prices stored. Last full scan: " .. (ns.db.lastDeep and API.PriceAge(ns.db.lastDeep) or "never")
+            .. ". Last quick scan: " .. (ns.db.lastQuick and API.PriceAge(ns.db.lastQuick) or "never") .. "."
+            .. (wait and (wait == 0 and " Full scan ready." or (" Full scan ready in " .. math.ceil(wait / 60) .. " min.")) or ""))
     else
         KM.Print(ns, "/sk show   open the Prices page (or /km prices)")
-        KM.Print(ns, "/sk scan   Material Scan (the auction house must be open)")
-        KM.Print(ns, "/sk deep   Deep Scan: every item on the auction house")
-        KM.Print(ns, "/sk market   Market Scan: pick professions to price")
+        KM.Print(ns, "/sk scan   Scan (at the auction house): a full scan when the game allows one (every 15 min), else a quick scan")
+        KM.Print(ns, "/sk deep   force a full scan, with its progress window (browses every category while the full one is on cooldown)")
+        KM.Print(ns, "/sk material   force a quick scan of Trade Goods and watched items only")
+        KM.Print(ns, "/sk market   force a quick scan of those plus the professions ticked on Crafting Profits")
         KM.Print(ns, "/sk tooltip [on|off]   prices in item tooltips")
         KM.Print(ns, "/sk status   how many prices you have and how old")
         KM.Print(ns, "/sk sync [on|off]   share prices with your guild now, or turn sharing on/off")

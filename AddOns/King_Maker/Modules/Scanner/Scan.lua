@@ -3,9 +3,15 @@ local ns = KM.Module("Scanner")
 local API = ns.API
 local UI = KM.UI
 
--- Scanning the auction house.
+-- Scanning the auction house: the one Scan button, and the quick scan.
 --
--- On the modern auction house a full scan is a handful of requests:
+-- King Maker has one scan. A click on Scan (the auction house title bar, the Prices page, the crown's quick
+-- action, /sk scan) runs ScannerKing.SmartScan():
+--   * the full scan (Deep Scan, DeepScan.lua) when the game allows one (ReplicateItems, once every 15 minutes);
+--   * otherwise a quick scan (QuickScan, MarketScan.lua) of everything King Maker cares about: Trade Goods,
+--     every Watch() list and every scan provider's current selection (Crafting Profits' ticked professions).
+--
+-- On the modern auction house a quick scan is a handful of requests:
 --   1. Browse the whole Trade Goods category. The auction house answers with
 --      every item's lowest price, a page at a time.
 --   2. Items other addons asked for (ScannerKing.Watch) that weren't in Trade
@@ -50,11 +56,14 @@ local function throttleReady()
     return not CanSendAuctionQuery or CanSendAuctionQuery()
 end
 
+-- The last SCAN_PROGRESS text of any scan (quick or full), for the Scan button's tooltip.
 local lastProgress = ""
 local function progress(text)
-    lastProgress = text or ""
     ns.Fire("SCAN_PROGRESS", text)
 end
+API.RegisterCallback("Scanner_King_progress", function(event, text)
+    if event == "SCAN_PROGRESS" then lastProgress = text or "" end
+end)
 
 local function sorts()
     return { { sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false } }
@@ -65,7 +74,7 @@ end
 ---------------------------------------------------------------------------
 
 local function resetButton()
-    if scanButton then scanButton:SetEnabled2(true); scanButton:SetLabel(scanButton.caption or "Material Scan") end
+    if scanButton then scanButton:SetEnabled2(true); scanButton:SetLabel(scanButton.caption or "Scan") end
     scanButton = nil
 end
 
@@ -83,6 +92,7 @@ local function finish()
     if not scanning then return end
     scanning, phase, current = false, nil, nil
     if pages > 0 then ns.db.lastScan = ns.Now() end
+    ns.db.lastQuick = ns.Now()
     resetButton()
     progress("Scan done: " .. found .. " prices")
     KM.Print(ns, "Scan done: " .. found .. " items priced.")
@@ -265,20 +275,23 @@ end
 
 function API.IsScanning() return scanning or (ns.DeepRunning and ns.DeepRunning()) or false end
 
--- Scan(): Trade Goods plus watched items (the scan button and /sk scan).
+-- Scan(): Trade Goods plus watched items (/sk material; QuickScan adds the scan providers' items).
 -- Scan({ items = { itemID, ... } }): the same, plus these items. Market King
 -- uses this for crafted items and everything that goes into them.
--- opts.kind names the scan in SCAN_RESULTS ("material" unless given; Market Scan passes "market").
+-- opts.kind names the scan in SCAN_RESULTS ("material" unless given; QuickScan and MarketScan pass "market" with a provider's items).
 function API.Scan(opts)
     if not ns.db then return end
     local extra = type(opts) == "table" and type(opts.items) == "table" and opts.items or nil
     if not ahOpen() then
-        KM.Print(ns, "Open the auction house first, then click Material Scan or type /sk scan.")
+        KM.Print(ns, "Open the auction house first, then click Scan or type /sk scan.")
         return
     end
-    if API.IsScanning() then return end
+    if API.IsScanning() then
+        KM.Print(ns, "A scan is already running.")
+        return
+    end
     kind = type(opts) == "table" and opts.kind or "material"
-    if not scanButton and ns.ahParent and buttons[ns.ahParent] then scanButton = buttons[ns.ahParent].mat end
+    if not scanButton and ns.ahParent and buttons[ns.ahParent] then scanButton = buttons[ns.ahParent].scan end
     scanning, found, seen, pages, phase = true, 0, {}, 0, nil
     scanList = ns.WatchedItems()
     if extra then
@@ -300,40 +313,76 @@ function API.Scan(opts)
 end
 
 ---------------------------------------------------------------------------
+-- The one scan: full when the game allows it, quick otherwise
+---------------------------------------------------------------------------
+
+-- What a click on Scan does right now: "full", "quick", or nil when the auction house isn't open.
+function ns.ScanMode()
+    if not ahOpen() then return nil end
+    local wait = ns.FullScanWait and ns.FullScanWait()
+    if wait == 0 and modernAH() then return "full" end
+    return "quick"
+end
+
+-- The merged scan (the Scan button, /sk scan, the crown's Scan, Crafting Profits' Scan).
+function API.SmartScan()
+    if not ns.db then return end
+    if not ahOpen() then
+        KM.Print(ns, "Open the auction house first, then click Scan or type /sk scan.")
+        return
+    end
+    if API.IsScanning() then
+        KM.Print(ns, "A scan is already running.")
+        return
+    end
+    if ns.ScanMode() == "full" then return API.DeepScan() end
+    return API.QuickScan()
+end
+
+-- The text of the last SCAN_PROGRESS (quick or full scan), for tooltips.
+function ns.LastProgress() return lastProgress end
+
+-- The Scan button's tooltip (title bar and Prices page): what a click does right now, and when the last scans ran.
+function ns.ScanTooltip(tt)
+    tt:AddLine("Scan")
+    local mode = ns.ScanMode()
+    if API.IsScanning() then
+        tt:AddLine(lastProgress ~= "" and lastProgress or "Scanning...", 0.4, 1, 0.4)
+        tt:AddLine("Keep the auction house open until it's done.", 1, 1, 1, true)
+    elseif not mode then
+        tt:AddLine("Open the auction house to scan.", 1, 1, 1, true)
+    elseif mode == "full" then
+        tt:AddLine("Full scan ready: a click downloads every auction on the auction house.", 0.4, 1, 0.4, true)
+        tt:AddLine("Market price, lowest buyout and how many are listed, for every item. About a minute. "
+            .. "The game allows one every 15 minutes; in between, a click does a quick scan.", 1, 1, 1, true)
+    else
+        local plan = ns.QuickPlan()
+        local wait = ns.FullScanWait and ns.FullScanWait()
+        local what = "a quick scan of Trade Goods plus " .. KM.Commas(plan.total) .. " items"
+        if wait then
+            tt:AddLine("Full scan ready in " .. math.max(1, math.ceil(wait / 60)) .. " min; a click now does " .. what .. ".",
+                1, 0.82, 0, true)
+        else
+            tt:AddLine("A click does " .. what .. ".", 1, 0.82, 0, true)
+        end
+        local parts = { "every Trade Goods item" }
+        if plan.watched > 0 then table.insert(parts, KM.Commas(plan.watched) .. " watched by other pages") end
+        if plan.prof > 0 then
+            table.insert(parts, KM.Commas(plan.prof) .. " more for the " .. plan.profs .. " profession(s) ticked on Crafting Profits")
+        end
+        tt:AddLine("Quick scan: " .. table.concat(parts, ", ") .. ". Lowest prices only.", 1, 1, 1, true)
+    end
+    local db = ns.db
+    tt:AddLine("Last full scan: " .. (db.lastDeep and API.PriceAge(db.lastDeep) or "never")
+        .. ".  Last quick scan: " .. (db.lastQuick and API.PriceAge(db.lastQuick) or "never") .. ".", 0.7, 0.7, 0.7, true)
+end
+
+---------------------------------------------------------------------------
 -- The button on the auction house window
 ---------------------------------------------------------------------------
 
--- Three buttons in the auction house title bar:
---   Material Scan: Trade Goods plus watched items (the quick, raw-materials scan).
---   Market Scan:   opens a picker from an addon that registered one (Market King's
---                  professions), then scans everything it needs.
---   Deep Scan:     the whole auction house, every item (DeepScan.lua).
-
-local function tooltip(self)
-    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-    GameTooltip:AddLine(self.caption)
-    GameTooltip:AddLine(self.help, 1, 1, 1, true)
-    if scanning and lastProgress ~= "" then
-        GameTooltip:AddLine(lastProgress, 0.4, 1, 0.4)
-    elseif self.deep and ns.db.lastDeep then
-        GameTooltip:AddLine("Last Deep Scan " .. API.PriceAge(ns.db.lastDeep), 0.7, 0.7, 0.7)
-    elseif ns.db.lastScan then
-        GameTooltip:AddLine("Last scan " .. API.PriceAge(ns.db.lastScan), 0.7, 0.7, 0.7)
-    end
-    GameTooltip:Show()
-end
-
--- King Maker's gold "primary" button, sitting in the auction house title bar.
--- b.caption is its resting label; while a scan runs the label shows progress.
-local function titleButton(parent, label, width, help, onClick)
-    local b = UI.Button(parent, label, width, 22, onClick, "primary")
-    b.caption, b.help = label, help
-    b:SetFrameStrata("HIGH")
-    b:HookScript("OnEnter", tooltip)
-    b:HookScript("OnLeave", function() GameTooltip:Hide() end)
-    return b
-end
-
+-- One gold "primary" button in the auction house title bar. b.caption is its resting label; while a scan
+-- runs (quick or full) the label shows its progress, and the tooltip says what a click will do right now.
 local function createButton()
     local parent, x, y
     if modernAH() then
@@ -344,30 +393,25 @@ local function createButton()
         return false
     end
     if not buttons[parent] then
-        local mat, market
-        mat = titleButton(parent, "Material Scan", 120,
-            "Prices every Trade Goods item: ores, herbs, leather, cloth, enchanting materials and more.",
-            function() scanButton = mat; API.Scan() end)
-        mat:SetPoint("TOPRIGHT", parent, "TOPRIGHT", x, y)
-        market = titleButton(parent, "Market Scan", 110,
-            "Pick professions and price everything they make and use (Crafting Profits).",
-            function() ns.ToggleMarketScan(parent) end)
-        market:SetPoint("RIGHT", mat, "LEFT", -4, 0)
-        local deep = titleButton(parent, "Deep Scan", 100,
-            "Prices every item on the auction house: market price, lowest buyout and how many are listed. "
-            .. "Shows in item tooltips and on the Prices page; Price History keeps every scan.",
-            function() ns.ToggleDeepScan(parent) end)
-        deep.deep = true
-        deep:SetPoint("RIGHT", market, "LEFT", -4, 0)
-        buttons[parent] = { mat = mat, market = market, deep = deep }
+        local b = UI.Button(parent, "Scan", 130, 22, function(self) scanButton = self; API.SmartScan() end, "primary")
+        b.caption = "Scan"
+        b:SetFrameStrata("HIGH")
+        b:SetPoint("TOPRIGHT", parent, "TOPRIGHT", x, y)
+        b:HookScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            ns.ScanTooltip(GameTooltip)
+            GameTooltip:Show()
+        end)
+        b:HookScript("OnLeave", function() GameTooltip:Hide() end)
+        buttons[parent] = { scan = b }
     end
-    buttons[parent].market:SetShown(ns.HasScanProvider())
     ns.ahParent = parent
     return true
 end
 ns.SetScanButton = function(b) scanButton = b end
-ns.MarketButton = function() return ns.ahParent and buttons[ns.ahParent] and buttons[ns.ahParent].market end
-ns.DeepButton = function() return ns.ahParent and buttons[ns.ahParent] and buttons[ns.ahParent].deep end
+-- The title-bar Scan button of the open auction house (nil until one has opened).
+ns.ScanButton = function() return ns.ahParent and buttons[ns.ahParent] and buttons[ns.ahParent].scan end
+ns.DeepButton = ns.ScanButton -- a full scan shows its progress on the same button
 ns.TitleButtons = function() return ns.ahParent and buttons[ns.ahParent] end
 
 local hinted = false

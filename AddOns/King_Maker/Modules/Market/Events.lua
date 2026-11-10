@@ -165,19 +165,15 @@ f:SetScript("OnEvent", function(_, event, ...)
                 if e == "PRICES_UPDATED" then ns.Refresh() end
             end)
         end
-        -- The Scanner runs Market Scan (its button and dialog); we tell it what to offer and what to scan.
+        -- The Scanner's one Scan prices what's ticked here (db.profs) in every quick scan; we tell it what to scan.
         if ScannerKing and ScannerKing.RegisterScanProvider then
             local options = {}
             for _, p in ipairs(ns.PROFESSIONS) do table.insert(options, { key = p.id, label = p.name }) end
             ScannerKing.RegisterScanProvider("Market_King", {
                 options = options,
                 items = ns.ItemsToScan,
-                finished = function(picked)
-                    -- Show the results for exactly what was scanned.
-                    ns.db.profs = {}
-                    for id in pairs(picked) do ns.db.profs[id] = true end
-                    ns.Toggle(true)
-                end,
+                selected = function() return ns.db.profs end,
+                finished = function() ns.Refresh() end,
             })
         end
     end

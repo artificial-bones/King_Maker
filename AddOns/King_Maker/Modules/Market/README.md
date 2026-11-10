@@ -22,25 +22,25 @@ Since King Maker 2.0 it has no window or minimap button of its own: it's the
 |---|---|
 | The ranked list | King Maker window, **Crafting > Crafting Profits** (`/mk` or `/km crafting`) |
 | Open it from the minimap | Right-click the King Maker crown: **Crafting Profits** |
-| Market Scan | The auction house title bar (the Scanner's button), the **Market Scan** button on the page, the crown's right-click menu, or `/mk scan` |
+| Scanning | The Scanner's one **Scan**: the auction house title bar, the **Scan** button on the page, the crown's right-click menu (at the auction house), or `/mk scan` |
 | Settings | King Maker **Settings > Market** |
 
 ## Use
 
-1. At the auction house, click **Market Scan** in the title bar (the
-   Scanner's button, next to Material Scan). A small window opens with
-   every profession ticked: Alchemy, Blacksmithing, Cooking, Enchanting,
-   Engineering, First Aid, Leatherworking, Smelting, Tailoring. Untick what you
-   don't want (**None** clears them all).
-2. Click **Scan**. The Scanner prices Trade Goods, then every item those
-   professions make and use, and every disenchanting material.
-3. When it's done, Crafting Profits opens on the professions you scanned.
-   Open it any time from the King Maker window, the crown's right-click menu
-   or `/mk`.
-4. The ticks at the top of the page only filter what you see (**All** ticks
-   or unticks them all). **Best** has every ticked profession together; the
-   other tabs have one profession each (short names when they're all ticked).
-   Everything is sorted most profitable first.
+1. Tick the professions you care about at the top of the page (Alchemy,
+   Blacksmithing, Cooking, Enchanting, Engineering, First Aid, Leatherworking,
+   Smelting, Tailoring; **All** ticks or unticks them all).
+2. At the auction house, click **Scan** (the title bar, or the button on this
+   page). When the game allows a full scan (once every 15 minutes) it prices
+   every item on the auction house; otherwise it does a quick scan of Trade
+   Goods plus every item the ticked professions make and use, and every
+   disenchanting material. There is no picker any more: the ticks are the
+   choice.
+3. The page updates when the scan is done. Open it any time from the King
+   Maker window, the crown's right-click menu or `/mk`.
+4. **Best** has every ticked profession together; the other tabs have one
+   profession each (short names when they're all ticked). Everything is
+   sorted most profitable first.
 
 Each row shows:
 
@@ -59,7 +59,7 @@ by what crafting and disenchanting them makes, for when you're only hunting
 disenchant profits; **No procs** next to it values disenchants without the
 rare shard and crystal procs.
 
-The recipes button (right, under Market Scan) chooses which recipes you see;
+The recipes button (right, under Scan) chooses which recipes you see;
 click it to switch:
 
 - **All recipes**: everything, with patterns you don't have greyed out.
@@ -105,7 +105,7 @@ sells for, and what it disenchants into on average.
 | Command | What it does |
 |---|---|
 | `/mk` | Open or close the Crafting Profits page |
-| `/mk scan` | Open Market Scan (auction house open) |
+| `/mk scan` | Scan (auction house open): prices the ticked professions |
 | `/mk mode buy` / `farm` | Yrgna Special (bought) or Ethical Gaming (farmed) |
 | `/mk recipes all` / `mine` / `missing` | Which recipes to show |
 | `/mk recipes reset` | Clear your have/don't-have marks |

@@ -221,6 +221,7 @@ assert len(list(ITEMS_[2770].r.values())) == before + 1
 print("ASK GUILD OK")
 
 ek("fav 2770"); assert L.eval("EconKingDB.fav[2770]") and L.eval("EconKing.IsFavorite(2770)")
+assert L.eval("EconKing.SetFavorite(2589, true)") and L.eval("EconKing.IsFavorite(2589)"); L.eval("EconKing.SetFavorite(2589, false)"); assert not L.eval("EconKing.IsFavorite(2589)") and L.eval("EconKing.SetFavorite('x', true)") is False
 ek("status"); assert "items tracked" in last(L), last(L)
 ek("item 2589"); assert KM.IsShown("history") and L.eval("BTN('< Back')").parent.shown
 ek(""); assert not KM.IsShown(), "/ek toggles the page closed"

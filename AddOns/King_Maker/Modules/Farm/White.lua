@@ -154,7 +154,7 @@ function ns.RefreshWhite()
     if not (ScannerKing and ScannerKing.GetAllPrices) then
         text = "Needs Scanner King's prices."
     elseif state.priced == 0 then
-        text = "No white items priced yet. Run a Deep Scan at the auction house to price every item."
+        text = "No white items priced yet. Press Scan at the auction house (a full scan prices every item)."
     else
         text = "None of the priced white items has a known dropper yet."
             .. (ns.QuestieAvailable() and "" or " QuestieDB adds every mob's drops.")
@@ -200,6 +200,6 @@ function ns.WhiteList() return list end
 KM.RegisterPage({
     id = "whites", group = "farm", label = "White Items", icon = "Interface\\Icons\\INV_Fabric_Linen_01", order = 11,
     title = "White Items",
-    subtitle = "White drops worth hunting: auction price against how many mobs drop them. A Deep Scan prices them all.",
+    subtitle = "White drops worth hunting: auction price against how many mobs drop them. A full scan prices them all.",
     build = buildPage, refresh = function() ns.RefreshWhite() end,
 })

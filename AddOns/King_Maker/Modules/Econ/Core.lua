@@ -11,6 +11,7 @@ local ns = KM.Module("Econ", { title = "Econ King", short = "Econ", legacy = "Ec
 --   EconKing.GetStats(itemID)   -> the numbers on the item's page (see History.lua), or nil
 --   EconKing.GetHistory(itemID) -> { { t, market, lowest, listed, auctions, added, gone, scans }, ... } oldest first
 --   EconKing.IsFavorite(itemID)
+--   EconKing.SetFavorite(itemID, on) -> true when set (the same stars as the page; Shopping's Favorites list)
 --
 -- In King Maker its window is the "history" page (UI.lua: the list, Item.lua: an item's page), opened from
 -- Auction House > Price History, the crown's quick actions or /ek.
@@ -90,6 +91,14 @@ function API.IsFavorite(id) return ns.db and ns.db.fav[id] == true end
 function ns.SetFavorite(id, on)
     ns.db.fav[id] = on and true or nil
     if ns.Refresh then ns.Refresh() end
+end
+
+-- For other modules (Shopping's "Favorites" list is these favorites): one shared set of stars.
+function API.SetFavorite(id, on)
+    id = tonumber(id)
+    if not (ns.db and id) then return false end
+    ns.SetFavorite(id, on)
+    return true
 end
 
 ---------------------------------------------------------------------------

@@ -28,9 +28,16 @@ ScannerKing.GetMarketPrice(itemID) -- market price from a Deep Scan (or the lowe
 ScannerKing.GetAllPrices()        -- { [itemID] = { p = copper, t = time, q = quantity, from = guildmate,
                                   --                m = market price, n = auctions } } (read only)
 ScannerKing.LastScan()            -- server time of the last scan that covered Trade Goods
-ScannerKing.LastDeepScan()        -- server time of the last Deep Scan
-ScannerKing.DeepScan()            -- every item on the auction house (auction house must be open)
-ScannerKing.OpenDeepScan(start)   -- the Deep Scan window; start = true also starts the scan
+ScannerKing.LastDeepScan()        -- server time of the last Deep Scan (full scan)
+
+-- King Maker has one Scan button (2.1). It calls SmartScan; the rest are the parts it is made of.
+ScannerKing.SmartScan()           -- the one scan: DeepScan() when the full dump is off cooldown, else QuickScan()
+ScannerKing.FullScanReadyIn()     -- seconds until the game allows the next full dump (0 = now),
+                                  -- nil when the client has no ReplicateItems (then SmartScan is always quick)
+ScannerKing.QuickScan()           -- Trade Goods + every Watch() list + every scan provider's current selection
+ScannerKing.DeepScan()            -- every item on the auction house (auction house must be open); while the dump
+                                  -- is on cooldown it browses every category instead (lowest prices only)
+ScannerKing.OpenDeepScan(start)   -- the Deep Scan progress window (/sk deep); start = true also starts the scan
 ScannerKing.Scan()                -- Trade Goods + watched items (auction house must be open)
 ScannerKing.Scan({ items = ids }) -- the same, plus these items (searched 100 at a time)
 ScannerKing.IsScanning()
@@ -42,7 +49,8 @@ ScannerKing.Watch("gather_king", function() return { 268415, 268416 } end)
 -- Hear about scans and new prices. fn(event, ...) gets:
 --   "SCAN_STARTED", "SCAN_PROGRESS" (text), "SCAN_FINISHED" (found), "PRICES_UPDATED"
 --   "SCAN_RESULTS" (results, kind, method) just before SCAN_FINISHED, with what this scan saw:
---       kind = "material", "market" or "deep"
+--       kind = "material" (Trade Goods + watched), "market" (the same plus a scan provider's items: a quick
+--              scan with professions ticked, or /sk market) or "deep" (the full scan). No new kinds in 2.1.
 --       results = { [itemID] = { p = lowest copper each, q = quantity listed,
 --                                m = market price, n = auctions, s = sellers,      (Deep Scan)
 --                                l = { { copper each, count }, ... } } }        (Deep Scan, full list only)
@@ -53,14 +61,18 @@ ScannerKing.Watch("gather_king", function() return { 268415, 268416 } end)
 ScannerKing.RegisterCallback("gather_king", fn)
 ScannerKing.UnregisterCallback("gather_king")
 
--- Offer a Market Scan (Market King does this). Scanner King shows the Market Scan
--- button and picker, runs the scan, and calls finished when it's done.
+-- Add your items to every quick scan (Market King does this). There is no picker since 2.1: `selected`
+-- says what is chosen right now (Crafting Profits' ticked professions); without it every option counts.
+-- finished is called after a scan that included your items.
 ScannerKing.RegisterScanProvider("Market_King", {
-    options  = { { key = 4, label = "Alchemy" }, ... },  -- ticked by default
+    options  = { { key = 4, label = "Alchemy" }, ... },
     items    = function(picked) return { itemID, ... } end, -- picked = { [key] = true }
-    finished = function(picked, found) end,
+    selected = function() return { [4] = true } end,       -- optional
+    finished = function(picked, found) end,                 -- optional
 })
-ScannerKing.OpenMarketScan()      -- open the picker (auction house open)
+ScannerKing.MarketScan([picked])  -- a quick scan with the provider's items for picked (default: its selection)
+ScannerKing.OpenMarketScan()      -- kept for old callers: at the auction house it runs SmartScan(),
+                                  -- elsewhere it opens Crafting Profits
 
 -- Add lines to item tooltips, under Scanner King's prices.
 ScannerKing.AddTooltipProvider("Econ_King", function(tooltip, itemID) tooltip:AddLine(...) end)
@@ -80,9 +92,10 @@ ScannerKing.Now()                 -- server time, the same clock for every guild
 
 ## Who does what
 
-- **Scanner King** owns every auction house scan and both scan buttons.
-- **Gather King** and **Market King** only read prices and tell Scanner King what
-  they need: Gather King through `Watch`, Market King through `RegisterScanProvider`.
+- **Scanner King** owns every auction house scan and the one Scan button.
+- **Gather King**, **Econ King**, **Shopping** and **Market King** only read prices and tell Scanner King
+  what they need: through `Watch` (Gather, Econ favorites, Shopping lists), or `RegisterScanProvider`
+  (Market King's ticked professions). Every quick scan covers all of them.
 - **Econ King** listens for `SCAN_RESULTS` and keeps every scan as history.
 
 ## Saved data
@@ -90,7 +103,7 @@ ScannerKing.Now()                 -- server time, the same clock for every guild
 | Addon | Saved variable | Holds |
 |---|---|---|
 | gather_king | `GatherKingDB` | markers, profiles, loot stats, ledger |
-| Scanner_King | `ScannerKingDB` | prices, last scan time, sync setting |
+| Scanner_King | `ScannerKingDB` | prices, `lastScan`, `lastDeep`, `lastReplicate`, `lastQuick` (2.1: last quick scan), sync setting |
 | Market_King | `MarketKingDB` | its own settings and history |
 | Econ_King | `EconKingDB` | price and supply history, favorites |
 

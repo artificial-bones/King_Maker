@@ -175,7 +175,7 @@ end
 
 local function emptyText()
     if searchText() ~= "" then return "Nothing matches. Names load as you browse; try again in a moment." end
-    if not next(ns.db.items) then return "No history yet. Click Deep Scan at the auction house to start." end
+    if not next(ns.db.items) then return "No history yet. Click Scan at the auction house to start." end
     if tab == "fav" then return "No favorites yet. Click the star next to an item, or on its page." end
     if tab == "deals" and warming then return "Working out trends..." end
     if tab == "deals" then return "No deals right now: nothing is 20% under its 30-day average with 5+ days of history." end
@@ -222,7 +222,7 @@ local function footerText()
     local shownN = math.min(#list, tbl.visible or #list)
     footer:SetText((warming and (UI.Hex(C.warn) .. "Working out trends...|r  ") or "")
         .. (#list > 0 and ((tbl.offset + 1) .. "-" .. (tbl.offset + shownN) .. " of " .. #list .. ".  ") or "")
-        .. tracked .. " items tracked.  Last Deep Scan: " .. ns.Age(ns.db.lastDeep) .. ".")
+        .. tracked .. " items tracked.  Last full scan: " .. ns.Age(ns.db.lastDeep) .. ".")
 end
 
 local function refreshList()

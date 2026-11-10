@@ -1,4 +1,5 @@
-# Scanner (was Scanner King): scans, Deep Scan, Market Scan, guild sync, tooltips, /sk and the Prices page.
+# Scanner (was Scanner King): the one Scan (full or quick), Deep Scan, scan providers, guild sync, tooltips, /sk
+# and the Prices page.
 import os, sys, math, random; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from km import fresh, last, outputs
 
@@ -18,6 +19,14 @@ def load():
 def fonts(L):
     fs = L.eval("FONTS")
     return [fs[i].text for i in range(1, len(fs) + 1) if fs[i].text]
+
+
+def hover(LL, b):
+    """The tooltip lines a hover over button b shows."""
+    LL.execute("GameTooltip.lines = {}")
+    b.RunScript(b, "OnEnter")
+    lines = LL.eval("GameTooltip.lines")
+    return [str(lines[i]) for i in range(1, len(lines) + 1)]
 
 
 L, KM, ns = load()
@@ -58,16 +67,24 @@ end
 C_AuctionHouse.GetBrowseResults = function() local r = {} for i = 1, math.min(SHOWN, #RESULTS) do r[i] = RESULTS[i] end return r end
 C_AuctionHouse.HasFullBrowseResults = function() return SHOWN >= #RESULTS end
 C_AuctionHouse.RequestMoreBrowseResults = function() PAGES_SENT = PAGES_SENT + 1; SHOWN = SHOWN + PAGE_SIZE; FIRE("AUCTION_HOUSE_BROWSE_RESULTS_ADDED") end
-EVENTS = {}
-ScannerKing.RegisterCallback("test", function(e, ...) EVENTS[#EVENTS+1] = e end)
+EVENTS, KIND = {}, nil
+ScannerKing.RegisterCallback("test", function(e, res, kind) EVENTS[#EVENTS+1] = e; if e == "SCAN_RESULTS" then KIND = kind end end)
 """)
 SK.Watch("gather_king", L.eval("function() return { 2770, 268415, 999 } end"))  # ore (in Trade Goods), seeds (not), unlisted
 L.execute('FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()')
 tb = ns.TitleButtons()
-assert tb and tb.mat.label.text == "Material Scan" and tb.deep.label.text == "Deep Scan", "title-bar buttons"
+assert tb and tb.scan.label.text == "Scan", "one Scan button in the title bar"
+for old in ("Material Scan", "Market Scan", "Deep Scan"):
+    assert len(L.eval("BTNS('%s')" % old)) == 0, old + " button is gone"
 L.globals().SKNS = ns
-assert L.eval("SKNS.TitleButtons().mat.parent == AuctionHouseFrame") and tb.mat.template is None, "King Maker buttons, no Blizzard template"
+assert L.eval("SKNS.TitleButtons().scan.parent == AuctionHouseFrame") and tb.scan.template is None, "King Maker button, no Blizzard template"
+# no ReplicateItems on this client: a click is always a quick scan of Trade Goods plus the 3 watched items
+tip = hover(L, tb.scan)
+assert tip[0] == "Scan" and any("A click does a quick scan of Trade Goods plus 3 items." in x for x in tip), tip
+assert any("3 watched" in x for x in tip) and any("Last full scan: never" in x for x in tip), tip
 sk("scan")
+assert tb.scan.label.text == "Scanning..." and not tb.scan.enabled2, "the button shows progress"
+assert any("Trade Goods" in x for x in hover(L, tb.scan)), "the tooltip follows the scan"
 L.execute("RUN_TIMERS()")
 assert "Scan done" in last(L) and "King Maker" in last(L), last(L)
 assert L.eval("BROWSE") == 1 and L.eval("PAGES_SENT") == 1 and L.eval("KEYS") == 1 and L.eval("AH_QUERIES") == 0
@@ -75,8 +92,9 @@ assert L.eval("KEY_IDS[268415]") and L.eval("KEY_IDS[999]") and not L.eval("KEY_
 assert price(2589) == 120 and price(248823) == 12345 and price(268415) == 777 and price(999) is None
 assert L.eval("ScannerKingDB.prices[2589].q") == 20
 p, t, q = SK.GetPrice(10940); assert p == 900 and t and q == 20
-assert L.eval("ScannerKingDB.lastScan")
-assert tb.mat.label.text == "Material Scan" and tb.mat.enabled2, "button back to rest after the scan"
+assert L.eval("ScannerKingDB.lastScan") and L.eval("ScannerKingDB.lastQuick") and L.eval("KIND") == "material"
+assert tb.scan.label.text == "Scan" and tb.scan.enabled2, "button back to rest after the scan"
+assert any("Last quick scan: 0 min ago" in x for x in hover(L, tb.scan))
 ev = [L.eval("EVENTS")[i] for i in range(1, len(L.eval("EVENTS")) + 1)]
 assert ev[0] == "SCAN_STARTED" and "SCAN_FINISHED" in ev and ev[-1] == "PRICES_UPDATED", ev
 assert SK.FormatMoney(12345) == "|cffffd7001g|r |cffc7c7cf23s|r |cffeda55f45c|r"
@@ -92,37 +110,54 @@ assert not L.eval("KEY_IDS[2589]")  # Trade Goods already priced it
 L.execute("for i = 1, 250 do ScannerKingDB.prices[50000 + i] = nil end")
 print("DETAILED SCAN OK")
 
-# Market Scan: a module (Market) registers what to offer and what to scan
-market = tb.market
-assert market.shown is False  # hidden until someone registers
-assert L.eval('MENU_ITEM ~= nil')
+# Scan providers: a module (Market) says what it has selected; every quick scan prices it. No picker.
 L.execute('KingMakerMinimapButton:Click("RightButton")')
-assert L.eval('MENU_ITEM("Market Scan")') is None, "no Market Scan quick action without a provider"
+for old in ("Material Scan", "Market Scan", "Deep Scan"):
+    assert L.eval('MENU_ITEM("%s")' % old) is None, old + " quick action is gone"
+assert L.eval('MENU_ITEM("Scan") ~= nil'), "one Scan quick action at the auction house"
 L.execute("""
-FINISHED = nil
+FINISHED, ASKED = nil, nil
+SEL = { [1] = true }
 ScannerKing.RegisterScanProvider("test", {
   options = { { key = 1, label = "Alpha" }, { key = 2, label = "Beta" } },
-  items = function(picked) local t = {} if picked[1] then t[#t+1] = 50001 end if picked[2] then t[#t+1] = 50002 end return t end,
+  items = function(picked) ASKED = picked; local t = {} if picked[1] then t[#t+1] = 50001 end if picked[2] then t[#t+1] = 50002 end return t end,
+  selected = function() return SEL end,
   finished = function(picked, found) FINISHED = picked end,
 })
 OTHER[50001] = 11; OTHER[50002] = 22
 """)
-assert market.shown
-market.Click(market)
-win = L.eval("ScannerKingMarketScan")
-assert win and win.shown and win.template is None, "Market Scan dialog is a UI.Window"
-checks = [f for f in L.eval("FRAMES").values() if f.key in (1, 2)]
-assert len(checks) == 2 and all(c.checked for c in checks)  # everything ticked
-checks[1].SetChecked(checks[1], False)  # untick Beta
-scan = L.eval("BTN('Scan')")
-scan.Click(scan); L.execute("RUN_TIMERS()")
-assert price(50001) == 11 and price(50002) is None
-assert L.eval("FINISHED[1]") and not L.eval("FINISHED[2]")
-assert not win.shown, "the picker closes when the scan is done"
-L.execute("ScannerKingDB.prices[50001] = nil")
-L.execute('KingMakerMinimapButton:Click("RightButton")')
-assert L.eval('MENU_ITEM("Market Scan") ~= nil')
-print("MARKET SCAN OK")
+tip = hover(L, tb.scan)
+assert any("quick scan of Trade Goods plus 4 items." in x for x in tip), tip
+assert any("1 more for the 1 profession(s) ticked on Crafting Profits" in x for x in tip), tip
+tb.scan.Click(tb.scan); L.execute("RUN_TIMERS()")
+assert L.eval("ScannerKingMarketScan") is None, "no picker dialog"
+assert price(50001) == 11 and price(50002) is None and price(268415) == 777, "selected items plus watched ones"
+assert L.eval("KIND") == "market" and L.eval("FINISHED[1]") and not L.eval("FINISHED[2]")
+# nothing selected: a plain Trade Goods + watched scan (kind material), the provider isn't told
+L.execute("SEL = {}; FINISHED = nil; ScannerKingDB.prices[50001] = nil")
+SK.QuickScan(); L.execute("RUN_TIMERS()")
+assert L.eval("KIND") == "material" and price(50001) is None and L.eval("FINISHED") is None
+# /sk market forces the provider's items; with nothing ticked it says where to tick them
+sk("market"); assert "Crafting Profits" in last(L), last(L)
+L.execute("SEL = { [2] = true }"); sk("market"); L.execute("RUN_TIMERS()")
+assert L.eval("KIND") == "market" and price(50002) == 22 and L.eval("FINISHED[2]")
+# /sk material forces Trade Goods + watched only, whatever is selected
+L.execute("ScannerKingDB.prices[50002] = nil"); sk("material"); L.execute("RUN_TIMERS()")
+assert L.eval("KIND") == "material" and price(50002) is None
+# OpenMarketScan (old API) runs the one scan at the auction house
+L.execute("ScannerKingDB.prices[50002] = nil"); SK.OpenMarketScan(); L.execute("RUN_TIMERS()")
+assert price(50002) == 22 and L.eval("ScannerKingMarketScan") is None
+# a provider without `selected` counts every option, like the old picker's defaults
+L.execute("""
+ScannerKingDB.prices[50001] = nil; ScannerKingDB.prices[50002] = nil
+ScannerKing.RegisterScanProvider("test", { options = { { key = 1, label = "Alpha" }, { key = 2, label = "Beta" } },
+  items = function(picked) local t = {} if picked[1] then t[#t+1] = 50001 end if picked[2] then t[#t+1] = 50002 end return t end })
+""")
+sk("scan"); L.execute("RUN_TIMERS()")
+assert price(50001) == 11 and price(50002) == 22
+L.execute("ScannerKingDB.prices[50001] = nil; ScannerKingDB.prices[50002] = nil; OTHER[50001] = nil; OTHER[50002] = nil")
+L.execute('ScannerKing.RegisterScanProvider("test", { options = {}, items = function() return {} end, selected = function() return {} end })')
+print("PROVIDERS OK")
 
 # The Prices page: categories come from the game's own item types
 L.execute("""
@@ -167,8 +202,9 @@ h.RunScript(h, "OnClick")
 assert [e.name for e in ns.PriceList().values()] == ["Copper Ore", "Copper Bar"]
 c.search.SetText(c.search, ""); c.search.RunScript(c.search, "OnTextChanged", True)
 assert len(ns.PriceList()) == 6
-# the toolbar's scans: Material Scan works at the auction house, Deep Scan opens its dialog
-assert c.mat.enabled2 and c.deep.enabled2
+# the toolbar has one Scan: it works at the auction house, and its tooltip says what a click does
+assert c.scan.enabled2 and c.scan.label.text == "Scan" and c.mat is None and c.deep is None and c.market is None
+assert any("quick scan of Trade Goods" in x for x in hover(L, c.scan))
 sk("show"); assert not KM.IsShown(), "/sk toggles the page closed"
 SK.ToggleBrowser(True); assert KM.IsShown("prices")
 SK.ToggleBrowser(False); assert not KM.IsShown()
@@ -178,15 +214,19 @@ print("PRICES PAGE OK")
 
 # The crown, the sidebar status, Home and Settings
 L.execute('KingMakerMinimapButton:Click("RightButton")')
-for label in ("Material Scan", "Deep Scan", "Prices"):
+for label in ("Scan", "Prices"):
     assert L.eval('MENU_ITEM("%s") ~= nil' % label), label
 L.execute('MENU_ITEM("Prices").fn()'); assert KM.IsShown("prices")
-assert L.eval("HASFONT('Prices: Deep Scan')") or L.eval("HASFONT('Prices: no Deep Scan yet')"), "status line"
+assert L.eval("HASFONT('Prices: no full scan yet, quick')"), "status line: no full scan, a quick one just now"
 L.execute('KingMakerMinimapButton:RunScript("OnEnter")')
 tip = list(L.eval("GameTooltip.lines").values())
-assert any("prices. Last scan:" in str(x) for x in tip), tip
+assert any("prices. Full scan: never. Quick scan:" in str(x) for x in tip), tip
 L.execute("AH_OPEN = false"); L.execute('KingMakerMinimapButton:Click("RightButton")')
-assert L.eval('MENU_ITEM("Material Scan")') is None, "Material Scan only at the auction house"
+assert L.eval('MENU_ITEM("Scan")') is None, "Scan only at the auction house"
+KM.Show("prices"); c = ns.PricesPage()
+assert not c.scan.enabled2 and any("Open the auction house to scan." in x for x in hover(L, c.scan))
+SK.OpenMarketScan(); assert "Open the auction house and click Scan" in last(L), last(L)  # old API, away from the AH
+sk("scan"); assert "Open the auction house first" in last(L), last(L)
 L.execute("AH_OPEN = true")
 KM.Show("home"); assert not KM.errorShown, last(L)
 assert "PRICES KNOWN" in fonts(L)
@@ -298,26 +338,34 @@ GOT = {}
 ScannerKing.RegisterCallback("t", function(e, res, kind, method) if e == "SCAN_RESULTS" then GOT = { res = res, kind = kind, method = method } end end)
 """)
 L4.execute('FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()')
-deep = ns4.TitleButtons().deep
-assert deep, "Deep Scan button"
-# the button opens the Deep Scan dialog, which says which scan you'll get; Scan starts it
-deep.Click(deep)
-dwin = L4.eval("ScannerKingDeepScan")
-assert dwin.shown and dwin.template is None and "Deep Scan" in fonts(L4)
-assert any("Full scan ready." in t for t in fonts(L4)) and L4.eval("REPLICATED") == 0
-scan = L4.eval("BTN('Scan')")
-scan.Click(scan); L4.execute("RUN_TIMERS()")
-assert "Deep Scan done: 10 items priced." in L4.eval("OUTPUT[#OUTPUT]") or any("Deep Scan done: 10 items priced." in str(o) for o in outputs(L4))
-assert any("Deep Scan done: 10 items priced." in t for t in fonts(L4)), [t for t in fonts(L4) if "Deep" in t]
-assert L4.eval("BTN('Scan again')") is not None
-assert any("Full scan ready again in 15 min" in t for t in fonts(L4))
-assert deep.label.text == "Deep Scan" and deep.enabled2, "the title button is back to rest"
-assert L4.eval("REPLICATED") == 1 and L4.eval("GOT.kind") == "deep" and L4.eval("GOT.method") == "replicate"
+scanb = ns4.TitleButtons().scan
+assert scanb, "Scan button"
+# the full dump is available: the tooltip says so, and a click runs the Deep Scan (no dialog), progress on the button
+tip = hover(L4, scanb)
+assert any("Full scan ready" in x for x in tip) and L4.eval("REPLICATED") == 0, tip
+assert SK4.FullScanReadyIn() == 0
+scanb.Click(scanb)
+assert L4.eval("REPLICATED") == 1 and SK4.IsScanning() and not scanb.enabled2
+assert scanb.label.text == "Downloading every auction...", scanb.label.text
+assert L4.eval("ScannerKingDeepScan") is None, "a click doesn't open the Deep Scan dialog"
+L4.execute("RUN_TIMERS()")
+assert any("Deep Scan done: 10 items priced." in str(o) for o in outputs(L4))
+assert scanb.label.text == "Scan" and scanb.enabled2, "the title button is back to rest"
+assert L4.eval("GOT.kind") == "deep" and L4.eval("GOT.method") == "replicate"
+# now on cooldown: the tooltip says when the next full scan is possible, and a click does a quick scan
+assert SK4.FullScanReadyIn() == 900
+tip = hover(L4, scanb)
+assert any("Full scan ready in 15 min; a click now does a quick scan of Trade Goods plus 0 items." in x for x in tip), tip
+L4.execute("NOW = NOW + 9 * 60")
+assert any("Full scan ready in 6 min" in x for x in hover(L4, scanb))
+L4.execute("NOW = NOW - 9 * 60; DEEPGOT = GOT; GOT = {}")
+scanb.Click(scanb); L4.execute("RUN_TIMERS()")
+assert L4.eval("REPLICATED") == 1 and L4.eval("GOT.kind") == "material", "quick scan while the dump is on cooldown"
 pr = L4.eval("ScannerKingDB.prices")
 # Linen: 1300/10 = 130 each is the cheapest; the 1000-each stack of 50 is an outlier
 assert pr[2589].p == 100 and pr[2589].q == 100 and pr[2589].n == 4, (pr[2589].p, pr[2589].q)
 assert pr[2589].m < 200 and pr[2589].m >= 100, pr[2589].m
-assert L4.eval("GOT.res[2589].s") == 3 and pr[6000].n == 3 and pr[7000] is None
+assert L4.eval("DEEPGOT.res[2589].s") == 3 and pr[6000].n == 3 and pr[7000] is None
 assert len([k for k in pr.keys()]) == 3 + 7
 assert pr[2770].p == 333 and pr[2770].m == math.floor(pr[2770].m)  # whole copper, so guild sync can read it
 assert pr[2589].d is None and pr[6000].d  # trade goods are shared with the guild, a weapon isn't
@@ -457,17 +505,40 @@ SK4.DeepScan(); assert SK4.IsScanning(); SK4.Scan(); assert "already" in L4.eval
 KM4.Show("prices")
 assert L4.eval("HASFONT('Prices: scanning')"), "status says a scan is running"
 L4.execute('FIRE("AUCTION_HOUSE_CLOSED")'); assert not SK4.IsScanning()
-# /sk deep opens the dialog and starts
+# /sk scan: the full dump once it's off cooldown (no dialog)
+sk4 = L4.eval("SlashCmdList.SCANNERKING")
 L4.execute("NOW = NOW + 3600; AH_OPEN = true; REPLICATED = 0; C_AuctionHouse.ReplicateItems = function() REPLICATED = REPLICATED + 1 end")
-L4.eval("SlashCmdList.SCANNERKING")("deep")
-assert L4.eval("REPLICATED") == 1 and SK4.IsScanning() and L4.eval("ScannerKingDeepScan").shown
-L4.execute('FIRE("AUCTION_HOUSE_CLOSED")')
+sk4("scan")
+assert L4.eval("REPLICATED") == 1 and SK4.IsScanning() and L4.eval("ScannerKingDeepScan") is None
+L4.execute('FIRE("AUCTION_HOUSE_CLOSED")'); assert not SK4.IsScanning()
+# /sk material forces a quick scan even when the full dump is ready
+L4.execute("NOW = NOW + 3600; AH_OPEN = true; REPLICATED = 0; GOT = {}")
+sk4("material"); L4.execute("RUN_TIMERS()")
+assert L4.eval("REPLICATED") == 0 and L4.eval("GOT.kind") == "material"
+# /sk deep opens the progress dialog and starts; the dialog follows it to the end
+L4.execute("""C_AuctionHouse.ReplicateItems = function() REPLICATED = REPLICATED + 1; C_Timer.After(1, function() FIRE("REPLICATE_ITEM_LIST_UPDATE") end) end""")
+sk4("deep")
+dwin = L4.eval("ScannerKingDeepScan")
+assert L4.eval("REPLICATED") == 1 and SK4.IsScanning() and dwin.shown and dwin.template is None
+L4.execute("RUN_TIMERS()")
+assert any("Deep Scan done: 10 items priced." in t for t in fonts(L4)), [t for t in fonts(L4) if "Deep" in t]
+assert L4.eval("BTN('Scan again')") is not None
+assert any("Full scan ready again in 15 min" in t for t in fonts(L4))
+# while the dump is on cooldown, /sk deep browses every category (lowest prices only)
+L4.execute("GOT = {}; USE_AH_BROWSE({ { itemKey = { itemID = 2589 }, minPrice = 90, totalQuantity = 30 } })")
+sk4("deep"); L4.execute("RUN_TIMERS()")
+assert L4.eval("REPLICATED") == 1 and L4.eval("GOT.method") == "browse"
 assert not KM4.errorShown, L4.eval("OUTPUT[#OUTPUT]")
 print("SCAN RESULTS OK")
 
 # /sk status and help
-L4.eval("SlashCmdList.SCANNERKING")("status"); assert "prices stored" in L4.eval("OUTPUT[#OUTPUT]")
-L4.eval("SlashCmdList.SCANNERKING")("help"); assert any("/sk deep" in str(o) for o in outputs(L4))
+L4.eval("SlashCmdList.SCANNERKING")("status")
+st = L4.eval("OUTPUT[#OUTPUT]"); assert "prices stored" in st and "Last full scan: 0 min ago" in st and "Full scan ready in 15 min" in st, st
+L4.eval("SlashCmdList.SCANNERKING")("help")
+helps = [str(o) for o in outputs(L4)]
+for cmd in ("/sk scan", "/sk deep", "/sk material", "/sk market"):
+    assert any(cmd in h for h in helps), cmd
+assert not any("Material Scan" in h or "Market Scan" in h for h in helps)
 
 # InitDB runs twice (Boot re-runs it after moving old data in): same table, old keys gone
 L5, KM5 = fresh(only=["Scanner"], seed="ScannerKingDB = { prices = { [2589] = { p = 5, t = 900 } }, ui = { button = true, buttonAngle = 30, tooltip = false } }")

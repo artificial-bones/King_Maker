@@ -77,7 +77,7 @@ local function refresh(c)
         local s = KM.Safe(fn)
         if s and s ~= "" then lines[#lines + 1] = s end
     end
-    if #lines == 0 then lines[1] = "Open the auction house and press Deep Scan to fill every page with prices." end
+    if #lines == 0 then lines[1] = "Open the auction house and press Scan to fill every page with prices." end
     noteFS:SetText(table.concat(lines, "\n\n"))
 end
 

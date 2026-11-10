@@ -4,7 +4,7 @@ local UI = KM.UI
 local C = UI.C
 
 -- The Crafting Profits page of the King Maker window (Crafting > Crafting Profits).
---   Top:    which professions to show (and All), Market Scan (the Scanner's dialog).
+--   Top:    which professions to show and price (and All), Scan (the Scanner's one scan, at the auction house).
 --   Then:   Yrgna Special (buying mats) or Ethical Gaming (farming mats), disenchanting options, and which
 --           recipes to show (all, mine, patterns I lack).
 --   Tabs:   Best (every ticked profession together), then one per ticked profession.
@@ -181,7 +181,7 @@ local function footerText()
     local mode = ns.db.mode
     local last = ScannerKing and ScannerKing.LastScan and ScannerKing.LastScan()
     if not next(ns.db.profs) then
-        footer:SetText("Tick the professions to show. Click Market Scan at the auction house to get prices.")
+        footer:SetText("Tick the professions to show. Click Scan at the auction house to get prices.")
     else
         local n = math.min(#shown, tbl.visible or #shown)
         footer:SetText(#shown .. " recipes, " .. above .. " beat " .. (mode == "farm" and "selling raw" or "not crafting")
@@ -277,7 +277,7 @@ function ns.OpenMarketScan()
     if ScannerKing and ScannerKing.OpenMarketScan then
         ScannerKing.OpenMarketScan()
     else
-        KM.Print(ns, "Market Scan needs the Scanner module.")
+        KM.Print(ns, "Scanning needs the Scanner module.")
     end
 end
 
@@ -311,9 +311,10 @@ local function buildPage(c)
         cb.prof = p.id
         checks[p.id] = cb
     end
-    local scan = UI.Button(c, "Market Scan", 104, 24, function() ns.OpenMarketScan() end, "primary")
+    local scan = UI.Button(c, "Scan", 104, 24, function() ns.OpenMarketScan() end, "primary")
     scan:SetPoint("TOPRIGHT", 0, 0)
-    UI.Tip(scan, "At the auction house: pick professions and price everything they make and use. Opens the Scanner's Market Scan window.")
+    UI.Tip(scan, "At the auction house: King Maker's one Scan. A full scan when the game allows one (every 15 minutes), "
+        .. "otherwise a quick scan of Trade Goods plus everything the ticked professions make and use.")
 
     -- How to count, disenchanting, which recipes.
     local y = -52
@@ -456,6 +457,6 @@ KM.RegisterSettings({ id = "market", label = "Market", order = 20, rows = {
     { type = "button", label = "Clear my have/don't-have marks", func = function() SlashCmdList.MARKETKING("recipes reset") end,
       tip = "Back to what your trade skill windows show, for this character." },
     { type = "header", label = "Commands" },
-    { type = "text", label = "/mk   open Crafting Profits\n/mk scan   Market Scan (at the auction house)\n/mk mode buy|farm   Yrgna Special or Ethical Gaming\n"
+    { type = "text", label = "/mk   open Crafting Profits\n/mk scan   Scan (at the auction house): prices the ticked professions\n/mk mode buy|farm   Yrgna Special or Ethical Gaming\n"
         .. "/mk recipes all|mine|missing   which recipes to show\n/mk recipes reset   clear your have/don't-have marks" },
 } })

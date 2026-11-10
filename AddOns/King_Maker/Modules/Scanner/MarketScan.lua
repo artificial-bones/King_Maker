@@ -1,129 +1,118 @@
 local _, KM = ...
 local ns = KM.Module("Scanner")
 local API = ns.API
-local UI = KM.UI
-local C = UI.C
 
--- Market Scan: Scanner King runs every scan, but what a market scan covers
--- comes from the addon that registered it (Market King: professions and their
--- recipes). The Market Scan button opens a King Maker dialog with every option ticked;
--- untick what you don't want and click Scan. When it finishes, the provider
--- is told so it can show its results.
+-- Scan providers and the quick scan.
+--
+-- Scanner King runs every scan, but some of what a scan covers comes from the addon that registered a scan
+-- provider (Market King: professions and their recipes). Since King Maker 2.1 there is no picker: the
+-- provider says what is selected right now (Crafting Profits' ticked professions), and every quick scan
+-- (the Scan button while the full dump is on cooldown) prices those items along with Trade Goods and every
+-- Watch() list. When a scan that included them finishes, the provider is told.
 --
 --   ScannerKing.RegisterScanProvider(owner, {
 --       options  = { { key = ..., label = "Alchemy" }, ... },
 --       items    = function(picked) return { itemID, ... } end,  -- picked = { [key] = true }
+--       selected = function() return { [key] = true } end,      -- optional: the current selection
+--                                                                --   (without it every option counts)
 --       finished = function(picked, found) end,                 -- optional
 --   })
 
-local provider, providerOwner
-local win, checks, status, scanBtn
-local running = nil -- the picked set while a market scan runs
+local provider
+local running = nil -- the picked set while a scan with the provider's items runs
 
 function API.RegisterScanProvider(owner, def)
-    provider, providerOwner = def, owner
-    local b = ns.MarketButton and ns.MarketButton()
-    if b then b:Show() end
+    provider = def -- one provider (the last to register); owner is kept for the API's shape
 end
 
 function ns.HasScanProvider() return provider ~= nil end
 
-local function picked()
+-- The provider's current selection as { [key] = true }, or nil (no provider, or nothing selected).
+function ns.ProviderSelection()
+    if not provider then return nil end
     local set = {}
-    for _, c in ipairs(checks) do if c:GetChecked() then set[c.key] = true end end
-    return set
-end
-
-local function updateButton()
-    scanBtn:SetEnabled2(next(picked()) ~= nil and not API.IsScanning())
-end
-
-local function create()
-    local n = #provider.options
-    win = UI.Window("ScannerKingMarketScan", "Market Scan", 280, 150 + n * 22)
-    local body = win.body
-    local help = UI.Para(body, 11, C.muted, 252)
-    help:SetPoint("TOPLEFT", 0, 0)
-    help:SetText("Prices Trade Goods plus everything these professions make and use.")
-
-    checks = {}
-    for i, opt in ipairs(provider.options) do
-        local c = UI.CheckLabel(body, opt.label, updateButton)
-        c.frame:SetPoint("TOPLEFT", 0, -34 - (i - 1) * 22)
-        c.key = opt.key
-        checks[i] = c
-    end
-    local function setAll(v)
-        for _, c in ipairs(checks) do c:SetChecked(v) end
-        updateButton()
-    end
-    local all = UI.Button(body, "All", 60, 22, function() setAll(true) end)
-    all:SetPoint("TOPRIGHT", 0, -32)
-    local none = UI.Button(body, "None", 60, 22, function() setAll(false) end)
-    none:SetPoint("TOP", all, "BOTTOM", 0, -4)
-
-    scanBtn = UI.Button(body, "Scan", 130, 26, function() API.MarketScan(picked()) end, "primary")
-    scanBtn:SetPoint("BOTTOM", 0, 22)
-    status = UI.Text(body, 11, C.muted, "CENTER")
-    status:SetPoint("BOTTOMLEFT", 0, 4)
-    status:SetPoint("BOTTOMRIGHT", 0, 4)
-end
-
-function ns.ToggleMarketScan(anchor, show)
-    if not provider then
-        KM.Print(ns, "Market Scan needs the Crafting Profits module (Market King).")
-        return
-    end
-    if not win then create() end
-    if show == nil then show = not win:IsShown() end
-    if show then
-        for _, c in ipairs(checks) do c:SetChecked(true) end -- everything ticked each time
-        win:ClearAllPoints()
-        if anchor and anchor:IsShown() then
-            win:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, 0)
-        else
-            win:SetPoint("CENTER")
+    if type(provider.selected) == "function" then
+        local ok, r = pcall(provider.selected)
+        for k, v in pairs(ok and type(r) == "table" and r or {}) do
+            if v then set[k] = true end
         end
-        if not running then
-            status:SetText(ns.db.lastScan and ("Last scan " .. API.PriceAge(ns.db.lastScan)) or "")
-        end
-        updateButton()
+    else
+        for _, o in ipairs(provider.options or {}) do set[o.key] = true end
     end
-    win:SetShown(show)
+    return next(set) and set or nil
 end
 
-function API.OpenMarketScan()
-    ns.ToggleMarketScan(ns.ahParent, true)
+-- The selection and the items it needs priced (nil, nil when there is nothing to add).
+local function providerPick(set)
+    set = set or ns.ProviderSelection()
+    if not set then return nil, nil end
+    local ok, items = pcall(provider.items, set)
+    if not ok or type(items) ~= "table" then return set, nil end
+    return set, items
 end
 
--- Runs a market scan for these picked options.
-function API.MarketScan(set)
-    if not provider or not next(set) then return end
+-- What a quick scan covers besides Trade Goods, for the Scan button's tooltip:
+-- { total = items, watched = from Watch() lists, prof = more from the provider, profs = options selected }.
+function ns.QuickPlan()
+    local have, watched = {}, 0
+    for _, id in ipairs(ns.WatchedItems()) do have[id] = true; watched = watched + 1 end
+    local set, items = providerPick()
+    local prof, profs = 0, 0
+    for _ in pairs(set or {}) do profs = profs + 1 end
+    for _, id in ipairs(items or {}) do
+        if not have[id] then have[id] = true; prof = prof + 1 end
+    end
+    return { total = watched + prof, watched = watched, prof = prof, profs = profs }
+end
+
+local function run(set, items)
     if API.IsScanning() then
         KM.Print(ns, "A scan is already running.")
         return
     end
-    local ok, items = pcall(provider.items, set)
-    if not ok or type(items) ~= "table" then return end
     running = set
-    if status then status:SetText("Starting: " .. #items .. " items plus Trade Goods") end
-    local b = ns.MarketButton and ns.MarketButton()
-    if b and ns.SetScanButton then ns.SetScanButton(b) end
     API.Scan({ items = items, kind = "market" })
     if not API.IsScanning() then running = nil end -- e.g. the auction house was closed
-    if scanBtn then updateButton() end
 end
 
-API.RegisterCallback("Scanner_King_market", function(event, arg)
-    if not running then return end
-    if event == "SCAN_PROGRESS" then
-        if status then status:SetText(arg or "") end
-    elseif event == "SCAN_FINISHED" then
-        local set = running
-        running = nil
-        if status then status:SetText("Done: " .. (arg or 0) .. " prices") end
-        if scanBtn then updateButton() end
-        if win then win:Hide() end
-        if provider.finished then pcall(provider.finished, set, arg) end
+-- The quick scan: Trade Goods + every Watch() list + the provider's current selection. Reports kind "market"
+-- when the provider added items, else "material" (the kinds Econ and the King Dashboard already know).
+function API.QuickScan()
+    if not ns.db then return end
+    local set, items = providerPick()
+    if items and #items > 0 then return run(set, items) end
+    return API.Scan()
+end
+
+-- Runs a quick scan with the provider's items for this set (default: its current selection); /sk market.
+function API.MarketScan(set)
+    if not provider then
+        KM.Print(ns, "Pricing professions needs the Crafting Profits module (Market King).")
+        return
     end
+    if type(set) ~= "table" or not next(set) then set = ns.ProviderSelection() end
+    if not set then
+        KM.Print(ns, "Tick the professions to price on Crafting Profits first (/km crafting).")
+        return
+    end
+    local _, items = providerPick(set)
+    if type(items) ~= "table" then return end
+    run(set, items)
+end
+
+-- Kept for addons that called it: there is no picker any more. At the auction house it runs the one scan;
+-- elsewhere it opens Crafting Profits, where the professions to price are ticked.
+function API.OpenMarketScan()
+    if not ns.db then return end
+    if ns.AHOpen and ns.AHOpen() then return API.SmartScan() end
+    KM.Print(ns, "Open the auction house and click Scan. It prices the professions ticked on Crafting Profits.")
+    if KM.pages and KM.pages.crafting then KM.Show("crafting") end
+end
+ns.ToggleMarketScan = function() API.OpenMarketScan() end
+
+API.RegisterCallback("Scanner_King_market", function(event, arg)
+    if not running or event ~= "SCAN_FINISHED" then return end
+    local set = running
+    running = nil
+    if provider and provider.finished then pcall(provider.finished, set, arg) end
 end)
