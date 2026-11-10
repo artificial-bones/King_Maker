@@ -1,14 +1,10 @@
 ## Interface: 16001
-## Title: Quest King
-## Notes: Every Horde dungeon quest on Forever: what you've done, what's next and where to go. Also marks quest items you can delete.
+## Title: Quest King (moved into King Maker)
+## Notes: Quest King is part of King Maker now. This folder only carries your old Quest King settings and data into King Maker; after one login you can delete it.
 ## Author: BearBones
-## Version: 1.3.0
-## OptionalDeps: QuestieDB, TomTom
+## Version: 2.0.0
+## Dependencies: King_Maker
 ## SavedVariables: QuestKingDB
-## IconTexture: Interface\Icons\INV_Misc_Note_02
+## X-KingMaker-Stub: 1
 
-Data\Dungeons.lua
-Core.lua
-Bags.lua
-Dungeon.lua
-DungeonUI.lua
+Stub.lua

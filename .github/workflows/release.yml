@@ -28,7 +28,7 @@ jobs:
         run: |
           gh release create "$VERSION" King_Maker.zip \
             --title "King Maker $VERSION" \
-            --notes "Download King_Maker.zip, unzip it, and copy every folder into your Interface\\AddOns folder. See the README for what each addon does."
+            --notes "Download King_Maker.zip, unzip it, and copy every folder into your Interface\\AddOns folder (say yes to replace). Upgrading from 1.x: the old-named folders in the zip carry your settings and data into King Maker on your first login; delete them afterwards. See the README."
       - name: Upload to CurseForge
         if: env.CF_API_TOKEN != ''
         env:

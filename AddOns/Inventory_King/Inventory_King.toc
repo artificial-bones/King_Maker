@@ -1,15 +1,10 @@
 ## Interface: 16001
-## Title: Inventory King
-## Notes: Everything you own on every character, what it's worth, and your net worth: gold plus items.
+## Title: Inventory King (moved into King Maker)
+## Notes: Inventory King is part of King Maker now. This folder only carries your old Inventory King settings and data into King Maker; after one login you can delete it.
 ## Author: BearBones
-## Version: 1.0.0
-## OptionalDeps: Scanner_King, Mail_King
+## Version: 2.0.0
+## Dependencies: King_Maker
 ## SavedVariables: InventoryKingDB
-## IconTexture: Interface\Icons\INV_Misc_Bag_08
+## X-KingMaker-Stub: 1
 
-Core.lua
-Scan.lua
-Worth.lua
-History.lua
-Tooltip.lua
-UI.lua
+Stub.lua

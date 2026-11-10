@@ -1,20 +1,10 @@
 ## Interface: 16001
-## Title: Farm King
-## Notes: Which mobs are worth farming: gold per kill from your own drop data, your guild's, and Scanner King's prices. Uses QuestieDB when installed.
+## Title: Farm King (moved into King Maker)
+## Notes: Farm King is part of King Maker now. This folder only carries your old Farm King settings and data into King Maker; after one login you can delete it.
 ## Author: BearBones
-## Version: 1.2.2
-## Dependencies: Scanner_King
-## OptionalDeps: QuestieDB
+## Version: 2.0.0
+## Dependencies: King_Maker
 ## SavedVariables: FarmKingDB
-## IconTexture: Interface\Icons\INV_Misc_Pelt_Wolf_01
+## X-KingMaker-Stub: 1
 
-Core.lua
-Questie.lua
-Tracker.lua
-Mobs.lua
-Sync.lua
-Map.lua
-Mob.lua
-White.lua
-UI.lua
-Session.lua
+Stub.lua

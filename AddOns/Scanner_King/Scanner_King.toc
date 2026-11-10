@@ -1,15 +1,10 @@
 ## Interface: 16001
-## Title: Scanner King
-## Notes: Auction house price scanner: Trade Goods, professions, or the whole auction house (Deep Scan). Prices in item tooltips. Shares prices with Gather King, Market King and your guild.
+## Title: Scanner King (moved into King Maker)
+## Notes: Scanner King is part of King Maker now. This folder only carries your old Scanner King settings and data into King Maker; after one login you can delete it.
 ## Author: BearBones
-## Version: 1.6.0
+## Version: 2.0.0
+## Dependencies: King_Maker
 ## SavedVariables: ScannerKingDB
-## IconTexture: Interface\Icons\INV_Misc_Coin_02
+## X-KingMaker-Stub: 1
 
-Core.lua
-Scan.lua
-DeepScan.lua
-Sync.lua
-MarketScan.lua
-Tooltip.lua
-Browser.lua
+Stub.lua

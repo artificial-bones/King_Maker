@@ -1,10 +1,10 @@
 ## Interface: 16001
-## Title: Minimap King
-## Notes: One crown on the minimap for every minimap button: the King addons and any other addon's buttons go into its drop-down.
+## Title: Minimap King (moved into King Maker)
+## Notes: Minimap King is part of King Maker now. This folder only carries your old Minimap King settings and data into King Maker; after one login you can delete it.
 ## Author: BearBones
-## Version: 2.1.1
-## OptionalDeps: Scanner_King, Market_King, Econ_King, Farm_King, gather_king, Mail_King, Quest_King, Skillup_King, LibDBIcon-1.0
+## Version: 2.0.0
+## Dependencies: King_Maker
 ## SavedVariables: MinimapKingDB
-## IconTexture: Interface\Icons\INV_Crown_01
+## X-KingMaker-Stub: 1
 
-Minimap_King.lua
+Stub.lua

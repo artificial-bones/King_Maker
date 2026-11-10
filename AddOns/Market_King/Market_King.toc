@@ -1,17 +1,10 @@
 ## Interface: 16001
-## Title: Market King
-## Notes: Finds the most profitable crafts for your professions: sell raw, craft, or disenchant. Needs Scanner King.
+## Title: Market King (moved into King Maker)
+## Notes: Market King is part of King Maker now. This folder only carries your old Market King settings and data into King Maker; after one login you can delete it.
 ## Author: BearBones
-## Version: 1.5.0
-## Dependencies: Scanner_King
+## Version: 2.0.0
+## Dependencies: King_Maker
 ## SavedVariables: MarketKingDB
-## IconTexture: Interface\Icons\INV_Misc_Bag_10
+## X-KingMaker-Stub: 1
 
-Data\Recipes.lua
-Data\Patterns.lua
-Data\Disenchant.lua
-Data\Vendor.lua
-Core.lua
-Profit.lua
-Events.lua
-UI.lua
+Stub.lua

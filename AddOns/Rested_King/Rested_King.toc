@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: Rested King (moved into King Maker)
+## Notes: Rested King is part of King Maker now. This folder only carries your old Rested King settings and data into King Maker; after one login you can delete it.
+## Author: BearBones
+## Version: 2.0.0
+## Dependencies: King_Maker
+## SavedVariables: RestedKingDB
+## X-KingMaker-Stub: 1
+
+Stub.lua

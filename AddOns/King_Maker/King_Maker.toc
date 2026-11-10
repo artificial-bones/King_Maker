@@ -1,0 +1,109 @@
+## Interface: 16001
+## Title: King Maker
+## Notes: Every King addon in one: AH prices and history, crafting profits, skill-ups, gold ledger, inventory, farming, gathering, dungeon quests and rested XP. /km
+## Author: BearBones
+## Version: 2.0.0
+## IconTexture: Interface\Icons\INV_Crown_01
+## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB
+## OptionalDeps: QuestieDB, TomTom, LibDBIcon-1.0, Auctionator
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\HereBeDragons\HereBeDragons-2.0.lua
+Libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
+
+Core\Core.lua
+Core\Theme.lua
+Core\Shell.lua
+Core\Settings.lua
+
+# Scanner
+Modules\Scanner\Core.lua
+Modules\Scanner\Scan.lua
+Modules\Scanner\DeepScan.lua
+Modules\Scanner\Sync.lua
+Modules\Scanner\MarketScan.lua
+Modules\Scanner\Tooltip.lua
+Modules\Scanner\Browser.lua
+
+# Econ
+Modules\Econ\Core.lua
+Modules\Econ\History.lua
+Modules\Econ\Categories.lua
+Modules\Econ\Graph.lua
+Modules\Econ\Item.lua
+Modules\Econ\UI.lua
+Modules\Econ\Tooltip.lua
+
+# Market
+Modules\Market\Data\Recipes.lua
+Modules\Market\Data\Patterns.lua
+Modules\Market\Data\Disenchant.lua
+Modules\Market\Data\Vendor.lua
+Modules\Market\Core.lua
+Modules\Market\Profit.lua
+Modules\Market\Events.lua
+Modules\Market\UI.lua
+
+# Skillup
+Modules\Skillup\Data\Recipes.lua
+Modules\Skillup\Data\Patterns.lua
+Modules\Skillup\Data\Disenchant.lua
+Modules\Skillup\Data\Vendor.lua
+Modules\Skillup\Core.lua
+Modules\Skillup\Plan.lua
+Modules\Skillup\UI.lua
+
+# Farm
+Modules\Farm\Core.lua
+Modules\Farm\Questie.lua
+Modules\Farm\Tracker.lua
+Modules\Farm\Mobs.lua
+Modules\Farm\Sync.lua
+Modules\Farm\Map.lua
+Modules\Farm\Mob.lua
+Modules\Farm\White.lua
+Modules\Farm\UI.lua
+Modules\Farm\Session.lua
+
+# Gather
+Modules\Gather\Data.lua
+Modules\Gather\Core.lua
+Modules\Gather\Pins.lua
+Modules\Gather\Recorder.lua
+Modules\Gather\Sync.lua
+Modules\Gather\Button.lua
+Modules\Gather\Prices.lua
+Modules\Gather\Ledger.lua
+Modules\Gather\Options.lua
+
+# Inventory
+Modules\Inventory\Core.lua
+Modules\Inventory\Scan.lua
+Modules\Inventory\Worth.lua
+Modules\Inventory\History.lua
+Modules\Inventory\Tooltip.lua
+Modules\Inventory\UI.lua
+
+# Mail
+Modules\Mail\Core.lua
+Modules\Mail\Mail.lua
+Modules\Mail\Ledger.lua
+Modules\Mail\UI.lua
+
+# Quest
+Modules\Quest\Data\Dungeons.lua
+Modules\Quest\Core.lua
+Modules\Quest\Bags.lua
+Modules\Quest\Dungeon.lua
+Modules\Quest\DungeonUI.lua
+
+# Rested
+Modules\Rested\Core.lua
+Modules\Rested\UI.lua
+
+# Minimap
+Modules\Minimap\Minimap_King.lua
+
+Core\Home.lua
+Core\Boot.lua

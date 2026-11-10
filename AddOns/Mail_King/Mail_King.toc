@@ -1,13 +1,10 @@
 ## Interface: 16001
-## Title: Mail King
-## Notes: A ledger of your auction house money, read from your mail: profit by strategy, item and day, who buys from you and what isn't selling.
+## Title: Mail King (moved into King Maker)
+## Notes: Mail King is part of King Maker now. This folder only carries your old Mail King settings and data into King Maker; after one login you can delete it.
 ## Author: BearBones
-## Version: 1.2.0
-## OptionalDeps: Scanner_King, Farm_King
+## Version: 2.0.0
+## Dependencies: King_Maker
 ## SavedVariables: MailKingDB
-## IconTexture: Interface\Icons\INV_Letter_15
+## X-KingMaker-Stub: 1
 
-Core.lua
-Mail.lua
-Ledger.lua
-UI.lua
+Stub.lua
