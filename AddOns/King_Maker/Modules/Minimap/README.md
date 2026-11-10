@@ -13,7 +13,7 @@ Settings. Your Minimap King 1.x choices move in by themselves.
 
 | What | Where |
 |---|---|
-| The menu | Right-click the King Maker crown: **Minimap buttons** (or `/mmk`) |
+| The menu | Left-click the King Maker crown (or `/mmk`): King Maker first, then Oracle, then every other addon |
 | Which buttons go in it | King Maker **Settings > Minimap buttons** (or `/mmk settings`) |
 
 ## The menu

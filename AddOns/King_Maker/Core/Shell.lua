@@ -127,7 +127,7 @@ end
 -- Lays the sidebar out top to bottom; collapsed groups hide their pages; the wheel scrolls when it overflows.
 function KM.LayoutNav()
     if not frame then return end
-    local y = -(navArea.scroll or 0)
+    local y = navArea.scroll or 0          -- scrolled down = the list moves up
     local col = db().collapsed
     for _, g in ipairs(sortedGroups()) do
         local label = g.label or ""
@@ -154,7 +154,7 @@ function KM.LayoutNav()
             end
         end
     end
-    navArea.total = -y + (navArea.scroll or 0)
+    navArea.total = (navArea.scroll or 0) - y   -- height of the whole list
 end
 
 local function create()
@@ -383,7 +383,9 @@ function KM.UpdateMinimapButton()
         border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
         mini:SetScript("OnClick", function(self, which)
             GameTooltip:Hide()
-            if which == "RightButton" then KM.QuickMenu(self) else KM.Toggle() end
+            if which == "RightButton" then KM.QuickMenu(self)
+            elseif KM.CrownLeftClick then KM.CrownLeftClick(self)   -- the button drawer (Modules\Minimap)
+            else KM.Toggle() end
         end)
         mini:SetScript("OnDragStart", function(self)
             self:SetScript("OnUpdate", function()
@@ -400,7 +402,7 @@ function KM.UpdateMinimapButton()
             GameTooltip:AddLine("King Maker", C.accent[1], C.accent[2], C.accent[3])
             for _, fn in ipairs(tips) do KM.Safe(fn, GameTooltip) end
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("Left-click: open", 0.8, 0.8, 0.8)
+            GameTooltip:AddLine(KM.CrownLeftClick and "Left-click: King Maker and your addon buttons" or "Left-click: open", 0.8, 0.8, 0.8)
             GameTooltip:AddLine("Right-click: quick actions", 0.8, 0.8, 0.8)
             GameTooltip:AddLine("Drag: move this button", 0.8, 0.8, 0.8)
             GameTooltip:Show()

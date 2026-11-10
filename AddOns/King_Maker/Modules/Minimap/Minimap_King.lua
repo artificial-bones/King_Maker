@@ -53,7 +53,7 @@ end
 function ns.IsAddonButton(f)
     local name = f.GetName and f:GetName()
     if not name or OWN[name] then return false end
-    if name:match("^LibDBIcon10_") then return true end
+    if name:match("^LibDBIcon10_") or name == "OracleMinimapButton" then return true end
     if isBlizzard(name) then return false end
     for _, p in ipairs(PINS) do if name:match(p) then return false end end
     if not (f.GetObjectType and f:GetObjectType() == "Button") then return false end
@@ -111,7 +111,13 @@ local function closeSoon()
     C_Timer.After(0, function() if menu then menu:Hide() end end)
 end
 
-local function byName(a, b) return ns.NameOf(a):lower() < ns.NameOf(b):lower() end
+-- Oracle (the player's companion addon) right under King Maker; everything else by name.
+local FIRST = { OracleMinimapButton = 1 }
+local function byName(a, b)
+    local fa, fb = FIRST[a:GetName() or ""] or 99, FIRST[b:GetName() or ""] or 99
+    if fa ~= fb then return fa < fb end
+    return ns.NameOf(a):lower() < ns.NameOf(b):lower()
+end
 
 function ns.Gather()
     if not ns.db then return end
@@ -236,7 +242,11 @@ function ns.Layout()
     if not menu then return end
     laying = true
     local shown = ns.Shown()
-    local y = -HEAD_H
+    -- the first line is King Maker itself
+    menu.km:ClearAllPoints()
+    menu.km:SetPoint("TOPLEFT", menu, "TOPLEFT", 10, -HEAD_H)
+    menu.km:SetPoint("RIGHT", menu, "RIGHT", -8, 0)
+    local y = -HEAD_H - LINE_H
     for i, btn in ipairs(shown) do
         btn:ClearAllPoints()
         btn:SetPoint("TOPLEFT", menu, "TOPLEFT", 10, y)
@@ -251,7 +261,7 @@ function ns.Layout()
         y = y - LINE_H
     end
     for i = #shown + 1, #labels do labels[i]:Hide(); labels[i].button = nil end
-    menu.empty:SetText(#shown == 0 and "No minimap buttons to show." or "")
+    menu.empty:SetText(#shown == 0 and "No other addon buttons to show." or "")
     if #shown == 0 then y = y - LINE_H end
     menu:SetSize(MENU_W, -y + 10)
     laying = false
@@ -266,10 +276,37 @@ function ns.EnsureMenu()
     UI.Fill(menu, C.bg)
     UI.Border(menu, { 1, 1, 1, 0.10 })
     UI.GoldEdge(menu)
-    menu.heading = UI.Heading(menu, "Minimap buttons")
+    menu.heading = UI.Heading(menu, "Your addons")
     menu.heading:SetPoint("TOPLEFT", 12, -12)
     menu.empty = UI.Text(menu, 12, C.dim)
-    menu.empty:SetPoint("TOPLEFT", 12, -HEAD_H - 8)
+    menu.empty:SetPoint("TOPLEFT", 12, -HEAD_H - LINE_H - 8)
+    -- King Maker's own line: its crown icon and name; left-click opens the window, right-click the quick actions
+    local km = CreateFrame("Button", nil, menu)
+    km:SetHeight(LINE_H - 2)
+    km:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    km.hl = UI.Fill(km, C.hover, "ARTWORK")
+    km.hl:Hide()
+    km.icon = km:CreateTexture(nil, "ARTWORK")
+    km.icon:SetSize(22, 22)
+    km.icon:SetPoint("LEFT", 3, 0)
+    km.icon:SetTexture("Interface\\Icons\\INV_Crown_01")
+    km.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    km.text = UI.Text(km, 12, C.accent)
+    km.text:SetPoint("LEFT", 34, 0)
+    km.text:SetText("King Maker")
+    km:SetScript("OnClick", function(self, which)
+        if which == "RightButton" then KM.QuickMenu(self) else menu:Hide(); KM.Toggle() end
+    end)
+    km:SetScript("OnEnter", function(self)
+        self.hl:Show()
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:AddLine("King Maker", C.accent[1], C.accent[2], C.accent[3])
+        GameTooltip:AddLine("Left-click: open the window", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine("Right-click: quick actions", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    km:SetScript("OnLeave", function(self) self.hl:Hide(); GameTooltip:Hide() end)
+    menu.km = km
     -- a click out in the world closes it (clicks on other windows, or on a
     -- menu one of the buttons opened, leave it open)
     menu:SetScript("OnEvent", function(self)
@@ -325,7 +362,7 @@ local function settingsRows()
     learn()
     local rows = {
         { type = "text", label = "Other addons' minimap buttons, gathered into one menu that opens from the King Maker crown "
-            .. "(right-click it: Minimap buttons). Each line is the addon's real button, so clicks, right-clicks, tooltips and "
+            .. "(left-click it; King Maker itself is the first line). Each line is the addon's real button, so clicks, right-clicks, tooltips and "
             .. "menus work as before. Blizzard's own buttons and map pins stay where they are." },
         { type = "check", label = "Gather minimap buttons into the menu", tip = "Off: every button goes back to the minimap.",
           get = function() return ns.db.gather end,
@@ -391,7 +428,7 @@ SlashCmdList.MINIMAPKING = function(msg)
     elseif cmd == "gather" then
         ns.db.gather = true
         ns.Gather()
-        KM.Print(ns, "The minimap buttons are in the menu (right-click the King Maker crown: Minimap buttons).")
+        KM.Print(ns, "The minimap buttons are in the menu: left-click the King Maker crown.")
     elseif cmd == "unignore" then
         wipe(ns.db.ignore)
         ns.Gather()
@@ -411,3 +448,9 @@ SlashCmdList.MINIMAPKING = function(msg)
 end
 
 MinimapKing = { ShowMenu = ns.ShowMenu, Gather = ns.Gather, Release = ns.Release, Shown = ns.Shown }
+
+-- The crown's left-click opens this drawer (King Maker first, then every gathered addon button); with gathering
+-- off it just opens the window.
+function KM.CrownLeftClick()
+    if ns.db and ns.db.gather then ns.ToggleMenu() else KM.Toggle() end
+end

@@ -59,7 +59,7 @@ assert L.eval("DBM_MinimapButton.points[#DBM_MinimapButton.points][2] == Minimap
 L.execute("AtlasLootMinimapButton:SetShown(false)"); assert "AtlasLoot" not in names()
 L.execute("AtlasLootMinimapButton:SetShown(true)"); assert "AtlasLoot" in names()
 assert L.eval("MinimapKingMenu.empty.text") == ""
-assert L.eval("MinimapKingMenu.heading.text") == "MINIMAP BUTTONS"
+assert L.eval("MinimapKingMenu.heading.text") == "YOUR ADDONS"
 print("LAYOUT OK")
 
 # the quick action opens the menu under the crown; names click through to the real buttons, tooltips are theirs
