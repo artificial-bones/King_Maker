@@ -51,6 +51,7 @@ and who fills up next. Under them, one line per character:
 - Hover a character for the details: rest out of the cap, XP left in the level, where it logged out.
 - Right-click a character to set its **Well Rested** perk rank, or to forget it.
 - Max-level characters are hidden; **Show max level** brings them back.
+- A character saved by 2.1 or older can show *log in once to read*: log in on it once and its rest shows up.
 - The numbers keep moving while the page is open.
 
 ## Commands

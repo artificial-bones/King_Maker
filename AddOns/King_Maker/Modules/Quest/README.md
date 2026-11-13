@@ -92,9 +92,11 @@ beta yet, so their quests are still unknown.
 ## Bag cleanup
 
 - A small **red X** in the top-left corner of a bag slot means that quest item
-  isn't needed by any quest in your log. It works with the default bags (one
-  big bag or separate bags).
+  isn't needed by any quest in your log and no vendor buys it. It works with
+  Bagnon and the default bags (one big bag or separate bags).
 - Hovering the item adds a line to its tooltip saying why it's safe to delete.
+- A quest item no quest needs but a vendor buys gets no X, just a tooltip line
+  telling you to sell it.
 - `/qk` lists every such item in chat.
 
 ## How it decides

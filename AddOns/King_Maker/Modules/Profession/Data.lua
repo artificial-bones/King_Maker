@@ -336,6 +336,22 @@ end
 -- Best now: top crafts for this profession, and the next skill-ups
 ---------------------------------------------------------------------------
 
+-- How many to craft to sell without flooding the auction house: a quarter of what's listed now, and no more than one
+-- day of units leaving it (gone per day counts sales, cancels and expiries, so it overstates sales). Nothing listed:
+-- 1, to test the market. Returns listed, make, gone per day (nil when the item has never been scanned).
+ns.BATCH_SHARE = 0.25
+function ns.Batch(item)
+    if not (item and ScannerKing and ScannerKing.GetPrice) then return nil end
+    local _, _, listed = ScannerKing.GetPrice(item)
+    if not listed then return nil end
+    if listed <= 0 then return 0, 1, nil end
+    local make = math.ceil(listed * ns.BATCH_SHARE)
+    local st = EconKing and EconKing.GetStats and call(EconKing.GetStats, item)
+    local gone = st and st.gonePerDay
+    if gone then make = math.min(make, math.floor(gone)) end
+    return listed, math.max(1, make), gone
+end
+
 function ns.BestCrafts(profID, limit)
     local m = market()
     if not (m and profID) then return {} end
@@ -346,7 +362,9 @@ function ns.BestCrafts(profID, limit)
     local out = {}
     for _, row in ipairs(ok and rows or {}) do
         if row.gain then
-            out[#out + 1] = { spell = row.recipe.spell, item = row.item, gain = row.gain, verdict = ns.Verdict(row, mode), row = row }
+            local r = { spell = row.recipe.spell, item = row.item, gain = row.gain, verdict = ns.Verdict(row, mode), row = row }
+            if r.verdict == "craft" then r.listed, r.make, r.gone = ns.Batch(row.item) end
+            out[#out + 1] = r
             if #out >= (limit or 12) then break end
         end
     end

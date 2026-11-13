@@ -134,3 +134,85 @@ function KM.Safe(fn, ...)
         KM.Print("|cffff6060error:|r " .. tostring(a))
     end
 end
+
+---------------------------------------------------------------------------
+-- Bag buttons (for marks on bag slots: Quest's "safe to delete", Inventory's cheapest stack)
+---------------------------------------------------------------------------
+-- Works with Bagnon and the game's own bags, and only ever decorates their buttons.
+
+-- The bag and slot a bag button shows. Bagnon's own GetBag (or .bag) first: its buttons are built on the game's
+-- bag button template, whose GetBagID reads the parent frame and means something else there.
+function KM.ButtonSlot(b)
+    local bag
+    if b.GetBag then local ok, v = pcall(b.GetBag, b); if ok then bag = v end end
+    if type(bag) ~= "number" then bag = rawget(b, "bag") end
+    if type(bag) ~= "number" and b.GetBagID then local ok, v = pcall(b.GetBagID, b); if ok then bag = v end end
+    if type(bag) ~= "number" and b.GetParent then
+        local p = b:GetParent()
+        local name = p and p.GetName and p:GetName()
+        if name and name:match("^ContainerFrame%d+$") then bag = p:GetID() end
+    end
+    if type(bag) ~= "number" or not b.GetID then return nil end
+    return bag, b:GetID()
+end
+
+-- The bag windows: Bagnon's (once it has made it: until then its registry holds a plain table), then the game's.
+function KM.BagRoots()
+    local out = {}
+    if Bagnon and Bagnon.Frames and Bagnon.Frames.Get then
+        local ok, f = pcall(Bagnon.Frames.Get, Bagnon.Frames, "inventory")
+        if ok and type(f) == "table" and f.GetChildren then out[#out + 1] = f end
+    end
+    if ContainerFrameCombinedBags then out[#out + 1] = ContainerFrameCombinedBags end
+    for i = 1, (NUM_CONTAINER_FRAMES or 13) do
+        local f = _G["ContainerFrame" .. i]
+        if f then out[#out + 1] = f end
+    end
+    return out
+end
+
+local function walkButtons(f, fn, depth)
+    if depth > 6 or not (f and f.GetChildren) then return end
+    for _, c in ipairs({ f:GetChildren() }) do
+        local bag, slot = KM.ButtonSlot(c)
+        if bag then fn(c, bag, slot) else walkButtons(c, fn, depth + 1) end
+    end
+end
+
+-- fn(button, bag, slot) for every bag button in an open bag window showing your own bags (Bagnon can show
+-- another character's: those are skipped). Empty slots too, so a mark can be taken off.
+function KM.EachBagButton(fn)
+    for _, root in ipairs(KM.BagRoots()) do
+        if root.IsShown and root:IsShown() then
+            walkButtons(root, function(b, bag, slot)
+                local cached = false
+                if b.IsCached then local ok, v = pcall(b.IsCached, b); cached = ok and v end
+                if not cached then fn(b, bag, slot) end
+            end, 0)
+        end
+    end
+end
+
+function KM.BagsOpen()
+    for _, root in ipairs(KM.BagRoots()) do
+        if root.IsShown and root:IsShown() then return true end
+    end
+    return false
+end
+
+-- Bag windows lay their buttons out again on their own (sorting, searching, Bagnon redrawing): while one is open,
+-- every registered marker runs about once a second, and right away when a bag window opens.
+local markers = {}
+function KM.RegisterBagMarker(fn) markers[#markers + 1] = fn end
+function KM.RunBagMarkers() for _, fn in ipairs(markers) do KM.Safe(fn) end end
+do
+    local ticker, check, since, wasOpen = CreateFrame("Frame"), 0, 0, false
+    ticker:SetScript("OnUpdate", function(_, dt)
+        check, since = check + dt, since + dt
+        if check < 0.25 then return end
+        check = 0
+        local open = #markers > 0 and KM.BagsOpen()
+        if open and (not wasOpen or since >= 1) then since = 0; KM.RunBagMarkers() end
+        wasOpen = open
+    end)
+end

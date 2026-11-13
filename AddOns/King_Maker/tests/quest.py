@@ -39,6 +39,7 @@ ITEM(105, "Old Map Scrap", { class = 12 })      -- starts a quest you already fi
 ITEM(106, "Linen Cloth", { class = 7 })         -- trade goods, never touched
 ITEM(107, "Mysterious Egg", { class = 15 })     -- not class Quest, but the client says it's a quest item
 ITEM(108, "Crumpled Page", { class = 12 })      -- starts a quest that's in your log
+ITEM(109, "Kobold Candle", { class = 12, sell = 25 }) -- leftover, but a vendor buys it: sell it, no X
 LOG = {
   { isHeader = true, title = "Elwynn Forest" },
   { questID = 1, title = "Wolves Across the Border", objectives = { { text = "Wolf Fang: 3/8", type = "item" } } },
@@ -56,6 +57,7 @@ BAGS[1][2] = { id = 105, quest = { isQuestItem = true, questID = 5 } }
 BAGS[1][3] = { id = 106, count = 20 }
 BAGS[2][5] = { id = 107, quest = { isQuestItem = true } }
 BAGS[2][6] = { id = 108, quest = { isQuestItem = true, questID = 8, isActive = true } }
+BAGS[2][7] = { id = 109, count = 4 }
 ContainerFrameCombinedBags:Show()
 FIRE("BAG_UPDATE_DELAYED"); RUN_TIMERS()
 """)
@@ -69,13 +71,33 @@ assert S(1, 2) == "unneeded"    # starts a quest you already did
 assert S(1, 3) is None          # not a quest item
 assert S(2, 5) == "unneeded"    # quest item by the client's flag
 assert S(2, 6) == "needed"      # its quest is active
+assert S(2, 7) == "sell" and not marked(2, 7), "a vendor buys it: no X, you'll sell it"
 assert marked(0, 2) and marked(1, 2) and marked(2, 5)
 assert not marked(0, 1) and not marked(1, 1) and not marked(1, 3) and not marked(0, 3)
 b = L.eval('BUTTON("ContainerFrameCombinedBags", 0, 2)')
 assert b.QuestKingMark.texture == "Interface\\RaidFrame\\ReadyCheck-NotReady"
+# Bagnon's bag window: its buttons carry the bag themselves (GetBag), and get the same marks
+L.execute("""
+local inv = CreateFrame("Frame", "BagnonInventoryFrame", UIParent)
+Bagnon = { Frames = { Get = function(_, id) if id == "inventory" then return inv end end } }
+local group = CreateFrame("Frame", nil, inv)
+BAGNON = {}
+for _, bs in ipairs({ { 0, 1 }, { 0, 2 }, { 2, 5 } }) do
+  local b = CreateFrame("Button", nil, group); b.bag = bs[1]; b:SetID(bs[2])
+  function b:GetBag() return self.bag end
+  function b:GetBagID() return 99 end -- the game's template method: means something else in Bagnon
+  BAGNON[bs[1] .. ":" .. bs[2]] = b
+end
+inv:Show()
+""")
+L.eval("QuestKing").UpdateBagButtons()
+bm = lambda k: bool(L.eval("BAGNON['%s'].QuestKingMark and BAGNON['%s'].QuestKingMark:IsShown()" % (k, k)))
+assert bm("0:2") and bm("2:5") and not bm("0:1"), "Bagnon slots marked like the game's"
+L.execute("BagnonInventoryFrame:Hide(); Bagnon = nil")
 print("STATUS + MARKS OK")
 
 line = L.eval("(HOVER(101))"); assert "safe to delete" in line, line
+line = L.eval("(HOVER(109))"); assert "sell it to a vendor" in line, line
 assert L.eval("(HOVER(100))") is None and L.eval("(HOVER(106))") is None
 print("TOOLTIP OK")
 

@@ -43,7 +43,7 @@ Leather, Mail, Plate...). Scroll the list with the mouse wheel.
 |---|---|
 | Market | Market price at the last scan |
 | vs 30d | Market price now compared with its 30-day average. Below zero: cheaper than usual |
-| 7d trend | This week's average price compared with last week's |
+| 7d trend | This week's average price compared with last week's (with less than two weeks of scans: the change over the days there are) |
 | Listed | Units on the auction house at the last scan |
 | Supply | Listed now compared with the 30-day average. Below zero: drying up |
 | Scanned | When it was last seen |
@@ -65,6 +65,8 @@ in the list without going back. The page shows:
 
 - Market price, lowest buyout, how many are listed and in how many auctions.
 - 7-day and 30-day averages, today against the 30-day average, the 7-day trend.
+- Average listed over 7 days and supply against it, **price vs supply** (how the price moves when more are listed:
+  near -1, more listed means cheaper), and when it was last scanned.
 - 30-day low and high, and **volatility** (how far the price usually swings
   from its average).
 - Average listed over 30 days, and supply now against that.

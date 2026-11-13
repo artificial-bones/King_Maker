@@ -311,7 +311,12 @@ function API.GetHistory(id) return ns.Series(id) end
 --   low30, high30, vol30     lowest and highest market price in 30 days; volatility (spread / average)
 --   listed30                 average number listed over 30 days
 --   gonePerDay               units gone (sold, cancelled or expired) per day over the last 7 days, when known
---   vs30, trend7, supply     current price vs the 30-day average; avg7 vs prev7; listed now vs the 30-day average
+--   vs30, supply             current price vs the 30-day average; listed now vs the 30-day average
+--   trend7, trendDays        avg7 vs prev7; until there are two weeks of scans, the later half of the days there are
+--                            against the earlier half (trendDays says how many days)
+--   listed7, supply7         average number listed over 7 days; listed now vs that
+--   corr, corrN              how price and supply move together over 30 days (-1 to 1), from corrN scans
+--   auctions, auctionsAt     auctions in the latest scan that counted them (only Deep Scans do)
 --   first, points            when tracking started; how many scans are behind it
 --   lowestOnly               no full Deep Scan has priced it in 30 days, so the price figures use the lowest buyout
 function ns.Stats(id)
@@ -341,13 +346,15 @@ function ns.Stats(id)
     local K = hasMarket and M or P
     s.lowestOnly = not hasMarket or nil
 
-    local acc = { avg7 = { 0, 0 }, avg30 = { 0, 0 }, prev7 = { 0, 0 }, listed30 = { 0, 0 } }
+    local acc = { avg7 = { 0, 0 }, avg30 = { 0, 0 }, prev7 = { 0, 0 }, listed30 = { 0, 0 }, listed7 = { 0, 0 } }
+    local week, pairs30 = {}, {} -- { t, price, weight } in the last 7 days; { price, listed } in the last 30
     local function addTo(a, value, w) a[1], a[2] = a[1] + value * w, a[2] + w end
     local sq, goneSum, gapSum, scans = 0, 0, 0, 0
     for _, v in ipairs(recent) do
         local t = v[T]
         scans = scans + (v[C] or 1)
-        if not s.seen or t > s.seen then s.seen, s.listed, s.auctions = t, v[Q], v[N] end
+        if not s.seen or t > s.seen then s.seen, s.listed = t, v[Q] end
+        if v[N] and (not s.auctionsAt or t > s.auctionsAt) then s.auctionsAt, s.auctions = t, v[N] end
         if v[K] and (not s.priced or t > s.priced) then s.priced, s.market = t, v[K] end
         if v[P] and (not s.lowestAt or t > s.lowestAt) then s.lowestAt, s.lowest = t, v[P] end
         local age = now - t
@@ -359,10 +366,12 @@ function ns.Stats(id)
                 s.low30 = math.min(s.low30 or v[K], v[K])
                 s.high30 = math.max(s.high30 or v[K], v[K])
             end
-            if age <= 7 * DAY then addTo(acc.avg7, v[K], w)
+            if age <= 30 * DAY and v[Q] then table.insert(pairs30, { v[K], v[Q] }) end
+            if age <= 7 * DAY then addTo(acc.avg7, v[K], w); table.insert(week, { t, v[K], w })
             elseif age <= 14 * DAY then addTo(acc.prev7, v[K], w) end
         end
         if age <= 30 * DAY and v[Q] then addTo(acc.listed30, v[Q], weight(v, Q)) end
+        if age <= 7 * DAY and v[Q] then addTo(acc.listed7, v[Q], weight(v, Q)) end
         -- Gone per day: units gone over the time between the Deep Scans that saw them go.
         if age <= 7 * DAY and v[R] and v[G] and v[G] > 0 then
             goneSum, gapSum = goneSum + v[R], gapSum + v[G]
@@ -375,8 +384,32 @@ function ns.Stats(id)
     end
     if gapSum > 0 then s.gonePerDay = goneSum / (gapSum / DAY) end
     if s.market and s.avg30 and s.avg30 > 0 then s.vs30 = (s.market - s.avg30) / s.avg30 end
-    if s.avg7 and s.prev7 and s.prev7 > 0 then s.trend7 = (s.avg7 - s.prev7) / s.prev7 end
+    if s.avg7 and s.prev7 and s.prev7 > 0 then
+        s.trend7 = (s.avg7 - s.prev7) / s.prev7
+    elseif s.avg7 and s.avg7 > 0 and #week >= 4 then
+        -- No week before this one yet: the average price over the later half of the days there are, against the
+        -- earlier half (weighted like the averages).
+        local t0, t1 = math.huge, 0
+        for _, x in ipairs(week) do t0, t1 = math.min(t0, x[1]), math.max(t1, x[1]) end
+        local span, mid = (t1 - t0) / DAY, (t0 + t1) / 2
+        local early, late = { 0, 0 }, { 0, 0 }
+        for _, x in ipairs(week) do addTo(x[1] < mid and early or late, x[2], x[3]) end
+        if span >= 2 and early[2] > 0 and late[2] > 0 and early[1] > 0 then
+            s.trend7 = (late[1] / late[2]) / (early[1] / early[2]) - 1
+            s.trendDays = math.floor(span + 0.5)
+        end
+    end
     if s.listed and s.listed30 and s.listed30 > 0 then s.supply = (s.listed - s.listed30) / s.listed30 end
+    if s.listed and s.listed7 and s.listed7 > 0 then s.supply7 = (s.listed - s.listed7) / s.listed7 end
+    -- Price against supply (Pearson's r over the month's scans): near -1, the price drops when more are listed.
+    if #pairs30 >= 6 then
+        local n, sx, sy, sxx, syy, sxy = #pairs30, 0, 0, 0, 0, 0
+        for _, x in ipairs(pairs30) do
+            sx, sy, sxx, syy, sxy = sx + x[1], sy + x[2], sxx + x[1] * x[1], syy + x[2] * x[2], sxy + x[1] * x[2]
+        end
+        local vx, vy = n * sxx - sx * sx, n * syy - sy * sy
+        if vx > 0 and vy > 0 then s.corr, s.corrN = (n * sxy - sx * sy) / math.sqrt(vx * vy), n end
+    end
     local firstList = (it.w[1] and it.w) or (it.d[1] and it.d) or it.r
     s.first = firstList[1] and timeOf(firstList[1])
     s.days = s.first and (now - s.first) / DAY or 0

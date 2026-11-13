@@ -14,6 +14,7 @@ local SHORT = { bags = "bags", bank = "bank", mail = "mail", ah = "on AH" }
 local MAX_CHARS = 8
 
 function ns.AddTooltipLines(tt, id)
+    if ns.CheapestTooltip then ns.CheapestTooltip(tt, id) end
     if not (ns.db and ns.db.ui.tooltip and tt and id) then return end
     local total, by = ns.API.GetCount(id)
     if total == 0 then return end

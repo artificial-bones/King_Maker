@@ -59,6 +59,11 @@ forget one you've deleted or moved.
 
 **Item tooltips** everywhere show how many you own and on which characters.
 
+**Cheapest stack.** When your bags are full, the stack you'd lose least by deleting gets a **red X** in the
+bottom-left corner of its slot (Bagnon or the game's bags) and a line in its tooltip. A stack is worth the vendor
+price or the auction price after the 5% cut, whichever is more, times the stack. Quest items, keys, profession
+tools and anything with no price are never marked; `/ik keep <item>` protects one more.
+
 ## What it's worth
 
 Items are valued at the Scanner's **market price** (from a Deep Scan), or its lowest buyout if you
@@ -87,6 +92,8 @@ Ctrl+A, then Ctrl+C, and paste it into a spreadsheet.
 | `/ik price market` / `lowest` | Value items at the market price or the lowest buyout |
 | `/ik vendor on` / `off` | Items with no auction price count at their vendor price |
 | `/ik tooltip on` / `off` | How many you own, in item tooltips |
+| `/ik cheapest on` / `off` | The red X on the cheapest stack in your bags |
+| `/ik keep <item>` | Never mark that item as cheapest (again to undo) |
 | `/ik forget Name-Realm` | Forget a deleted or moved character |
 | `/ik export` | Items and characters as text for a spreadsheet |
 

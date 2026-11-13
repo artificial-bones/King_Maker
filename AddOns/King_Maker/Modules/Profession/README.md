@@ -17,6 +17,8 @@ For the recipe you have selected:
 ## Best now tab
 
 - The **best crafts right now** for this profession, using only recipes you have, ranked the way Crafting Profits ranks them.
+- For the ones worth crafting: how many are **Listed**, and how many to **Make** so you don't flood the auction house (a
+  quarter of what's listed, at most one day of units leaving it; nothing listed: make 1 to test the market).
 - Your **next skill-up steps** from your current skill (Skillup's cheapest plan).
 
 Click a row to show its card. On the modern profession window this also selects the recipe in the game's window.

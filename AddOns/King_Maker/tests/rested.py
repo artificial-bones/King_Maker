@@ -102,6 +102,19 @@ assert me.level == 42, "the new level's numbers come a moment later"
 L.execute("RUN_TIMERS()"); assert me.level == 43 and me.xpMax == 11000
 L.execute("FIRE('PLAYER_LOGOUT')"); assert me.online is False
 L.execute("FIRE('PLAYER_ENTERING_WORLD', false, true)"); assert me.online is True
+# The game reports 0 XP needed while you log out: that must not wipe the saved numbers (it hid every alt as "max level").
+L.execute("XP, XPMAX, EXHAUSTION = 0, 0, nil; FIRE('PLAYER_LOGOUT')")
+me = L.eval("RestedKingDB.chars['Jay-Forever']")
+assert me.xpMax == 11000 and me.xp > 0 and me.rested > 0 and me.online is False, "last real XP numbers kept"
+assert not ns.IsMax(me) and not ns.Estimate(me).max
+# Characters already saved that way (2.1 and older) still show up, marked to log in once.
+L.execute('RestedKingDB.chars["Zero-Forever"] = { name = "Zero", realm = "Forever", class = "MAGE", level = 42, maxLevel = 60, xp = 0, xpMax = 0, rested = 0, t = NOW }')
+z = L.eval("RestedKingDB.chars['Zero-Forever']")
+assert ns.Unknown(z) and ns.Estimate(z).unknown and not ns.IsMax(z)
+assert "Zero-Forever" in [r.key for r in ns.Characters("rested", True, False).values()], "listed, not hidden as max level"
+assert "log in" in ns.RestedText(ns.Estimate(z))
+for k in ("rested", "full", "name", "level", "seen"): ns.Characters(k, True, False)
+L.execute('RestedKingDB.chars["Zero-Forever"] = nil; XP, XPMAX, EXHAUSTION = 4000, 11000, 1200')
 print("EVENTS OK")
 
 # --- perk and forget ----------------------------------------------------------------------

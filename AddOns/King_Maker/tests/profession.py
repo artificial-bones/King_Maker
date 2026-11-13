@@ -208,6 +208,14 @@ rows = ns.BestCrafts(2, 10)
 gains = [r.gain for r in rows.values()]
 assert len(gains) >= 2 and gains == sorted(gains, reverse=True), gains
 assert rows[1].item == 2851, rows[1].item                             # the belt is the best flip at these prices
+# Listed and Make on craft rows: a quarter of the 7 belts listed rounds up to 2; one day of units leaving caps it
+assert rows[1].verdict == "craft" and rows[1].listed == 7 and rows[1].make == 2, (rows[1].verdict, rows[1].listed, rows[1].make)
+L.execute("EconKing = EconKing or {}; OLD_STATS = EconKing.GetStats; EconKing.GetStats = function(id) if id == 2851 then return { gonePerDay = 1.4 } end end")
+assert tuple(ns.Batch(2851))[:2] == (7, 1), "no more than a day's worth"
+L.execute("ScannerKingDB.prices[2851].q = 0")
+assert tuple(ns.Batch(2851))[:2] == (0, 1), "nothing listed: make one to test"
+L.execute("ScannerKingDB.prices[2851].q = 7; EconKing.GetStats = OLD_STATS")
+assert ns.Batch(10940) is None, "never scanned for quantity"
 steps = ns.NextSkillups(2, 60, 150, 8)
 assert len(list(steps.values())) > 0 and steps[1]["from"] == 60, steps[1]
 assert not KM.errorShown, last(L)
@@ -239,6 +247,30 @@ ns.Place()
 pt = L.eval("KingMakerProfessionPanel.points[#KingMakerProfessionPanel.points]")
 assert pt[1] == "TOPRIGHT" and pt[3] == "TOPLEFT", pt
 L.execute("ProfessionKingDB.side = 'right'")
+# Things hanging off the window's right edge (its side tabs, the help button) push the panel past them
+L.execute("""
+local f = ProfessionsFrame
+f.GetLeft, f.GetRight, f.GetTop, f.GetBottom = function() return 100 end, function() return 800 end, function() return 700 end, function() return 100 end
+TAB = CreateFrame("Button", nil, f)
+TAB.GetLeft, TAB.GetRight, TAB.GetTop, TAB.GetBottom = function() return 798 end, function() return 862 end, function() return 650 end, function() return 590 end
+""")
+assert ns.Overhang(L.eval("ProfessionsFrame"), "right") == 62
+ns.Place()
+pt = L.eval("KingMakerProfessionPanel.points[#KingMakerProfessionPanel.points]")
+assert pt[1] == "TOPLEFT" and pt[3] == "TOPRIGHT" and pt[4] == 66, list(pt.values())
+# a frame the game won't let addons read (forbidden) must not stop the panel from showing
+L.execute("""
+BAD = CreateFrame("Frame", nil, UIParent)
+for _, m in ipairs({ "IsShown", "GetLeft", "GetRight", "GetTop", "GetBottom", "GetChildren" }) do
+  BAD[m] = function() error("attempt to access forbidden object") end
+end
+""")
+L.execute("ProfessionsFrame:Hide(); ProfessionsFrame:Show()")
+assert L.eval("KingMakerProfessionPanel:IsShown()") and not KM.errorShown, last(L)
+assert ns.Overhang(L.eval("ProfessionsFrame"), "right") == 62
+L.execute("BAD:SetParent(nil)")
+L.execute("TAB:Hide()"); ns.Place()
+assert L.eval("KingMakerProfessionPanel.points[#KingMakerProfessionPanel.points][4]") == 4, "hidden tabs don't count"
 
 # hides with the window
 L.execute("ProfessionsFrame:Hide()")

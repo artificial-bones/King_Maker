@@ -4,7 +4,7 @@ local UI = KM.UI
 local C = UI.C
 
 -- An item's page, drawn inside the Price History page where the list was: where its price and supply stand
--- now (a card of sixteen numbers), how they've moved, and two graphs over time: market price (with the lowest
+-- now (a card of twenty numbers), how they've moved, and two graphs over time: market price (with the lowest
 -- buyout) and how many are listed (with how many left the auction house between Deep Scans).
 -- Back returns to the list; the arrows step through the list without leaving.
 
@@ -31,12 +31,20 @@ local GRID = {
     { { "7-day average", "avg7", "money" }, { "30-day average", "avg30", "money" }, { "Now vs 30-day", "vs30", "pctDown" }, { "7-day trend", "trend7", "pct" } },
     { { "30-day low", "low30", "money" }, { "30-day high", "high30", "money" }, { "Volatility", "vol30", "vol" }, { "Avg listed (30d)", "listed30", "units" } },
     { { "Gone per day", "gonePerDay", "units" }, { "Supply vs 30-day", "supply", "pct" }, { "Tracking since", "first", "date" }, { "Scans behind it", "points", "units" } },
+    { { "Avg listed (7d)", "listed7", "units" }, { "Supply vs 7-day", "supply7", "pct" }, { "Price vs supply", "corr", "corr" }, { "Last scanned", "seen", "ago" } },
 }
 
 local function format(kindOf, v)
     if kindOf == "money" then return ns.Money(v) end
     if kindOf == "pct" then return ns.Percent(v) end
     if kindOf == "pctDown" then return ns.Percent(v, true) end
+    if kindOf == "corr" then
+        if not v then return "|cff808080-|r" end
+        local a = math.abs(v)
+        local word = a >= 0.6 and "strong" or a >= 0.3 and "some" or "no link"
+        return string.format("%+.2f", v) .. " |cffa0a0a0" .. word .. "|r"
+    end
+    if kindOf == "ago" then return v and ns.Age(v) or "|cff808080-|r" end
     if kindOf == "vol" then return v and ("+/-" .. math.floor(v * 100 + 0.5) .. "%") or "|cff808080-|r" end
     if kindOf == "date" then
         if not v then return "|cff808080-|r" end
@@ -95,7 +103,12 @@ function ns.RefreshItem()
     local s = ns.Stats(id) or {}
     for r, line in ipairs(GRID) do
         for c, cell in ipairs(line) do
-            cells[r][c]:SetText(format(cell[3], s[cell[2]]))
+            local text = format(cell[3], s[cell[2]])
+            if cell[2] == "trend7" and s.trendDays then text = text .. " |cffa0a0a0over " .. s.trendDays .. "d|r" end
+            if cell[2] == "auctions" and s.auctions and s.auctionsAt and s.seen and s.auctionsAt < s.seen then
+                text = text .. " |cffa0a0a0" .. ns.Age(s.auctionsAt) .. "|r"
+            end
+            cells[r][c]:SetText(text)
         end
     end
 
@@ -204,10 +217,10 @@ function ns.CreateItemView(parent)
     kind = UI.Text(view, 10, C.muted)
     kind:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -4)
 
-    -- Numbers: a card of four columns of four.
+    -- Numbers: a card of four columns of five.
     local card = UI.Panel(view, C.panel)
     card:SetPoint("TOPLEFT", 0, -76)
-    card:SetSize(W, 4 * 30 + 12)
+    card:SetSize(W, #GRID * 30 + 12)
     local colW = (W - 24) / 4
     cells = {}
     for r, line in ipairs(GRID) do
@@ -228,22 +241,22 @@ function ns.CreateItemView(parent)
     local items = {}
     for i, r in ipairs(RANGES) do items[i] = { id = r[1], label = r[2], w = 44 } end
     rangeTabs = UI.Tabs(view, items, function(days) range = days; ns.RefreshItem() end, 20)
-    rangeTabs:SetPoint("TOPRIGHT", 0, -218)
+    rangeTabs:SetPoint("TOPRIGHT", 0, -248)
 
     local priceTitle = UI.Heading(view, "Market price")
-    priceTitle:SetPoint("TOPLEFT", 0, -222)
+    priceTitle:SetPoint("TOPLEFT", 0, -252)
     priceLegend = UI.Text(view, 10, C.muted)
     priceLegend:SetPoint("LEFT", priceTitle, "RIGHT", 12, 0)
     priceLegend:SetText(UI.Hex(C.accent) .. "Market|r   " .. UI.Hex(C.muted) .. "Lowest buyout|r")
-    priceGraph = ns.CreateGraph(view, W, 132)
-    priceGraph.frame:SetPoint("TOPLEFT", 0, -242)
+    priceGraph = ns.CreateGraph(view, W, 112)
+    priceGraph.frame:SetPoint("TOPLEFT", 0, -272)
 
     local supplyTitle = UI.Heading(view, "Supply")
-    supplyTitle:SetPoint("TOPLEFT", 0, -384)
+    supplyTitle:SetPoint("TOPLEFT", 0, -394)
     supplyLegend = UI.Text(view, 10, C.muted)
     supplyLegend:SetPoint("LEFT", supplyTitle, "RIGHT", 12, 0)
-    supplyGraph = ns.CreateGraph(view, W, 96)
-    supplyGraph.frame:SetPoint("TOPLEFT", 0, -400)
+    supplyGraph = ns.CreateGraph(view, W, 90)
+    supplyGraph.frame:SetPoint("TOPLEFT", 0, -410)
 
     note = UI.Para(view, 10, C.dim, W)
     note:SetPoint("TOPLEFT", 0, -504)

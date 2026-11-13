@@ -6,7 +6,7 @@ local ns = KM.Module("Profession")
 
 local UI = KM.UI
 local C = UI.C
-local W, HEAD, CW = 330, 30, 310   -- panel width, header height, content width
+local W, HEAD, CW = 400, 30, 380   -- panel width, header height, content width
 local MIN_H, MAX_H = 420, 720
 
 local panel, body, tabs, collapseBtn, summary, emptyFS
@@ -149,8 +149,11 @@ local function buildBest(parent)
     best.mode:SetPoint("TOPRIGHT", -10, -8)
     best.mode:SetWidth(160)
     best.crafts = UI.Table(f, {
-        { key = "name", label = "Item", w = 150 },
-        { key = "gain", label = "Profit", w = 80, justify = "RIGHT" },
+        { key = "name", label = "Item", w = 130 },
+        { key = "gain", label = "Profit", w = 72, justify = "RIGHT" },
+        { key = "listed", label = "Listed", w = 44, justify = "RIGHT", tip = "How many are on the auction house now (your last scan)." },
+        { key = "make", label = "Make", w = 36, justify = "RIGHT",
+          tip = "How many to craft to sell: a quarter of what's listed, and no more than one day of units leaving the auction house. Nothing listed: make 1 to test the market." },
         { key = "verdict", label = "Do", w = 0, justify = "RIGHT" },
     }, 18, { icon = true, fontSize = 11, noSort = true, onClick = function(row) ns.Pin(row.spell) end })
     best.crafts:SetPoint("TOPLEFT", 10, -24)
@@ -407,6 +410,9 @@ local function drawBest()
         if r.icon then r.icon:SetTexture(ns.ItemInfo(row.item).icon) end
         cells.name:SetText(ns.ItemText(row.item))
         cells.gain:SetText(signed(row.gain))
+        local dash = "|cff808080-|r"
+        cells.listed:SetText(row.listed and KM.Commas(row.listed) or dash)
+        cells.make:SetText(row.make and tostring(row.make) or dash)
         local v = ns.VERDICTS[row.verdict]
         cells.verdict:SetText(v and (UI.Hex(C[v[2]] or C.muted) .. v[1] .. "|r") or "")
     end)
@@ -460,15 +466,54 @@ end
 -- Showing, placing
 ---------------------------------------------------------------------------
 
+-- How far things stick out past the window's right (or left) edge: the profession window's side tabs and help
+-- button hang outside it. Checks the window's own children and frames parented to UIParent that sit against that
+-- edge; capped so a stray wide frame can't push the panel off the screen.
+local function outer(r, side, edge) return side == "left" and (edge - (r:GetLeft() or edge)) or ((r:GetRight() or edge) - edge) end
+local function besideEdge(r, f, side)
+    local top, bottom = f:GetTop(), f:GetBottom()
+    local rt, rb, rl, rr = r:GetTop(), r:GetBottom(), r:GetLeft(), r:GetRight()
+    if not (top and bottom and rt and rb and rl and rr) then return false end
+    if rb > top or rt < bottom or (rr - rl) > 120 then return false end
+    if side == "left" then return rr >= f:GetLeft() - 4 and rr <= f:GetLeft() + 40 end
+    return rl <= f:GetRight() + 4 and rl >= f:GetRight() - 40
+end
+function ns.Overhang(f, side)
+    if not (f.GetRight and f:GetRight() and f:GetLeft()) then return 0 end
+    local edge = side == "left" and f:GetLeft() or f:GetRight()
+    local most = 0
+    local function look(r, deep)
+        if r == panel or (r.IsForbidden and r:IsForbidden()) or not (r.IsShown and r:IsShown()) then return end
+        local o = outer(r, side, edge)
+        if o > most and o <= 120 then most = o end
+        if deep and r.GetChildren then for _, c in ipairs({ r:GetChildren() }) do look(c, false) end end
+    end
+    -- one frame that can't be read (forbidden, or no position yet) is skipped, never an error
+    local function try(c, deep, check)
+        pcall(function()
+            if c.IsForbidden and c:IsForbidden() then return end
+            if check and not (c ~= f and c ~= panel and c.IsShown and c:IsShown() and besideEdge(c, f, side)) then return end
+            look(c, deep)
+        end)
+    end
+    if f.GetChildren then for _, c in ipairs({ f:GetChildren() }) do try(c, true) end end
+    if UIParent and UIParent.GetChildren then
+        for _, c in ipairs({ UIParent:GetChildren() }) do try(c, true, true) end
+    end
+    return math.floor(most + 0.5)
+end
+
 function ns.Place()
     if not panel then return end
     local _, f = ns.Active()
     if not f then return end
     panel:ClearAllPoints()
+    local ok, over = pcall(ns.Overhang, f, ns.db.side == "left" and "left" or "right")
+    local gap = 4 + (ok and over or 0)
     if ns.db.side == "left" then
-        panel:SetPoint("TOPRIGHT", f, "TOPLEFT", -4, 0)
+        panel:SetPoint("TOPRIGHT", f, "TOPLEFT", -gap, 0)
     else
-        panel:SetPoint("TOPLEFT", f, "TOPRIGHT", 4, 0)
+        panel:SetPoint("TOPLEFT", f, "TOPRIGHT", gap, 0)
     end
     local h = (f.GetHeight and f:GetHeight()) or MIN_H
     panel:SetHeight(ns.db.collapsed and HEAD or math.max(MIN_H, math.min(MAX_H, h)))
@@ -485,6 +530,8 @@ function ns.ShowPanel()
     ns.Place()
     panel:Show()
     ns.Refresh()
+    -- the window's side tabs can appear a moment after it does: place again once they're up
+    if C_Timer and C_Timer.After then C_Timer.After(0.2, function() if panel:IsShown() then ns.Place() end end) end
 end
 
 function ns.HidePanel()

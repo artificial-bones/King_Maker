@@ -67,7 +67,9 @@ function ns.Cap(c)
     return math.floor(c.xpMax * ns.CAP * perkMult(c))
 end
 
-function ns.IsMax(c) return (c.level or 0) >= (c.maxLevel or ns.MaxLevel()) or not c.xpMax or c.xpMax <= 0 end
+function ns.IsMax(c) return (c.level or 0) >= (c.maxLevel or ns.MaxLevel()) end
+-- Saved without its XP numbers (by 2.1 and older at logout): shown, but with no rest worked out until its next login.
+function ns.Unknown(c) return not ns.IsMax(c) and (not c.xpMax or c.xpMax <= 0) end
 
 -- How a character's rest stands right now:
 -- { rested, cap, pct (of a level), bubbles, full (true when capped),
@@ -75,6 +77,7 @@ function ns.IsMax(c) return (c.level or 0) >= (c.maxLevel or ns.MaxLevel()) or n
 function ns.Estimate(c, now)
     now = now or ns.Now()
     if ns.IsMax(c) then return { max = true } end
+    if ns.Unknown(c) then return { unknown = true } end
     local cap = ns.Cap(c)
     local rested = c.rested or 0
     local estimated = false
@@ -131,9 +134,14 @@ function ns.Snapshot(loggingOut)
     c.class = class or c.class
     c.level = UnitLevel("player") or c.level
     c.maxLevel = ns.MaxLevel()
-    c.xp = (UnitXP and UnitXP("player")) or 0
-    c.xpMax = (UnitXPMax and UnitXPMax("player")) or 0
-    c.rested = (GetXPExhaustion and GetXPExhaustion()) or 0
+    -- While you log out (and for a moment at login) the game reports 0 XP needed for the level. Saving that made
+    -- every character look max level, so the page hid them: keep the last real numbers instead.
+    local xpMax = (UnitXPMax and UnitXPMax("player")) or 0
+    if xpMax > 0 or (c.level or 0) >= c.maxLevel then
+        c.xp = (UnitXP and UnitXP("player")) or 0
+        c.xpMax = xpMax
+        c.rested = (GetXPExhaustion and GetXPExhaustion()) or 0
+    end
     c.resting = IsResting and IsResting() and true or false
     c.zone = (GetRealZoneText and GetRealZoneText()) or c.zone
     c.t = ns.Now()
@@ -154,12 +162,12 @@ function ns.Characters(sortKey, desc, showMax)
         if sortKey == "name" then return r.c.name:lower() end
         if sortKey == "level" then return (r.c.level or 0) + (r.c.xpMax and r.c.xpMax > 0 and (r.c.xp or 0) / r.c.xpMax or 0) end
         if sortKey == "full" then
-            if r.e.max then return math.huge end
+            if r.e.max or r.e.unknown then return math.huge end
             if r.e.full then return -(now - (r.e.fullSince or now)) end -- wasting longest first
             return r.e.fullIn or math.huge
         end
         if sortKey == "seen" then return r.c.t or 0 end
-        return r.e.max and -1 or r.e.pct -- "rested"
+        return r.e.max and -1 or r.e.unknown and -0.5 or r.e.pct -- "rested"
     end
     table.sort(out, function(a, b)
         local va, vb = val(a), val(b)
@@ -185,7 +193,7 @@ function ns.SetPerk(key, rank)
     -- rate before changing it.
     if not c.online then
         local e = ns.Estimate(c)
-        if not e.max then c.rested, c.t = e.rested, ns.Now() end
+        if e.rested then c.rested, c.t = e.rested, ns.Now() end
     end
     c.perk = math.max(0, math.min(ns.PERK_RANKS, rank))
     if ns.Refresh then ns.Refresh() end

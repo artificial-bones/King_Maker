@@ -37,6 +37,7 @@ ns.ClassColour = classColour
 -- What the Full column says, and its colour.
 function ns.FullText(e, now)
     if e.max then return grey("max level") end
+    if e.unknown then return grey("-") end
     if e.full then
         local since = e.fullSince and (" " .. ns.Duration(now - e.fullSince)) or ""
         return colour("ff4040", "FULL" .. since)
@@ -49,6 +50,7 @@ end
 
 function ns.RestedText(e)
     if e.max then return grey("-") end
+    if e.unknown then return grey("log in once to read") end
     local s = ns.Num(e.rested) .. "  " .. string.format("(%d%%, %.1f bubbles)", math.floor(e.pct * 100 + 0.5), e.bubbles)
     if e.estimated then s = s .. grey(" est") end
     return s
@@ -65,7 +67,7 @@ function ns.MostRestedAlt()
     if not ns.db then return nil end
     local me = ns.Char()
     for _, item in ipairs(ns.Characters("rested", true, false)) do
-        if item.key ~= me then return item end
+        if item.key ~= me and not item.e.unknown then return item end
     end
 end
 
@@ -100,6 +102,8 @@ local function rowTip(r)
     GameTooltip:AddLine(item.key)
     if e.max then
         GameTooltip:AddLine("Max level: no rest to track.", 1, 1, 1)
+    elseif e.unknown then
+        GameTooltip:AddLine("No XP numbers saved for this character yet. Log in on it once and they'll show up.", 1, 1, 1, true)
     else
         GameTooltip:AddDoubleLine("Rested now", ns.Num(e.rested) .. " / " .. ns.Num(e.cap), 1, 1, 1, 1, 1, 1)
         GameTooltip:AddDoubleLine("XP left this level", ns.Num(e.toLevel), 1, 1, 1, 1, 1, 1)
@@ -130,7 +134,7 @@ local function fillRow(r, item, cells)
     cells.level:SetText(lvl)
     cells.rested:SetText(ns.RestedText(e))
     cells.full:SetText(ns.FullText(e, now))
-    cells.where:SetText(e.max and grey("-") or (c.resting and "Inn/city" or colour("ffa040", "Outside")))
+    cells.where:SetText((e.max or e.unknown) and grey("-") or (c.resting and "Inn/city" or colour("ffa040", "Outside")))
     cells.seen:SetText(lastSeen(c, now))
 end
 
@@ -140,7 +144,8 @@ local function refreshTiles(now)
         if not ns.IsMax(c) then
             levelling = levelling + 1
             local e = ns.Estimate(c, now)
-            if e.full then full = full + 1
+            if e.unknown then -- nothing to add up yet
+            elseif e.full then full = full + 1
             elseif e.fullIn and (not next or e.fullIn < next.e.fullIn) then next = { c = c, e = e } end
         end
     end
@@ -171,7 +176,7 @@ local function refresh()
     tbl:SetRows(list, fillRow)
     local full, n = 0, 0
     for _, item in ipairs(list) do
-        if not item.e.max then n = n + 1; if item.e.full then full = full + 1 end end
+        if not item.e.max and not item.e.unknown then n = n + 1; if item.e.full then full = full + 1 end end
     end
     if n == 0 then
         footer:SetText("Rest: 5% of a level per 8h in an inn or city, per 32h outside, up to 150%.")
@@ -280,7 +285,7 @@ KM.RegisterTooltip(function(tt)
     if not ns.db then return end
     local now, shown = ns.Now(), 0
     for _, item in ipairs(ns.Characters("rested", true, false)) do
-        if shown >= 3 then break end
+        if shown >= 3 or item.e.unknown then break end
         shown = shown + 1
         local e = item.e
         tt:AddDoubleLine("Rested: " .. colour(classColour(item.c.class), item.c.name) .. " " .. (item.c.level or ""),

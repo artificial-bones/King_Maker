@@ -299,4 +299,49 @@ assert any(str(l).startswith("Inventory King: 35 owned") for l in lines.values()
 KM.Show("inventory"); ns.SelectTab("items"); assert not KM.errorShown and not L.eval("SIDE('LEDGER STRATEGIES')"), last(L)
 print("INITDB OK")
 
+# The cheapest stack in your bags gets a red X (Bagnon's buttons here) and a tooltip line
+L, KM, ns = load()
+L.execute("""
+ITEM(5000, "Quest Thing", { class = 12, subclass = 0, sell = 0 })
+ITEM(6948, "Hearthstone", { class = 15, subclass = 0, sell = 0 })
+BAGS[0][4] = { id = 5000, count = 1 }; BAGS[0][5] = { id = 6948, count = 1, bound = true }
+local inv = CreateFrame("Frame", "BagnonInventory", UIParent)
+Bagnon = { Frames = { Get = function(_, id) if id == "inventory" then return inv end end } }
+local group = CreateFrame("Frame", nil, inv)
+BTNS = {}
+for _, bs in ipairs({ { 0, 1 }, { 0, 2 }, { 0, 3 }, { 1, 1 } }) do
+  local b = CreateFrame("Button", nil, group); b.bag = bs[1]; b:SetID(bs[2])
+  function b:GetBag() return self.bag end
+  BTNS[bs[1] .. ":" .. bs[2]] = b
+end
+inv:Show()
+""")
+assert L.eval("InventoryKingDB.ui.cheapest") is True
+L.execute("FIRE('BAG_UPDATE_DELAYED'); RUN_TIMERS()")
+c = ns.Cheapest()
+# potions: no auction price, 6c vendor x5 = 30c; linen 95c each after the cut; the bound ring only vendors (5s)
+assert c and c.item == 118 and c.value == 30 and (c.bag, c.slot) == (1, 1), c and (c.item, c.value)
+shown = lambda k: bool(L.eval("BTNS['%s'].kmCheap and BTNS['%s'].kmCheap:IsShown()" % (k, k)))
+assert shown("1:1") and not shown("0:1") and not shown("0:3"), "the X sits on the potions' slot only"
+assert L.eval("BTNS['1:1'].kmCheap.texture") == "Interface/RaidFrame/ReadyCheck-NotReady", "a red X"
+assert L.eval("BTNS['1:1'].kmCheap.point[1]") == "BOTTOMLEFT", "bottom left: top left is the quest X"
+lines = []
+tt = L.eval("{ AddLine = function(self, t) table.insert(TTL, t) end, AddDoubleLine = function(self, a) table.insert(TTL, a) end }")
+L.execute("TTL = {}"); ns.AddTooltipLines(tt, 118)
+assert any("Cheapest thing in your bags" in str(t) for t in L.eval("TTL").values())
+L.execute("TTL = {}"); ns.AddTooltipLines(tt, 2589)
+assert not any("Cheapest" in str(t) for t in L.eval("TTL").values())
+# /ik keep protects an item: the X moves to the next cheapest (the ring, 5s, under 15 linen at 14s 25c)
+ik = L.eval("SlashCmdList.INVENTORYKING")
+ik("keep 118"); assert "won't be marked" in last(L), last(L)
+assert ns.Cheapest().item == 9000 and shown("0:3") and not shown("1:1")
+ik("keep 118"); assert ns.Cheapest().item == 118 and shown("1:1")
+# Bagnon showing another character's bags: no mark
+L.execute("BTNS['1:1'].IsCached = function() return true end"); ns.MarkCheapest()
+assert not shown("1:1"); L.execute("BTNS['1:1'].IsCached = nil")
+ik("cheapest off"); assert not shown("1:1") and ns.Cheapest() is None
+ik("cheapest on"); assert "Minor Healing Potion" in last(L) and shown("1:1"), last(L)
+assert not KM.errorShown, last(L)
+print("CHEAPEST OK")
+
 print("inventory: ok")

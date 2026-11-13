@@ -82,9 +82,20 @@ end
 ---------------------------------------------------------------------------
 
 -- Per slot: nil (not a quest item, or we can't tell), "needed", "starter"
--- (starts a quest you haven't done) or "unneeded" (safe to delete).
+-- (starts a quest you haven't done), "unneeded" (no quest needs it and no vendor buys it: safe to delete, red X)
+-- or "sell" (no quest needs it, but a vendor buys it: sell it, no X).
 local status = {}
 local unneededIDs = {}
+local sellIDs = {}
+
+-- Does a vendor buy it? The item's sell price once the game has it, else the bag's own "no value" flag.
+local function sellable(info)
+    local get = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    local sell = get and select(11, get(info.itemID))
+    if sell ~= nil then return sell > 0 end
+    return not info.hasNoValue
+end
+ns.Sellable = sellable
 
 function ns.IsQuestItem(itemID, questInfo)
     if questInfo and (questInfo.isQuestItem or questInfo.questID) then return true end
@@ -113,13 +124,14 @@ local function lastBag()
 end
 
 function ns.ScanBags()
-    wipe(status); wipe(unneededIDs)
+    wipe(status); wipe(unneededIDs); wipe(sellIDs)
     for bag = 0, lastBag() do
         for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info and info.itemID then
                 local q = C_Container.GetContainerItemQuestInfo and C_Container.GetContainerItemQuestInfo(bag, slot)
                 local s, why = ns.Judge(info.itemID, info.hyperlink, q)
+                if s == "unneeded" and sellable(info) then s = "sell"; sellIDs[info.itemID] = why end
                 if s then
                     status[bag * 1000 + slot] = s
                     if s == "unneeded" then unneededIDs[info.itemID] = why end
@@ -137,6 +149,11 @@ end
 -- Reason text when no quest needs this item, else nil.
 function ns.UnneededReason(itemID)
     return itemID and unneededIDs[itemID]
+end
+
+-- Reason text when no quest needs this item but a vendor buys it, else nil.
+function ns.SellReason(itemID)
+    return itemID and sellIDs[itemID]
 end
 
 function ns.Unneeded()

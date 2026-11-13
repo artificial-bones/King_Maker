@@ -87,6 +87,22 @@ assert s.gonePerDay and s.gonePerDay > 50  # each day's price changed, so every 
 assert s.points == ITEMS_[2589].n == 42 and not s.lowestOnly  # every scan counted, even rolled-up ones
 st = L.eval("EconKing.GetStats(2589)"); assert st.market == 120
 hist = L.eval("EconKing.GetHistory(2589)"); assert len(list(hist.values())) == nr + nd + nw
+assert s.listed7 and 0 < s.supply7 < s.supply, (s.supply7, s.supply)  # listed now against the week and the month
+assert s.corr < -0.9 and s.corrN >= 6, s.corr  # cheaper as supply grew: price and supply move opposite ways
+assert s.auctions == 2 and not s.trendDays  # two weeks of scans: the trend is week against week
+# A young item (four days, no week before this one): the trend is the later half of its days against the earlier half,
+# and auctions come from the last scan that counted them even when a later one (a quick scan) didn't.
+L.execute("""
+local n = NOW
+EconKingDB.items[9002] = { r = {
+  (n - 4 * 86400) .. ":100:100:50:5", (n - 3 * 86400) .. ":110:110:40:4", (n - 2 * 86400) .. ":120:120:30:3",
+  (n - 86400) .. ":130:130:20:7", (n - 600) .. "::125:10" }, d = {}, w = {}, n = 5 }
+""")
+ns.ClearStats(); y = ns.Stats(9002)
+assert y.trend7 and y.trendDays == 3 and abs(y.trend7 - (125 / 105 - 1)) < 1e-6, (y.trend7, y.trendDays)  # days 3-4 (125) against days 1-2 (105)
+assert y.auctions == 7 and y.listed == 10 and y.auctionsAt < y.seen
+assert y.corr is None  # too few scans to say
+L.execute("EconKingDB.items[9002] = nil"); ns.ClearStats()
 print("STATS OK", round(s.vs30, 3), round(s.trend7, 3), s.points)
 
 # Rolling up keeps each average's true weight: one priced scan (100) and three

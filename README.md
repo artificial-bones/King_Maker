@@ -91,7 +91,7 @@ The long-term memory of the auction house: every scan is kept, so you can see ho
 - **Every item, every category**: market price, today against its 30-day average, the 7-day trend, units listed and
   supply against normal.
 - **Item pages** with averages, lows and highs, volatility, units leaving per day, and **price and supply graphs**
-  over 7 days, 30 days, 90 days, a year or everything.
+  over 7 days, 30 days, 90 days, a year or everything, and how price follows supply.
 - **Deals** (at least 20% under the 30-day average), **favorites**, and **Ask guild** to fill gaps between your scans.
 
 [Full guide](AddOns/King_Maker/Modules/Econ#readme)
@@ -138,6 +138,7 @@ net worth.
   ranked.
 - **Items**: auction house categories, filter by character and place, search, sort any column, **Export**.
 - **Item tooltips** show how many you own and where.
+- A **red X on the cheapest stack** in your bags, for when you need the space.
 
 Log in on each character and open each bank once. [Full guide](AddOns/King_Maker/Modules/Inventory#readme)
 
@@ -169,7 +170,7 @@ Every Horde dungeon quest from level 13 to 60, with what you've done, what's nex
 
 - **Every dungeon** in level order with its quests, chains laid out inline, the step to do **Next** marked.
 - **The levels that matter**, **XP for every quest at your level**, **waypoints** to givers and entrances.
-- **The route** through the dungeons, and **bag cleanup** marks for quest items you no longer need.
+- **The route** through the dungeons, and **bag cleanup** marks for quest items you no longer need (Bagnon too).
 
 [Full guide](AddOns/King_Maker/Modules/Quest#readme)
 

@@ -5,7 +5,7 @@ local MARK_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-NotReady"
 local MAX_SLOTS = 36
 
 ---------------------------------------------------------------------------
--- Marks on the default bag buttons
+-- Marks on bag buttons (the game's bags and Bagnon): a red X on quest items no quest needs
 ---------------------------------------------------------------------------
 
 local function markButton(button, bag, slot)
@@ -45,9 +45,11 @@ local function eachFrame(fn)
     for i = 1, NUM_CONTAINER_FRAMES or 13 do fn(_G["ContainerFrame" .. i]) end
 end
 
+-- Every open bag window, Bagnon's too (it lays its buttons out itself, so Core re-runs this while bags are open).
 function ns.UpdateBagButtons()
-    eachFrame(updateFrame)
+    KM.EachBagButton(markButton)
 end
+KM.RegisterBagMarker(function() ns.UpdateBagButtons() end)
 
 local hooked = {}
 function ns.HookBags()
@@ -72,6 +74,8 @@ local function addLine(tooltip, itemID)
     local why = ns.UnneededReason(itemID)
     if why then
         tooltip:AddLine("Quest King: safe to delete, " .. why .. ".", 1, 0.3, 0.3, true)
+    elseif ns.SellReason(itemID) then
+        tooltip:AddLine("Quest King: sell it to a vendor, " .. ns.SellReason(itemID) .. ".", 1, 0.82, 0, true)
     end
 end
 

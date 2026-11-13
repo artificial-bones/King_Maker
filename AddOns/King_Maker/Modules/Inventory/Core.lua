@@ -174,6 +174,7 @@ function ns.InitDB()
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     if db.ui.tooltip == nil then db.ui.tooltip = true end
     if db.ui.vendor == nil then db.ui.vendor = true end
+    if db.ui.cheapest == nil then db.ui.cheapest = true end -- a red X (bottom left) on the cheapest stack in your bags
     db.ui.price = db.ui.price or "market"
     ns.db = db
     ns.ImportMailKing()
@@ -236,6 +237,26 @@ SlashCmdList.INVENTORYKING = function(msg)
         local who = rest
         if not who:find("-") and GetRealmName then who = who .. "-" .. GetRealmName() end
         KM.Print(ns, ns.Forget(who) and ("forgot " .. who .. ".") or ("no character called " .. who .. "."))
+    elseif cmd == "cheapest" then
+        ns.db.ui.cheapest = onoff(ns.db.ui.cheapest)
+        ns.UpdateCheapest()
+        KM.Print(ns, "marking the cheapest stack in your bags " .. (ns.db.ui.cheapest and "on." or "off."))
+        local c = ns.Cheapest()
+        if c then
+            KM.Print(ns, "cheapest now: " .. ns.ItemText(c.item) .. (c.count > 1 and (" x" .. c.count) or "") .. ", worth " .. ns.Money(c.value)
+                .. " (bag " .. c.bag .. ", slot " .. c.slot .. "); marked on " .. (ns.markedCount or 0) .. " open bag button(s).")
+        elseif ns.db.ui.cheapest then
+            KM.Print(ns, "nothing in your bags can be marked (no prices, or only quest items, tools and kept items).")
+        end
+    elseif cmd == "keep" and rest ~= "" then
+        local id = tonumber(rest:match("item:(%d+)") or rest)
+        if not id then
+            local get = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+            local link = get and select(2, get(rest))
+            id = link and tonumber(link:match("item:(%d+)"))
+        end
+        if not id then KM.Print(ns, "no item called " .. rest .. " (shift-click it into the chat box).") return end
+        KM.Print(ns, ns.ItemText(id) .. (ns.ToggleKeep(id) and " won't be marked as cheapest any more." or " can be marked as cheapest again."))
     elseif cmd == "export" then
         ns.Export()
     elseif cmd == "status" then
@@ -248,6 +269,8 @@ SlashCmdList.INVENTORYKING = function(msg)
         KM.Print(ns, "/ik price market|lowest   value items at the market price or the lowest buyout")
         KM.Print(ns, "/ik vendor [on|off]   items with no auction price count at their vendor price")
         KM.Print(ns, "/ik tooltip [on|off]   how many you own, in item tooltips")
+        KM.Print(ns, "/ik cheapest [on|off]   a red X (bottom left) on the cheapest stack in your bags")
+        KM.Print(ns, "/ik keep <item>   never mark that item as cheapest (again to undo)")
         KM.Print(ns, "/ik forget Name-Realm   forget a deleted or moved character")
         KM.Print(ns, "/ik export   items and characters as text for a spreadsheet")
     end

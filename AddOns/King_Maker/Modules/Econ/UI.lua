@@ -370,7 +370,7 @@ local function buildPage(c)
         col("name", "Item", 160),
         col("market", "Market", 92, "RIGHT"),
         col("vs30", "vs 30d", 56, "RIGHT", "Market price now compared with its 30-day average. Below zero: cheaper than usual."),
-        col("trend7", "7d trend", 58, "RIGHT", "Average market price this week compared with the week before."),
+        col("trend7", "7d trend", 58, "RIGHT", "Average market price this week compared with the week before (until there are two weeks of scans: the price's change over the days there are)."),
         col("listed", "Listed", 52, "RIGHT", "Units on the auction house at the last scan."),
         col("supply", "Supply", 56, "RIGHT", "Listed now compared with the 30-day average. Below zero: drying up."),
         col("seen", "Scanned", 0),

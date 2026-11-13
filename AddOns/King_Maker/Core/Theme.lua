@@ -402,10 +402,15 @@ function UI.Table(parent, cols, rowH, opts)
     for _, col in ipairs(cols) do
         local h = CreateFrame("Button", nil, t.head)
         h:SetPoint("TOPLEFT", x, 0)
-        h:SetSize(col.w > 0 and col.w or 100, 20)
+        if col.w > 0 then
+            h:SetSize(col.w, 20)
+        else -- the last column takes what's left, like its cells (a fixed width ran off narrow tables)
+            h:SetPoint("TOPRIGHT", 0, 0)
+            h:SetHeight(20)
+        end
         h.fs = UI.Text(h, 9, C.muted, col.justify or "LEFT")
         h.fs:SetPoint("LEFT", 0, 0)
-        h.fs:SetPoint("RIGHT", -6, 0)
+        h.fs:SetPoint("RIGHT", col.w > 0 and -6 or -8, 0)
         h.fs:SetText((col.label or ""):upper())
         if col.sort then
             h:SetScript("OnClick", function()
