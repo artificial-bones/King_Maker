@@ -753,6 +753,6 @@ KM.RegisterSettings({ id = "inventory", label = "Inventory", order = 30, rows = 
     rows[#rows + 1] = { type = "header", label = "Commands" }
     rows[#rows + 1] = { type = "text", label = "/ik   open Inventory\n/ik status   your net worth in one line\n/ik price market|lowest   how items are valued\n"
         .. "/ik vendor on|off   vendor prices for items with no auction price\n/ik tooltip on|off   counts in item tooltips\n"
-        .. "/ik forget Name-Realm   forget a character\n/ik export   items and characters for a spreadsheet" }
+        .. "/ik forget First Last   forget a character\n/ik export   items and characters for a spreadsheet" }
     return rows
 end })

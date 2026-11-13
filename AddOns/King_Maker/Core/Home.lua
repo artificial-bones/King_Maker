@@ -83,6 +83,5 @@ end
 
 KM.RegisterPage({ id = "home", group = "home", label = "Home", icon = "Interface\\Icons\\INV_Crown_01", order = 1,
     title = "King Maker", subtitle = function()
-        local name = UnitName and UnitName("player")
-        return name and ("Welcome back, " .. name .. ".") or ""
+        return "Welcome back, " .. KM.PlayerName() .. "."
     end, build = build, refresh = refresh })

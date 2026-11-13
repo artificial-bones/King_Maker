@@ -741,8 +741,10 @@ KM.RegisterSettings({ id = "mail", label = "Sales Ledger", order = 15, rows = {
     { type = "check", label = "Only this character's mail", tip = "Every character's auction mail, or only the one you're on.",
       get = function() return ns.db.ui.mine end, set = function(v) ns.db.ui.mine = v; ns.Refresh() end },
     { type = "text", label = "Every auction house mail you open is recorded once: sales (dated when they sold), purchases, and expired or cancelled auctions with the deposit lost. Right-click any item on the Sales Ledger to choose its strategy." },
+    { type = "check", label = "My characters beside the mailbox", tip = "A list of your other characters next to the mailbox: click one to put its name in Send Mail's To: box.",
+      get = function() return ns.db.ui.alts end, set = function(v) ns.SetAlts(v) end },
     { type = "button", label = "Export the ledger", func = function() ns.Export() end, tip = "The whole ledger as comma-separated text, for a spreadsheet." },
     { type = "button", label = "Clear the whole ledger", func = function() StaticPopup_Show("MAILKING_RESET") end, tip = "Asks first. Your strategies stay." },
     { type = "header", label = "Commands" },
-    { type = "text", label = "/mlk   open the Sales Ledger\n/mlk status   what's been recorded\n/mlk export   the ledger for a spreadsheet\n/mlk reset yes   clear the whole ledger" },
+    { type = "text", label = "/mlk   open the Sales Ledger\n/mlk status   what's been recorded\n/mlk export   the ledger for a spreadsheet\n/mlk alts   your characters beside the mailbox\n/mlk reset yes   clear the whole ledger" },
 } })

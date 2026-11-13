@@ -21,6 +21,7 @@ themselves.
 | Open it from the minimap | Right-click the King Maker crown: **Sales Ledger** |
 | Profit at a glance | Hover the crown (last 7 days), or the **Profit, 7 days** tile on Home |
 | Period, whose mail, export, clearing the ledger | King Maker **Settings > Sales Ledger** |
+| Mail your alts in one click | **My characters**, beside the mailbox |
 
 ## What it records
 
@@ -94,6 +95,17 @@ An item gets one automatically, in this order:
 Your choices apply to past sales too, so you can sort old history into strategies whenever you like.
 Inventory's Items tab sorts what you hold into the same strategies.
 
+## My characters
+
+Open a mailbox and **My characters** sits to the right of it: your other characters that this one can
+mail (same realm and faction), highest level first, in their class colours, with the gold each had
+when you last logged out. Click one and its name goes in the **To:** box of Send Mail (from the
+Inbox it switches to Send Mail for you), and the cursor moves to the subject. The one you're mailing
+is highlighted. Scroll it if you have more than 16.
+
+A character shows up once you've logged in to it with King Maker. Turn the list off in **Settings >
+Sales Ledger** or with `/mlk alts`.
+
 ## Export
 
 **Export** (or `/mlk export`) opens the whole ledger as comma-separated text. Press Ctrl+A, then
@@ -106,6 +118,7 @@ Ctrl+C, and paste it into a spreadsheet.
 | `/mlk` | Open or close the Sales Ledger |
 | `/mlk status` | What's been recorded |
 | `/mlk export` | The ledger as text for a spreadsheet |
+| `/mlk alts [on\|off]` | My characters beside the mailbox |
 | `/mlk reset yes` | Clear the whole ledger (Settings has a button that asks first) |
 
 `/mlk button` now points you to the King Maker crown (`/km button`).

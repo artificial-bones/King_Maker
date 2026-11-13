@@ -225,7 +225,7 @@ end
 
 local function onMessage(text, sender)
     local who = shortName(sender)
-    if who == UnitName("player") then return end
+    if KM.IsMe(who) then return end -- your own message back (full name: Forever has surnames)
     local kind, body = text:sub(1, 1), text:sub(2)
     if kind == "R" then
         if not ns.db.answer then return end

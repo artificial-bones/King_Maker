@@ -141,7 +141,7 @@ end
 ---------------------------------------------------------------------------
 
 function ns.Char()
-    local key = (UnitName and UnitName("player") or "?") .. "-" .. (GetRealmName and GetRealmName() or "")
+    local key = KM.Char() -- "First Last-Realm"
     local c = ns.db.chars[key]
     if not c then
         c = { known = {}, owned = {} }
@@ -149,6 +149,9 @@ function ns.Char()
     end
     return c
 end
+
+-- 2.3.0 keys characters by their full name: this character's entry under its first name moves over.
+function ns.RenameChar(old, new) KM.MoveKey(ns.db.chars, old, new) end
 
 -- What you'd have without an override: known, or not a pattern recipe.
 local function autoOwned(spell)

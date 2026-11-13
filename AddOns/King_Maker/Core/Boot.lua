@@ -105,11 +105,13 @@ f:SetScript("OnEvent", function(_, event, name)
             KM.Each(initModule)
             for _, l in pairs(KM.LEGACY) do live[l.var] = _G[l.var] end
             KM.loaded = true
+            KM.RenameChar()
             if KM.OnLoaded then KM.Safe(KM.OnLoaded) end
         elseif KM.loaded and KM.LEGACY[name] then
             KM.TakeLegacy(name)
         end
     elseif event == "PLAYER_LOGIN" then
+        KM.RenameChar() -- again: the surname may only be known now
         KM.UpdateMinimapButton()
         if KM.movedNow then
             KM.Print("moved your old King addon data in (" .. KM.movedNow .. " addons). Everything now lives in King Maker; /km opens it.")

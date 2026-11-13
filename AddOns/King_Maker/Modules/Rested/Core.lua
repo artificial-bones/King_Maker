@@ -35,11 +35,14 @@ ns.MAX_LEVEL = 60
 
 function ns.Now() return (GetServerTime and GetServerTime()) or time() end
 
--- The character this is, as "Name-Realm".
-function ns.Char()
-    local name = UnitName("player") or "?"
-    local realm = GetRealmName and GetRealmName() or ""
-    return realm ~= "" and (name .. "-" .. realm) or name
+-- The character this is, as "First Last-Realm" (KM.Char: Forever names have a surname).
+function ns.Char() return KM.Char() end
+
+-- 2.3.0 keys characters by their full name: this character's entry under its first name moves over.
+function ns.RenameChar(old, new)
+    KM.MoveKey(ns.db.chars, old, new)
+    local c = ns.db.chars[new]
+    if c then c.name = KM.PlayerName() end
 end
 
 function ns.MaxLevel()
@@ -258,6 +261,6 @@ SlashCmdList.RESTEDKING = function(msg)
     else
         KM.Print(ns, "/rk   open the Rested XP page (or /km rested)")
         KM.Print(ns, "/rk perk 0-5   your Well Rested legacy perk rank on this character")
-        KM.Print(ns, "/rk forget Name   stop tracking a character (or right-click it on the page)")
+        KM.Print(ns, "/rk forget First Last   stop tracking a character (or right-click it on the page)")
     end
 end

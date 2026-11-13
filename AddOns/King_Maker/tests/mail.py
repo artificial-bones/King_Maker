@@ -346,4 +346,66 @@ assert L.eval("MailKingDB.posts") is not None and L.eval("KingMakerDB.moved.Mail
 assert L.eval("MailKing.StrategyOf(2770)") == "Ore run" and ns.Summary(0).profit == 900
 print("INITDB OK")
 
+# My characters beside the mailbox: same realm and faction only, highest level first, click -> To: box, Send tab
+ALTS = """
+InventoryKingDB = { chars = {
+  ["Jay-Forever"] = { class = "WARRIOR", level = 42, faction = "Alliance", gold = 100000 },
+  ["Bank-Forever"] = { class = "MAGE", level = 5, faction = "Alliance", gold = 2500000 },
+  ["Tank-Forever"] = { class = "PALADIN", level = 60, faction = "Alliance" },
+  ["Orc-Forever"] = { class = "ROGUE", level = 30, faction = "Horde" },
+  ["Away-Elsewhere"] = { class = "PRIEST", level = 20, faction = "Alliance" } } }
+RestedKingDB = { chars = { ["Fresh-Forever"] = { name = "Fresh", realm = "Forever", class = "DRUID", level = 1 },
+  ["Bank-Forever"] = { name = "Bank", realm = "Forever", class = "MAGE", level = 6 } } }
+MailFrame = CreateFrame("Frame", "MailFrame")
+SendMailFrame = CreateFrame("Frame", "SendMailFrame"); SendMailFrame:Hide()
+SendMailNameEditBox = CreateFrame("EditBox", "SendMailNameEditBox")
+SendMailSubjectEditBox = CreateFrame("EditBox", "SendMailSubjectEditBox")
+function SendMailSubjectEditBox:SetFocus() FOCUSED = "subject" end
+MailFrameTab2 = CreateFrame("Button", "MailFrameTab2")
+MailFrameTab2:SetScript("OnClick", function() SendMailFrame:Show() end)
+"""
+L, KM, ns = load(only=["Inventory", "Rested", "Mail"], seed=ALTS)
+assert L.eval("MailKingDB.ui.alts") is True
+got = ns.Alts()
+names = [got[i].name for i in range(1, len(got) + 1)]
+assert names == ["Tank", "Bank", "Fresh"], names
+assert got[2].level == 6 and got[2].gold == 2500000
+L.execute('MailFrame:Show(); FIRE("MAIL_SHOW"); RUN_TIMERS()')
+panel = L.eval("MailKingAltsPanel")
+assert panel and panel.shown is True and panel.point[1] == "TOPLEFT" and panel.point[3] == "TOPRIGHT"
+assert L.eval("HASFONT('My characters')") and not KM.errorShown, last(L)
+row = [f for f in L.eval("FRAMES").values() if f.alt is not None and f.alt.name == "Bank"][0]
+click(row)
+assert L.eval("SendMailNameEditBox:GetText()") == "Bank" and L.eval("SendMailFrame.shown") is True
+assert L.eval("FOCUSED") == "subject" and row.sel.shown is True
+# the setting and /mlk alts hide and show it
+mlk = L.eval("SlashCmdList.MAILKING")
+mlk("alts off"); assert L.eval("MailKingDB.ui.alts") is False and panel.shown is False
+mlk("alts"); assert L.eval("MailKingDB.ui.alts") is True and panel.shown is True
+L.execute('MailFrame:Hide(); FIRE("MAIL_CLOSED")'); assert panel.shown is False
+mlk("alts off"); L.execute('MailFrame:Show(); FIRE("MAIL_SHOW")'); assert panel.shown is False
+# no other characters yet: a hint instead of an empty box
+L, KM, ns = load(only=["Mail"], seed="MailFrame = CreateFrame('Frame', 'MailFrame')")
+L.execute('FIRE("MAIL_SHOW")')
+assert len(ns.Alts()) == 0 and L.eval("HASFONT('Log in to your other characters')") and not KM.errorShown, last(L)
+# Forever names: alts known by full name show it; an alt saved by first name gets its surname from the guild roster
+L, KM, ns = load(only=["Inventory", "Rested", "Mail"], seed=ALTS + """
+PLAYER.surname = "Stone"
+InventoryKingDB.chars["Jay-Forever"] = nil
+InventoryKingDB.chars["Tank Shield-Forever"] = InventoryKingDB.chars["Tank-Forever"]; InventoryKingDB.chars["Tank-Forever"] = nil
+GUILD_ROSTER = { { name = "Bank Vault-Forever", class = "MAGE" }, { name = "Fresh Leaf-Forever", class = "PRIEST" } }
+""")
+got = ns.Alts(); names = [got[i].name for i in range(1, len(got) + 1)]
+assert names == ["Tank Shield", "Bank Vault", "Fresh"], names
+assert "Jay" not in names and "Jay Stone" not in names
+L.execute('MailFrame:Show(); FIRE("MAIL_SHOW")')
+row = [f for f in L.eval("FRAMES").values() if f.alt is not None and f.alt.name == "Tank Shield"][0]
+click(row); assert L.eval("SendMailNameEditBox:GetText()") == "Tank Shield"
+# it closes with the mail window, even when MAIL_CLOSED never comes
+panel = L.eval("MailKingAltsPanel"); assert panel.shown is True
+L.execute("MailFrame:Hide()"); assert panel.shown is False
+L.execute("MailFrame:Show()"); assert panel.shown is True
+L.execute("MailFrame.shown = false; RUN_ONUPDATE(1)"); assert panel.shown is False, "the per-frame check"
+print("ALTS OK")
+
 print("mail: ok")

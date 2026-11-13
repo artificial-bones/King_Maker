@@ -186,9 +186,10 @@ end
 -- This character: skills, level, known recipes
 ---------------------------------------------------------------------------
 
-function ns.CharKey()
-    return (UnitName and UnitName("player") or "?") .. "-" .. (GetRealmName and GetRealmName() or "")
-end
+function ns.CharKey() return KM.Char() end -- "First Last-Realm"
+
+-- 2.3.0 keys characters by their full name: this character's entry under its first name moves over.
+function ns.RenameChar(old, new) KM.MoveKey(ns.db.chars, old, new) end
 
 function ns.Char()
     local key = ns.CharKey()

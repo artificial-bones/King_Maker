@@ -332,7 +332,8 @@ GUIDS = { player = PLAYER.guid, pet = nil }
 UNITS = {}            -- UNITS["target"] = { guid=, name=, level=, class=, dead=, tapDenied= }
 THREAT = {}           -- THREAT[unit .. guid] = status
 GROUP, IN_GUILD = false, true
-function UnitName(u) if u == "player" or u == nil then return PLAYER.name, nil end return UNITS[u] and UNITS[u].name end
+-- Forever: the second value is the surname (PLAYER.surname; nil = none), not a realm.
+function UnitName(u) if u == "player" or u == nil then return PLAYER.name, PLAYER.surname end return UNITS[u] and UNITS[u].name end
 function UnitFullName(u) if u == "player" then return PLAYER.name, PLAYER.realm end return UnitName(u) end
 function UnitClass(u) if u == "player" or u == nil then return PLAYER.classLocal, PLAYER.class end return UNITS[u] and UNITS[u].className, UNITS[u] and UNITS[u].class end
 function UnitLevel(u) if u == "player" or u == nil then return PLAYER.level end return UNITS[u] and UNITS[u].level or 0 end
@@ -356,7 +357,9 @@ function IsInRaid() return false end
 function GetNumGroupMembers() return GROUP and 5 or 0 end
 function IsInGuild() return IN_GUILD end
 function GetGuildInfo(u) if IN_GUILD then return "Kings", "Member", 1, PLAYER.realm end end
-function GetNumGuildMembers() return IN_GUILD and 10 or 0 end
+GUILD_ROSTER = nil  -- { { name = "First Last-Realm", class = "MAGE" } }; nil = 10 nameless members
+function GetNumGuildMembers() return IN_GUILD and (GUILD_ROSTER and #GUILD_ROSTER or 10) or 0 end
+function GetGuildRosterInfo(i) local m = GUILD_ROSTER and GUILD_ROSTER[i]; if m then return m.name, "Member", 1, 60, m.class, "", "", "", true, 0, m.class end end
 function GetRealmName() return PLAYER.realm end
 function GetNormalizedRealmName() return PLAYER.realm end
 MONEY = 1234567

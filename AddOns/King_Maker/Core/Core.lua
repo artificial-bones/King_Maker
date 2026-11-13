@@ -70,6 +70,71 @@ end
 
 function KM.Now() return (GetServerTime and GetServerTime()) or time() end
 
+-----
+-- Your character's name
+-----
+-- Forever characters have a first and a last name ("Slum Bum"), and that full name is what chat, mail, invoices and
+-- guild addon messages use. UnitName("player") returns them separately: the second value is the surname, not a
+-- realm. Every module keys per-character data by KM.Char(), "First Last-Realm"; before 2.3.0 that was "First-Realm",
+-- and KM.RenameChar moves this character's old entries over (Boot.lua, at load and at login).
+
+-- "Slum Bum" (just the first name when there is no surname, or before the game knows it).
+function KM.PlayerName()
+    local first, last = UnitName("player")
+    first = first or "?"
+    if type(last) == "string" and last ~= "" then return first .. " " .. last end
+    return first
+end
+
+local function withRealm(name)
+    local realm = GetRealmName and GetRealmName() or ""
+    return realm ~= "" and (name .. "-" .. realm) or name
+end
+
+-- This character as "First Last-Realm".
+function KM.Char() return withRealm(KM.PlayerName()) end
+
+-- The key before 2.3.0: "First-Realm".
+function KM.OldChar() return withRealm((UnitName("player")) or "?") end
+
+-- Is this name (from chat, an addon message, an invoice; realm or not) the character you're on?
+function KM.IsMe(name)
+    if type(name) ~= "string" then return false end
+    name = name:gsub("%-.*$", "")
+    return name:lower() == KM.PlayerName():lower()
+end
+
+-- Fills what dst lacks from src, at every depth (dst's own values win).
+local function fill(dst, src, depth)
+    for k, v in pairs(src) do
+        local d = dst[k]
+        if d == nil then dst[k] = v
+        elseif depth < 6 and type(d) == "table" and type(v) == "table" then fill(d, v, depth + 1) end
+    end
+end
+
+-- t[old] -> t[new]. When both exist (data saved under the new key already), what only the old entry has is kept.
+function KM.MoveKey(t, old, new)
+    if type(t) ~= "table" or old == new or t[old] == nil then return end
+    local o, n = t[old], t[new]
+    if n == nil then
+        t[new] = o
+    elseif type(o) == "table" and type(n) == "table" then
+        fill(n, o, 0)
+    end
+    t[old] = nil
+end
+
+-- Moves this character's data from its old first-name key to its full name, in every module that has a RenameChar.
+function KM.RenameChar()
+    local first, last = UnitName("player")
+    if not first or first == "Unknown" or type(last) ~= "string" or last == "" then return end
+    local old, new = KM.OldChar(), KM.Char()
+    for _, m in ipairs(KM.order) do
+        if m.RenameChar and m.db then KM.Safe(m.RenameChar, old, new) end
+    end
+end
+
 -- 12345 -> "1g 23s 45c" with coin colours; nil -> grey dash. Negative amounts get a red minus.
 function KM.Money(c, plain)
     if c == nil then return "|cff808080-|r" end

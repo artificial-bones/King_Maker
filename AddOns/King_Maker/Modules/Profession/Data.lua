@@ -104,11 +104,7 @@ end
 -- What you own
 ---------------------------------------------------------------------------
 
-local function charKey()
-    local name = UnitName and UnitName("player") or "?"
-    local realm = GetRealmName and GetRealmName() or ""
-    return realm ~= "" and (name .. "-" .. realm) or name
-end
+local function charKey() return KM.Char() end -- "First Last-Realm", Inventory's key
 
 local function bagCount(id)
     if not (C_Container and C_Container.GetContainerNumSlots) then return nil end

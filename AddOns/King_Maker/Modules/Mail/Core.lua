@@ -13,6 +13,7 @@ local ns = KM.Module("Mail", { title = "Mail King", short = "Mail", legacy = "Ma
 --   Ledger.lua   adds it all up: periods, strategies, items, buyers, what isn't selling
 --   UI.lua       the Sales Ledger page (Auction House > Sales Ledger), the crown's quick action and tooltip line,
 --                Home, Settings
+--   Alts.lua     My characters: your alts beside the mailbox, click one to send it mail
 --
 -- In King Maker it has no window or minimap button of its own: /mlk and the crown open the "ledger" page.
 
@@ -28,11 +29,13 @@ end
 -- "1g 23s 45c" with coin colours (King Maker's one money format); nil is a grey dash, negative a red minus.
 function ns.Money(v) return KM.Money(v) end
 
--- The character this is, as "Name-Realm".
-function ns.Char()
-    local name = UnitName("player") or "?"
-    local realm = GetRealmName and GetRealmName() or ""
-    return realm ~= "" and (name .. "-" .. realm) or name
+-- The character this is, as "First Last-Realm" (KM.Char: Forever names have a surname).
+function ns.Char() return KM.Char() end
+
+-- 2.3.0 keys characters by their full name: this character's mail and postings under its first name move over.
+function ns.RenameChar(old, new)
+    for _, e in ipairs(ns.db.entries) do if e.c == old then e.c = new end end
+    for _, p in ipairs(ns.db.posts) do if p.c == old then p.c = new end end
 end
 
 ---------------------------------------------------------------------------
@@ -141,6 +144,7 @@ function ns.InitDB()
     db.ui = db.ui or {}
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     db.ui.period = db.ui.period or 7
+    if db.ui.alts == nil then db.ui.alts = true end -- My characters beside the mailbox
     ns.db = db
     if ns.Prune then ns.Prune() end
     -- Old 1.1 stock and gold may have just arrived (moved in from a Mail_King folder): the Inventory module takes them.
@@ -174,10 +178,15 @@ SlashCmdList.MAILKING = function(msg)
         KM.Print(ns, #ns.db.entries .. " mails recorded. All time: " .. s.sales .. " sales, profit " .. ns.Money(s.profit) .. ".")
     elseif cmd == "reset" and rest:lower() == "yes" then
         ns.Reset()
+    elseif cmd == "alts" then
+        local v = rest:lower()
+        ns.SetAlts(v == "on" or (v ~= "off" and not ns.db.ui.alts))
+        KM.Print(ns, "My characters beside the mailbox: " .. (ns.db.ui.alts and "on." or "off."))
     else
         KM.Print(ns, "/mlk   open the Sales Ledger (or /km ledger)")
         KM.Print(ns, "/mlk status   what's been recorded")
         KM.Print(ns, "/mlk export   the ledger as text to copy into a spreadsheet")
+        KM.Print(ns, "/mlk alts [on|off]   your characters beside the mailbox, click one to mail it")
         KM.Print(ns, "/mlk reset yes   clear the whole ledger")
     end
 end

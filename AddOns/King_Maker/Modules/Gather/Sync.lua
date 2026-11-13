@@ -25,10 +25,6 @@ local function enabled()
     return ns.db and ns.db.sync.guild and IsInGuild and IsInGuild()
 end
 
-local function me()
-    local name = UnitName("player")
-    return name
-end
 
 local function shortName(sender)
     if Ambiguate then return Ambiguate(sender, "none") end
@@ -231,7 +227,7 @@ end
 
 local function onMessage(text, channel, sender)
     local who = shortName(sender)
-    if who == me() then return end
+    if KM.IsMe(who) then return end -- your own message back (full name: Forever has surnames)
     local kind, body = text:sub(1, 1), text:sub(2)
 
     if kind == "H" then

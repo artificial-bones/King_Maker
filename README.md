@@ -104,6 +104,7 @@ Your auction house mail as a ledger: what you actually made, where it came from,
 - **Summary**: profit, income, the auction house cut, spent and deposits lost, with a profit-per-day chart.
 - **Strategies** (Herbalism, Mining, Cloth, Mob drops...) so you see which farms pay off.
 - **Items**, **Not selling** (and why it might be stuck), **Buyers** and **Sellers**, and **Export** to a spreadsheet.
+- **My characters** beside the mailbox: click an alt to put its name in Send Mail.
 
 [Full guide](AddOns/King_Maker/Modules/Mail#readme)
 

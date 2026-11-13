@@ -100,4 +100,35 @@ L.execute('FIRE("ADDON_LOADED", "Scanner_King"); FIRE("PLAYER_LOGIN")')
 assert L.eval("KingMakerDB.moved.ScannerKingDB") is None
 assert any("old King addons are still installed" in o for o in outputs(L)), outputs(L)
 
+# --- Forever names: "First Last" (UnitName's second value is the surname) --------------------------------
+OLD = """PLAYER.surname = "Stone"
+InventoryKingDB = { chars = { ["Jay-Forever"] = { gold = 500, class = "WARRIOR", faction = "Alliance" }, ["Alt-Forever"] = { gold = 1 } },
+  stock = { ["Jay-Forever"] = { bank = { [2589] = 4 }, bankT = 5 } }, history = { [20000] = { ["Jay-Forever"] = { g = 500 } } } }
+RestedKingDB = { chars = { ["Jay-Forever"] = { name = "Jay", realm = "Forever", rested = 100, perk = 3 } } }
+MailKingDB = { entries = { { t = 1, k = "sale", name = "Linen Cloth", n = 1, g = 10, c = "Jay-Forever" },
+  { t = 2, k = "sale", name = "Linen Cloth", n = 1, g = 10, c = "Alt-Forever" } }, posts = { { c = "Jay-Forever", t = 1 } } }
+MarketKingDB = { chars = { ["Jay-Forever"] = { known = { [3321] = true }, owned = { [2661] = false } } } }
+SkillupKingDB = { chars = { ["Jay-Forever"] = { known = { [100] = true }, skills = { Tailoring = { 50, 75 } } } } }
+"""
+L, KM = fresh(seed=OLD)
+assert KM.PlayerName() == "Jay Stone" and KM.Char() == "Jay Stone-Forever" and KM.OldChar() == "Jay-Forever"
+assert KM.IsMe("Jay Stone-Forever") and KM.IsMe("jay stone") and not KM.IsMe("Jay") and not KM.IsMe("Jay Other")
+for path in ["InventoryKingDB.chars", "InventoryKingDB.stock", "InventoryKingDB.history[20000]", "RestedKingDB.chars",
+             "MarketKingDB.chars", "SkillupKingDB.chars"]:
+    assert L.eval(path + "['Jay-Forever']") is None and L.eval(path + "['Jay Stone-Forever']") is not None, path
+assert L.eval("InventoryKingDB.chars['Jay Stone-Forever'].gold") is not None and L.eval("InventoryKingDB.chars['Alt-Forever'].gold") == 1
+assert L.eval("InventoryKingDB.stock['Jay Stone-Forever'].bank[2589]") == 4, "old bank kept beside the fresh bag scan"
+assert L.eval("RestedKingDB.chars['Jay Stone-Forever'].name") == "Jay Stone" and L.eval("RestedKingDB.chars['Jay Stone-Forever'].perk") == 3
+assert L.eval("MarketKingDB.chars['Jay Stone-Forever'].known[3321]") is True, "recipes known survive an empty new entry"
+assert L.eval("SkillupKingDB.chars['Jay Stone-Forever'].known[100]") is True
+assert L.eval("MailKingDB.entries[1].c") == "Jay Stone-Forever" and L.eval("MailKingDB.entries[2].c") == "Alt-Forever"
+assert L.eval("MailKingDB.posts[1].c") == "Jay Stone-Forever"
+assert not KM.errorShown, last(L)
+KM.RenameChar(); assert L.eval("MailKingDB.entries[1].c") == "Jay Stone-Forever", "safe twice"
+# no surname: keys stay as they were
+L, KM = fresh(seed=OLD.replace('PLAYER.surname = "Stone"', ''))
+assert KM.Char() == "Jay-Forever" and L.eval("InventoryKingDB.chars['Jay-Forever']") is not None
+assert L.eval("MailKingDB.entries[1].c") == "Jay-Forever"
+print("NAMES OK")
+
 print("core: ok")

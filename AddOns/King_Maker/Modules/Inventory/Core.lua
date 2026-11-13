@@ -36,11 +36,14 @@ end
 
 ns.WARBAND = "Warband"
 
--- The character this is, as "Name-Realm".
-function ns.Char()
-    local name = UnitName("player") or "?"
-    local realm = GetRealmName and GetRealmName() or ""
-    return realm ~= "" and (name .. "-" .. realm) or name
+-- The character this is, as "First Last-Realm" (KM.Char: Forever names have a surname).
+function ns.Char() return KM.Char() end
+
+-- 2.3.0 keys characters by their full name: this character's entries under its first name move over.
+function ns.RenameChar(old, new)
+    KM.MoveKey(ns.db.stock, old, new)
+    KM.MoveKey(ns.db.chars, old, new)
+    for _, day in pairs(ns.db.history) do KM.MoveKey(day, old, new) end
 end
 
 -- "Jay-Forever" -> "Jay" (the realm only when it isn't yours).
@@ -271,7 +274,7 @@ SlashCmdList.INVENTORYKING = function(msg)
         KM.Print(ns, "/ik tooltip [on|off]   how many you own, in item tooltips")
         KM.Print(ns, "/ik cheapest [on|off]   a red X (bottom left) on the cheapest stack in your bags")
         KM.Print(ns, "/ik keep <item>   never mark that item as cheapest (again to undo)")
-        KM.Print(ns, "/ik forget Name-Realm   forget a deleted or moved character")
+        KM.Print(ns, "/ik forget First Last   forget a deleted or moved character")
         KM.Print(ns, "/ik export   items and characters as text for a spreadsheet")
     end
 end
