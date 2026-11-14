@@ -59,6 +59,7 @@ end
 function ns.MarketRecipe(spell)
     local m = market()
     if not (m and spell) then return nil end
+    if m.Recipe then return m.Recipe(spell) end
     local r = m.RECIPES[spell] or m.db.learned[spell]
     if not r then return nil end
     return { spell = spell, item = r[1], prof = r[2], skill = r[3] or 0, reagents = r[4], made = r[5] or 1 }

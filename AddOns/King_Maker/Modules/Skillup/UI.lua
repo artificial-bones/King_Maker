@@ -412,6 +412,8 @@ KM.RegisterSettings({ id = "skillup", label = "Skillup", order = 21, rows = {
       get = function() return ns.db.ui.lack end, set = function(v) ns.db.ui.lack = v; ns.Refresh() end },
     { type = "choice", label = "Open on", options = { { "plan", "Plan" }, { "now", "At my skill" } },
       get = function() return ns.db.ui.view end, set = function(v) ns.db.ui.view = v; ns.Refresh() end },
+    { type = "header", label = "Recipe data" },
+    { type = "text", label = "Every WoW: Forever recipe, its reagents and skill ranges: data from ForeverDB.net (foreverdb.net, GPL-3.0)." },
     { type = "header", label = "Commands" },
     { type = "text", label = "/suk   open Skill-ups\n/suk tailoring   open it on a profession (first aid, smelting, ...)" },
 } })

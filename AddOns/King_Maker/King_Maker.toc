@@ -2,7 +2,9 @@
 ## Title: King Maker
 ## Notes: Every King addon in one: AH prices and history, crafting profits, skill-ups, gold ledger, inventory, farming, gathering, dungeon quests and rested XP. /km
 ## Author: BearBones
-## Version: 2.3.0
+## X-License: GPL-3.0
+## X-Credits: Recipe data from ForeverDB.net
+## Version: 2.4.0
 ## IconTexture: Interface\Icons\INV_Crown_01
 ## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB, ShoppingKingDB, ProfessionKingDB
 ## OptionalDeps: QuestieDB, TomTom, LibDBIcon-1.0, Auctionator

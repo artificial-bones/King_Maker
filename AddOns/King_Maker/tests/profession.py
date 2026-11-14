@@ -338,7 +338,7 @@ function LOAD_TRADESKILL()
 end
 CR = { { "Enchant Bracer - Minor Health", "", "optimal", link = "|Henchant:7418|h[Enchant Bracer - Minor Health]|h", reagents = { { 10940, 1, 0 } } } }
 CR_SEL = 0
-GetCraftDisplaySkillLine = function() return "Enchanting", 72, 150 end
+GetCraftDisplaySkillLine = function() return "Enchanting", 21, 150 end
 GetNumCrafts = function() return #CR end
 GetCraftInfo = function(i) local t = CR[i]; if t then return t[1], t[2], t[3], 0 end end
 GetCraftSelectionIndex = function() return CR_SEL end
@@ -370,7 +370,7 @@ L.execute("TradeSkillFrame_SetSelection(2)")      # the game's own call: our pos
 c = ns.card
 assert c is not None and c.item == 2851 and c.spell == 2661, (c and c.item, c and c.spell)
 assert c.mats[1].have == 3, "the window's own reagent count"
-assert c.skill == 95 and c.color == "green" and abs(c.chance - 0.5) < 1e-9, (c.skill, c.color, c.chance)
+assert c.skill == 95 and c.color == "green" and abs(c.chance - 0.375) < 1e-9, (c.skill, c.color, c.chance)  # Forever: 35 / 70 / 110
 assert c.cost == 600 and abs(c.profit - 1300) < 1e-6
 L.execute("TradeSkillFrame_SetSelection(3)")
 c = ns.card
@@ -386,10 +386,10 @@ assert ns.hooked.craft and L.eval("KingMakerProfessionPanel:IsShown()")
 c = ns.card
 assert c.spell == 7418 and c.item is None and c.cost == 150 and c.color == "orange" and c.chance == 1, (c.spell, c.cost, c.color)
 assert "Enchant Bracer" in c.name
-# the window's colour wins over the built-in data (Skillup's data says yellow at 72)
+# the window's colour wins over the built-in data (Forever's 7418: orange 1, yellow 20, grey 25; at 21 yellow)
 L.execute("CR[1][3] = 'medium'; CraftFrame_SetSelection(1)")
 c = ns.card
-assert c.color == "yellow" and abs(c.chance - 38 / 40) < 1e-9, (c.color, c.chance)
+assert c.color == "yellow" and abs(c.chance - 4 / 5) < 1e-9, (c.color, c.chance)
 L.execute("CraftFrame:Hide()")
 assert L.eval("KingMakerProfessionPanel:IsShown()") is False
 

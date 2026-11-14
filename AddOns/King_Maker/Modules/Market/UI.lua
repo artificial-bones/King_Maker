@@ -456,6 +456,8 @@ KM.RegisterSettings({ id = "market", label = "Market", order = 20, rows = {
       get = function() return ns.db.recipes end, set = function(v) ns.db.recipes = v; ns.Refresh() end },
     { type = "button", label = "Clear my have/don't-have marks", func = function() SlashCmdList.MARKETKING("recipes reset") end,
       tip = "Back to what your trade skill windows show, for this character." },
+    { type = "header", label = "Recipe data" },
+    { type = "text", label = "Every WoW: Forever recipe, its reagents and skill ranges: data from ForeverDB.net (foreverdb.net, GPL-3.0)." },
     { type = "header", label = "Commands" },
     { type = "text", label = "/mk   open Crafting Profits\n/mk scan   Scan (at the auction house): prices the ticked professions\n/mk mode buy|farm   Yrgna Special or Ethical Gaming\n"
         .. "/mk recipes all|mine|missing   which recipes to show\n/mk recipes reset   clear your have/don't-have marks" },

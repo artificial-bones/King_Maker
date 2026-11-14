@@ -200,14 +200,26 @@ print("UI OK")
 L.execute("""
 C_TradeSkillUI = {
   GetBaseProfessionInfo = function() return { professionName = "Blacksmithing" } end,
-  GetAllRecipeIDs = function() return { 2661, 999001 } end,
-  GetRecipeSchematic = function(id) return { outputItemID = 777001, quantityMin = 1,
-    reagentSlotSchematics = { { reagents = { { itemID = 2840 } }, quantityRequired = 3 } } } end,
+  GetAllRecipeIDs = function() return { 2661, 2662, 999001 } end,
+  GetRecipeSchematic = function(id)
+    if id == 2661 then -- Copper Chain Belt, as our data has it
+      return { outputItemID = 2851, quantityMin = 1, reagentSlotSchematics = { { reagents = { { itemID = 2840 } }, quantityRequired = 6 } } }
+    elseif id == 2662 then -- Copper Chain Pants, changed since our data was made: 9 bars instead of 4
+      return { outputItemID = 2852, quantityMin = 1, reagentSlotSchematics = { { reagents = { { itemID = 2840 } }, quantityRequired = 9 } } }
+    end
+    return { outputItemID = 777001, quantityMin = 2, quantityMax = 4,
+      reagentSlotSchematics = { { reagents = { { itemID = 2840 } }, quantityRequired = 3 } } }
+  end,
 }
 FIRE("TRADE_SKILL_LIST_UPDATE")
 """)
-assert L.eval("MarketKingDB.learned[999001][1]") == 777001 and L.eval("MarketKingDB.learned[2661]") is None
+assert L.eval("MarketKingDB.learned[999001][1]") == 777001 and L.eval("MarketKingDB.learned[999001][5]") == 3, "new: kept, made = average"
+assert L.eval("MarketKingDB.learned[2661]") is None, "same as our data: nothing saved"
+assert L.eval("MarketKingDB.learned[2662][4][2]") == 9, "changed: the window's reagents are saved"
+r = ns.Recipe(2662)
+assert r.reagents[2] == 9 and r.skill > 0, "and win, keeping our learn skill"
 assert any("Learned 1 new Blacksmithing recipe" in str(o) for o in outputs(L)), outputs(L)[-3:]
+assert any("1 Blacksmithing recipe(s) differ" in str(o) for o in outputs(L)), outputs(L)[-3:]
 
 # Patterns: trainer recipes are yours, pattern recipes aren't until a trade skill window shows them
 assert ns.PATTERNS[2661] is None and ns.HasRecipe(2661)            # Copper Chain Belt: trainer
@@ -304,5 +316,14 @@ L4, KM4 = fresh(only=["Market"], extra=EXTRA)
 KM4.Show("crafting"); assert not KM4.errorShown, last(L4)
 L4.eval("SlashCmdList.MARKETKING")("scan"); assert "Scanner" in last(L4)
 print("INITDB OK")
+
+# Windows taught us a recipe that the built-in data now has (2.4.0's Forever data): the saved copy goes at load;
+# one that still differs stays
+L3, KM3 = fresh(only=["Scanner", "Market"], extra=EXTRA, seed="""
+MarketKingDB = { learned = { [2661] = { 2851, 2, 0, { 2840, 6 }, 1 }, [2662] = { 2852, 2, 0, { 2840, 9 }, 1 },
+  [999002] = { 777002, 2, 0, { 2840, 1 }, 1 } } }""")
+assert L3.eval("MarketKingDB.learned[2661]") is None and L3.eval("MarketKingDB.learned[2662]") is not None
+assert L3.eval("MarketKingDB.learned[999002]") is not None
+print("LEARNED CLEANUP OK")
 
 print("market: ok")

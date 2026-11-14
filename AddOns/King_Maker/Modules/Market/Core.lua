@@ -117,19 +117,37 @@ function ns.DisenchantValue(id)
 end
 
 ---------------------------------------------------------------------------
--- Recipes: built-in data plus anything learned from your trade skill windows
+-- Recipes: built-in data plus what your trade skill windows showed
 ---------------------------------------------------------------------------
+-- The game's own window wins: a recipe Forever changed after Data/Recipes.lua was made is saved in db.learned with
+-- what the window showed (item, reagents, how many), and that's what counts. The skill to learn it comes from the
+-- built-in data when the window doesn't say (it never does).
+
+-- Same item and reagents (how many it makes isn't compared: the data has the average of a random count).
+function ns.SameRecipe(a, b)
+    if not (a and b) or a[1] ~= b[1] or #(a[4] or {}) ~= #(b[4] or {}) then return false end
+    local want = {}
+    for i = 1, #a[4], 2 do want[a[4][i]] = a[4][i + 1] end
+    for i = 1, #b[4], 2 do if want[b[4][i]] ~= b[4][i + 1] then return false end end
+    return true
+end
+
+-- { spell, item, prof, skill, reagents = { id, count, ... }, made, learned } or nil.
+function ns.Recipe(spell)
+    local b, l = ns.RECIPES[spell], ns.db and ns.db.learned[spell]
+    if l then
+        local skill = (l[3] and l[3] > 0 and l[3]) or (b and b[3]) or 0
+        return { spell = spell, item = l[1], prof = l[2], skill = skill, reagents = l[4], made = l[5] or 1, learned = not b }
+    end
+    if b then return { spell = spell, item = b[1], prof = b[2], skill = b[3], reagents = b[4], made = b[5] or 1 } end
+end
 
 -- Iterates { spell, item, prof, skill, reagents = { id, count, ... }, made }.
 function ns.Recipes()
     local list = {}
-    for spell, r in pairs(ns.RECIPES) do
-        table.insert(list, { spell = spell, item = r[1], prof = r[2], skill = r[3], reagents = r[4], made = r[5] or 1 })
-    end
-    for spell, r in pairs(ns.db.learned) do
-        if not ns.RECIPES[spell] then
-            table.insert(list, { spell = spell, item = r[1], prof = r[2], skill = r[3] or 0, reagents = r[4], made = r[5] or 1, learned = true })
-        end
+    for spell in pairs(ns.RECIPES) do table.insert(list, ns.Recipe(spell)) end
+    for spell in pairs(ns.db.learned) do
+        if not ns.RECIPES[spell] then table.insert(list, ns.Recipe(spell)) end
     end
     return list
 end
@@ -206,7 +224,11 @@ function ns.InitDB()
     db.deOnly = db.deOnly or false
     db.deNoProcs = db.deNoProcs or false
     db.vendor = db.vendor or {}        -- itemID -> copper paid at a vendor
-    db.learned = db.learned or {}      -- recipes seen in your trade skill windows
+    db.learned = db.learned or {}      -- recipes seen in your trade skill windows: new ones, and ones that differ from ours
+    -- 2.4.0's recipe data has Forever's recipes: what windows taught us before and the data now has, it doesn't need
+    for spell, l in pairs(db.learned) do
+        if ns.RECIPES and ns.SameRecipe(ns.RECIPES[spell], l) then db.learned[spell] = nil end
+    end
     db.chars = db.chars or {}          -- per character: recipes known, and your own have/don't-have marks
     db.recipes = db.recipes or "all"   -- show "all" recipes, only "mine", or only patterns "missing"
     db.ui = db.ui or {}

@@ -95,6 +95,26 @@ local function recordMerchant()
     end
 end
 
+-- What the window shows for a recipe: { item, prof, 0, reagents, made } or nil.
+local function fromWindow(recipeID, profID)
+    local ok, s = pcall(C_TradeSkillUI.GetRecipeSchematic, recipeID, false)
+    if not (ok and s and s.outputItemID) then return nil end
+    local reagents = {}
+    for _, slot in ipairs(s.reagentSlotSchematics or {}) do
+        local r = slot.reagents and slot.reagents[1]
+        if r and r.itemID then
+            table.insert(reagents, r.itemID)
+            table.insert(reagents, slot.quantityRequired or 1)
+        end
+    end
+    if #reagents == 0 then return nil end
+    local lo = s.quantityMin or 1
+    local hi = math.max(s.quantityMax or lo, lo)
+    return { s.outputItemID, profID, 0, reagents, (lo + hi) / 2 }
+end
+
+local readThisSession = {} -- profession id -> true: a window's recipes are read once per session
+
 local function learnTradeSkill()
     if not (C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs and C_TradeSkillUI.GetRecipeSchematic) then return end
     local profName
@@ -106,32 +126,36 @@ local function learnTradeSkill()
     if not prof then return end
     local ok, ids = pcall(C_TradeSkillUI.GetAllRecipeIDs)
     if not ok or not ids then return end
-    local added, news = 0, 0
+    local added, changed, news = 0, 0, 0
+    local readAll = not readThisSession[prof.id]
+    readThisSession[prof.id] = true
     for _, recipeID in ipairs(ids) do
         if C_TradeSkillUI.GetRecipeInfo then
             local ok3, info = pcall(C_TradeSkillUI.GetRecipeInfo, recipeID)
             if ok3 and info and info.learned and markKnown(recipeID) then news = news + 1 end
         end
-        if not ns.RECIPES[recipeID] and not ns.db.learned[recipeID] then
-            local ok2, s = pcall(C_TradeSkillUI.GetRecipeSchematic, recipeID, false)
-            if ok2 and s and s.outputItemID then
-                local reagents = {}
-                for _, slot in ipairs(s.reagentSlotSchematics or {}) do
-                    local r = slot.reagents and slot.reagents[1]
-                    if r and r.itemID then
-                        table.insert(reagents, r.itemID)
-                        table.insert(reagents, slot.quantityRequired or 1)
-                    end
-                end
-                if #reagents > 0 then
-                    ns.db.learned[recipeID] = { s.outputItemID, prof.id, 0, reagents, s.quantityMin or 1 }
-                    added = added + 1
+        -- new recipes always; the ones we have, once a session, in case Forever changed them since our data was made
+        local built = ns.RECIPES[recipeID]
+        if readAll or not (built or ns.db.learned[recipeID]) then
+            local w = fromWindow(recipeID, prof.id)
+            if w then
+                if not built then
+                    if not ns.db.learned[recipeID] then added = added + 1 end
+                    ns.db.learned[recipeID] = w
+                elseif ns.SameRecipe(built, w) then
+                    ns.db.learned[recipeID] = nil -- the built-in data is right
+                else
+                    if not ns.db.learned[recipeID] then changed = changed + 1 end
+                    ns.db.learned[recipeID] = w
                 end
             end
         end
     end
     if added > 0 then
         KM.Print(ns, "Learned " .. added .. " new " .. prof.name .. " recipe(s) from your trade skill window.")
+    end
+    if changed > 0 then
+        KM.Print(ns, changed .. " " .. prof.name .. " recipe(s) differ from King Maker's data: using what your window shows.")
     end
     return news
 end

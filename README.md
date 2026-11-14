@@ -113,7 +113,8 @@ Your auction house mail as a ledger: what you actually made, where it came from,
 
 For every item your professions make: sell the raw materials, craft and sell, or craft and disenchant?
 
-- **Every Classic recipe** (over 1,100) for nine professions, ranked most profitable first, after the 5% auction cut.
+- **Every WoW: Forever recipe** (over 2,200, Forever's new ones included) for nine professions, ranked most profitable
+  first, after the 5% auction cut.
 - **Two ways to count materials**: *Yrgna Special* treats them as bought (finds flips), *Ethical Gaming* treats them
   as farmed.
 - **Disenchanting**, or **DE only** to hunt disenchant profits; **your recipes** or the patterns you lack.
@@ -189,8 +190,14 @@ Thank you to the [Questie](https://github.com/Questie/Questie) team for Questie 
 Mob Farming know every quest, mob, spawn point and quest reward in the game. King Maker only reads that data; it
 doesn't include or change any of it, so install Questie and QuestieDB from their own pages and support their authors.
 
+**Recipe data from [ForeverDB.net](https://foreverdb.net)** (GPL-3.0): every Forever recipe, its reagents, skill
+ranges and where it's learned, used by Crafting Profits, Skill-ups and the item tooltips. Thank you to ForeverDB for
+collecting it and sharing it.
+
 Thanks also to the author of [TomTom](https://www.curseforge.com/wow/addons/tomtom), whose arrow Dungeon Quests uses
 for waypoints, and to the authors of LibStub, CallbackHandler and HereBeDragons, which King Maker includes.
+
+King Maker is free software under the [GNU General Public License v3](LICENSE).
 
 ## For maintainers
 
