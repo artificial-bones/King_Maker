@@ -103,7 +103,9 @@ when you last logged out. Click one and its name goes in the **To:** box of Send
 Inbox it switches to Send Mail for you), and the cursor moves to the subject. The one you're mailing
 is highlighted. Scroll it if you have more than 16.
 
-A character shows up once you've logged in to it with King Maker. Turn the list off in **Settings >
+A character shows up once you've logged in to it with King Maker. Forever names have a
+surname; a character last saved by King Maker 2.2 or older shows its first name only until you log in to
+it again, or until you send it mail (or it sends you mail) with its full name, which the list remembers. Turn the list off in **Settings >
 Sales Ledger** or with `/mlk alts`.
 
 ## Export

@@ -145,6 +145,7 @@ function ns.InitDB()
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     db.ui.period = db.ui.period or 7
     if db.ui.alts == nil then db.ui.alts = true end -- My characters beside the mailbox
+    db.altNames = db.altNames or {} -- "First-Realm" (an alt saved before 2.3.0) -> "First Last", learned from mail
     ns.db = db
     if ns.Prune then ns.Prune() end
     -- Old 1.1 stock and gold may have just arrived (moved in from a Mail_King folder): the Inventory module takes them.

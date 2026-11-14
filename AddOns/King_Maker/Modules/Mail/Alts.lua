@@ -24,7 +24,10 @@ local function split(key)
 end
 
 -- An alt saved before 2.3.0 (and not logged in to since) has only its first name. Forever names have a surname,
--- and mail needs the full name: when it's in your guild the roster has it (one match by first name and class).
+-- and mail needs the full name. Where it comes from, until you log in to that alt (which fixes it for good):
+--   - mail: you send mail to "First Last", or "First Last" sends you mail, and First is one of those alts
+--     (db.altNames, learned below);
+--   - your guild roster: one match by first name and class.
 local function guildFull(first, class)
     if not (IsInGuild and IsInGuild() and GetNumGuildMembers and GetGuildRosterInfo) then return nil end
     local found
@@ -69,8 +72,9 @@ function ns.Alts()
     for i = #out, 1, -1 do
         if faction and out[i].faction and out[i].faction ~= faction then table.remove(out, i) end
     end
+    local learned = ns.db and ns.db.altNames or {}
     for _, a in ipairs(out) do
-        if not a.name:find(" ") then a.name = guildFull(a.name, a.class) or a.name end
+        if not a.name:find(" ") then a.name = learned[a.key] or guildFull(a.name, a.class) or a.name end
     end
     table.sort(out, function(a, b)
         if (a.level or 0) ~= (b.level or 0) then return (a.level or 0) > (b.level or 0) end
@@ -220,6 +224,49 @@ function ns.ShowAlts(show)
     ns.RefreshAlts()
 end
 
+---------------------------------------------------------------------------
+-- Learning surnames from mail
+---------------------------------------------------------------------------
+
+-- "Cowlossus Bones" (from the To: box or an inbox sender): if exactly one first-name-only alt is called Cowlossus,
+-- that's its full name.
+function ns.LearnAltName(full)
+    if not (ns.db and type(full) == "string") then return false end
+    full = full:gsub("%-.*$", ""):match("^%s*(.-)%s*$")
+    local first = full:match("^(%S+) %S")
+    if not first then return false end
+    first = first:lower()
+    local hit
+    for _, a in ipairs(ns.Alts()) do
+        local f = split(a.key)
+        if not f:find(" ") and f:lower() == first then
+            if hit then return false end -- two alts with that first name: can't tell which
+            hit = a
+        end
+    end
+    if not hit or ns.db.altNames[hit.key] == full then return false end
+    ns.db.altNames[hit.key] = full
+    if panel and panel:IsShown() then list = ns.Alts(); ns.RefreshAlts() end
+    return true
+end
+
+local pendingTo
+local function hookSend()
+    if not (SendMailMailButton and SendMailMailButton.HookScript) or SendMailMailButton.kmAlts then return end
+    SendMailMailButton.kmAlts = true
+    SendMailMailButton:HookScript("OnClick", function()
+        pendingTo = SendMailNameEditBox and SendMailNameEditBox.GetText and SendMailNameEditBox:GetText() or nil
+    end)
+end
+
+local function learnInbox()
+    if not (GetInboxNumItems and GetInboxHeaderInfo) then return end
+    for i = 1, GetInboxNumItems() or 0 do
+        local ok, _, _, sender = pcall(GetInboxHeaderInfo, i)
+        if ok and sender then ns.LearnAltName(sender) end
+    end
+end
+
 local function mailOpen() return MailFrame and MailFrame:IsShown() end
 
 -- It opens and closes with the mail window itself: MailFrame's OnShow/OnHide (hooked, not replaced), the mailbox
@@ -234,11 +281,18 @@ local function hookMailFrame()
 end
 
 local f = CreateFrame("Frame")
-KM.Register(f, "PLAYER_LOGIN", "MAIL_SHOW", "MAIL_CLOSED", "PLAYER_INTERACTION_MANAGER_FRAME_HIDE")
+KM.Register(f, "PLAYER_LOGIN", "MAIL_SHOW", "MAIL_CLOSED", "PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "MAIL_SEND_SUCCESS",
+    "MAIL_INBOX_UPDATE")
 f:SetScript("OnEvent", function(_, event)
     hookMailFrame()
+    hookSend()
     if not ns.db or event == "PLAYER_LOGIN" then return end
-    if event == "MAIL_SHOW" then
+    if event == "MAIL_SEND_SUCCESS" then
+        if pendingTo then KM.Safe(ns.LearnAltName, pendingTo) end
+        pendingTo = nil
+    elseif event == "MAIL_INBOX_UPDATE" then
+        KM.Safe(learnInbox)
+    elseif event == "MAIL_SHOW" then
         KM.Safe(ns.ShowAlts, true)
     elseif not mailOpen() then
         KM.Safe(ns.ShowAlts, false)

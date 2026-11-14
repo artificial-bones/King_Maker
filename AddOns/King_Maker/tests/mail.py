@@ -406,6 +406,17 @@ panel = L.eval("MailKingAltsPanel"); assert panel.shown is True
 L.execute("MailFrame:Hide()"); assert panel.shown is False
 L.execute("MailFrame:Show()"); assert panel.shown is True
 L.execute("MailFrame.shown = false; RUN_ONUPDATE(1)"); assert panel.shown is False, "the per-frame check"
+# Surnames learned from mail: sending to "Bank Vault" names the first-name-only alt Bank; an inbox sender too
+L, KM, ns = load(only=["Inventory", "Rested", "Mail"], seed=ALTS)
+L.execute('MailFrame:Show(); FIRE("MAIL_SHOW")')
+L.execute('SendMailMailButton = CreateFrame("Button", "SendMailMailButton"); FIRE("MAIL_SHOW")')
+L.execute('SendMailNameEditBox:SetText("Bank Vault"); SendMailMailButton:Click(); FIRE("MAIL_SEND_SUCCESS")')
+assert L.eval("MailKingDB.altNames['Bank-Forever']") == "Bank Vault"
+assert "Bank Vault" in [a.name for a in ns.Alts().values()]
+assert not ns.LearnAltName("Somebody Else") and not ns.LearnAltName("Tank"), "no alt called that / no surname"
+L.execute('GetInboxHeaderInfo = function(i) return nil, nil, INBOX[i].sender, "hi", 0, 0, 30 end; GetInboxNumItems = function() return #INBOX end')
+L.execute('INBOX = { { sender = "Fresh Start" } }; FIRE("MAIL_INBOX_UPDATE")')
+assert L.eval("MailKingDB.altNames['Fresh-Forever']") == "Fresh Start"
 print("ALTS OK")
 
 print("mail: ok")
