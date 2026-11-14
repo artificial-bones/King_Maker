@@ -36,10 +36,10 @@ themselves.
    |---|---|
    | Make | The recipe to craft |
    | Crafts | How many, on average (yellow and green don't always give a point) |
-   | Each | One craft: materials minus what you get back. Below zero, it makes money |
+   | Each | One craft: materials minus what you get back. **Green: it makes money** |
    | Get back by | Selling it on the auction house, disenchanting it, or a vendor: whichever pays most |
-   | Per point / Total | What the skill points cost |
-   | Recipe | Trainer, Known, or the pattern you'd need and its price |
+   | Per point / Total | What the skill points cost (green: what they make), a pattern you'd buy included |
+   | Recipe | Trainer, Known, or the pattern you'd need and its price (auction house or vendor) |
 
    Trainer visits (Journeyman at 75, Expert at 150, Artisan at 225) get their own lines, in red when
    you're not high enough level yet. **Shopping list** (bottom right) shows every material the plan
@@ -56,8 +56,9 @@ Change **From** and **To** to plan any stretch, like your next 25 points or the 
   can disenchant for you.
 - **Sell on AH:** count selling what you make. Turn it off when the market is flooded; only a vendor
   (and disenchanting) is counted then.
-- **Patterns I lack:** also use recipes from patterns you don't have yet. Their price shows so you can
-  see if buying one pays off.
+- **Patterns I lack:** also use recipes from patterns you don't have yet, when one is for sale (auction
+  house or vendor). The pattern's price counts: once in the total and on the shopping list, and while
+  choosing, so a pattern is only picked when it pays for itself over the points it covers.
 
 The same three are rows in **Settings > Skillup**, with which view the page opens on.
 

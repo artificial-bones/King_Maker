@@ -140,6 +140,25 @@ gp = ns.Plan(1, 1, 40); assert gp.gaps == 39 and list(gp.steps.values())[0].gap 
 L.execute("PRICE(2589, 20)")
 # patterns you lack only count when allowed
 assert not any(o.usable for o in ns.Options(1, 130).values() if o.r.spell == 7935 and not ns.HasRecipe(7935))
+# allowed, a pattern counts only when it can be bought, and its price counts once (total, shopping list)
+pat = [r for r in rs if r.spell == 7935][0]
+pid = ns.PATTERNS[7935][1]
+L.globals().SKNS = ns
+L.execute(f"SkillupKingDB.ui.lack = true; PRICE(1288, 1); KNEW = SKNS.Char().known[7935]; SKNS.Char().known[7935] = nil; SAVED_VENDOR = SKNS.VENDOR_ITEMS[{pid}]; SKNS.VENDOR_ITEMS[{pid}] = nil; SkillupKingDB.vendor[{pid}] = nil; ScannerKingDB.prices[{pid}] = nil")
+ns.ClearCache()
+assert not ns.Usable(pat), "nobody sells the pattern: not in the plan"
+assert not any(x.r and x.r.spell == 7935 for x in ns.Plan(1, 130, 150).steps.values() if not x.note)
+L.execute(f"SkillupKingDB.vendor[{pid}] = 400")
+assert ns.Usable(pat) and ns.PatternPrice(pat) == (400, pid, True), "a vendor sells the manual"
+L.execute(f"SkillupKingDB.vendor[{pid}] = nil; PRICE({pid}, 5000)")
+pp = ns.Plan(1, 130, 150)
+used = [x for x in pp.steps.values() if not x.note and x.r and x.r.spell == 7935]
+assert used, "Strong Anti-Venom (1 Large Venom Sac, orange to 165) is the cheapest point here"
+assert used[0].pattern == 5000 and pp.patterns == 5000 and sum(1 for x in used if x.pattern) == 1, "bought once"
+assert any(m.id == pid and m.n == 1 and m.pattern for m in pp.mats.values()), "the pattern is on the shopping list"
+assert abs(sum(x.cost for x in pp.steps.values() if not x.note and not x.gap) - pp.cost) < 1e-6
+L.execute(f"SKNS.VENDOR_ITEMS[{pid}] = SAVED_VENDOR; SKNS.Char().known[7935] = KNEW; SkillupKingDB.ui.lack = false"); ns.ClearCache()
+assert ns.Net(-15000, True).endswith(" profit|r") and ns.Net(15000, True).endswith(" cost")
 # public API
 st, cost = API.Plan(1, 1, 40)
 assert abs(cost - exact * -8.5) < 1e-6 and st[1].r.spell == 3275

@@ -160,6 +160,15 @@ function ns.Money(v)
     return v < 0 and ("|cffff6060-|r" .. s) or s
 end
 
+-- A net cost (materials minus what you get back): a cost as it is, money made in green. With words (footer,
+-- tooltips): "12g cost" / "12g profit".
+function ns.Net(v, words)
+    if not v then return "|cff808080-|r" end
+    local s = ns.Money(math.abs(v))
+    if v < 0 then return "|cff40ff40" .. s .. (words and " profit" or "") .. "|r" end
+    return s .. (words and " cost" or "")
+end
+
 ---------------------------------------------------------------------------
 -- Recipes
 ---------------------------------------------------------------------------

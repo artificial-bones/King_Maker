@@ -21,6 +21,10 @@ local ns = KM.Module("Skillup")
 -- lowest cost per point right there. Points don't depend on each other, so
 -- that gives the cheapest expected total. Next to each step: how many crafts
 -- (on average), what each costs, and the materials to buy.
+--
+-- Patterns you lack (when allowed) count only when one can be bought (auction house or vendor), and their price
+-- counts: once in the plan's total and shopping list, and while choosing, spread over the points the recipe can
+-- cover in the plan (so a 14g pattern for 4 points weighs 3g 50s a point).
 
 function ns.Color(r, skill)
     if skill < r.orange then return nil end
@@ -39,20 +43,22 @@ function ns.Chance(r, skill)
     return (r.grey - skill) / (r.grey - r.yellow)
 end
 
--- Whether a recipe counts: trainer recipes and patterns you know, plus the
--- patterns you lack when you've asked for them.
-function ns.Usable(r)
-    return ns.HasRecipe(r.spell) or ns.db.ui.lack
+-- The cheapest way to buy a recipe's pattern (auction house or vendor), when it's taught by one:
+-- price, pattern item, true when that's a vendor.
+function ns.PatternPrice(r)
+    local best, item, vendor
+    for _, id in ipairs(ns.PATTERNS[r.spell] or {}) do
+        local p, v = ns.BuyCost(id)
+        if p and (not best or p < best) then best, item, vendor = p, id, v end
+    end
+    return best, item, vendor
 end
 
--- The cheapest listing of a recipe's pattern, when it's taught by one.
-function ns.PatternPrice(r)
-    local best
-    for _, id in ipairs(ns.PATTERNS[r.spell] or {}) do
-        local p = ns.AHPrice(id)
-        if p and (not best or p < best) then best = p end
-    end
-    return best
+-- Whether a recipe counts: trainer recipes and patterns you know, plus, when you've asked for them, patterns you
+-- lack that you can buy right now (one nobody sells can't be in the plan).
+function ns.Usable(r)
+    if ns.HasRecipe(r.spell) then return true end
+    return ns.db.ui.lack and ns.PatternPrice(r) ~= nil or false
 end
 
 local cache = {}
@@ -114,8 +120,9 @@ function ns.Options(profID, skill)
     return out
 end
 
--- The best recipe at one skill: the recipe, its chance, cost per point.
-local function bestAt(recipes, skill)
+-- The best recipe at one skill: the recipe, its chance, cost per point. A pattern you'd have to buy (and haven't
+-- already picked earlier in this plan) adds its price spread over the points it can cover between from and to.
+local function bestAt(recipes, skill, from, to, bought)
     local best, bestChance, bestPer
     for _, r in ipairs(recipes) do
         if r.orange <= skill and skill < r.grey and ns.Usable(r) then
@@ -123,6 +130,10 @@ local function bestAt(recipes, skill)
             if not craft.missing then
                 local chance = ns.Chance(r, skill)
                 local per = craft.net / chance
+                if not ns.HasRecipe(r.spell) and not bought[r.spell] then
+                    local span = math.max(1, math.min(to, r.grey) - math.max(from, r.orange))
+                    per = per + (ns.PatternPrice(r) or 0) / span
+                end
                 if not bestPer or per < bestPer - 0.5 or (math.abs(per - bestPer) <= 0.5 and chance > bestChance) then
                     best, bestChance, bestPer = r, chance, per
                 end
@@ -133,16 +144,18 @@ local function bestAt(recipes, skill)
 end
 
 -- The plan from one skill to another:
---   { steps = { { from, to, r, crafts, cost, each } or { note }... }, cost, crafts,
---     mats = { { id, n, unit, vendor } }, gaps = number of points nothing priced covers }
+--   { steps = { { from, to, r, crafts, cost, each, pattern = price to buy it } or { note }... }, cost, crafts,
+--     mats = { { id, n, unit, vendor, pattern = true } }, gaps = number of points nothing priced covers,
+--     patterns = what the patterns to buy cost }
+-- A step's cost and the plan's include the pattern's price.
 function ns.Plan(profID, from, to)
     from = math.max(from or 1, 1)
     to = math.min(to or ns.MAX_SKILL, ns.MAX_SKILL)
     ns.ClearCache()
     local recipes = {}
     for _, r in ipairs(ns.Recipes()) do if r.prof == profID then table.insert(recipes, r) end end
-    local plan = { steps = {}, cost = 0, crafts = 0, gaps = 0, mats = {} }
-    local step, mats = nil, {}
+    local plan = { steps = {}, cost = 0, crafts = 0, gaps = 0, mats = {}, patterns = 0 }
+    local step, mats, bought = nil, {}, {}
     local level = ns.Level()
     for skill = from, to - 1 do
         for _, rank in ipairs(ns.RANKS) do
@@ -154,7 +167,7 @@ function ns.Plan(profID, from, to)
                 step = nil
             end
         end
-        local r, chance = bestAt(recipes, skill)
+        local r, chance = bestAt(recipes, skill, from, to, bought)
         if not r then
             plan.gaps = plan.gaps + 1
             if step and step.gap then step.to = skill + 1
@@ -164,6 +177,17 @@ function ns.Plan(profID, from, to)
             if not (step and step.r == r) then
                 step = { from = skill, to = skill + 1, r = r, crafts = 0, cost = 0, each = craft.net, how = craft.how }
                 table.insert(plan.steps, step)
+                if not ns.HasRecipe(r.spell) and not bought[r.spell] then
+                    local price, item, vendor = ns.PatternPrice(r)
+                    bought[r.spell] = true
+                    if price then
+                        step.pattern = price
+                        step.cost = step.cost + price
+                        plan.cost = plan.cost + price
+                        plan.patterns = plan.patterns + price
+                        mats[item] = { id = item, n = 1, unit = price, vendor = vendor, pattern = true }
+                    end
+                end
             end
             step.to = skill + 1
             step.crafts = step.crafts + 1 / chance

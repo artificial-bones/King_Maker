@@ -41,8 +41,8 @@ end
 local function learnText(r)
     if not ns.PATTERNS[r.spell] then return "Trainer" end
     if ns.Char().known[r.spell] then return "|cff40bf40Known|r" end
-    local p = ns.PatternPrice(r)
-    return "|cffff8040Pattern|r " .. (p and ns.Money(p) or grey("not listed"))
+    local p, _, vendor = ns.PatternPrice(r)
+    return "|cffff8040Pattern|r " .. (p and (ns.Money(p) .. (vendor and grey(" vendor") or "")) or grey("not for sale"))
 end
 
 ---------------------------------------------------------------------------
@@ -54,7 +54,7 @@ local COLS = {
         { key = "skill", label = "Skill", w = 66 },
         { key = "make", label = "Make", w = 214 },
         { key = "crafts", label = "Crafts", w = 52, justify = "RIGHT", tip = "How many, on average: yellow and green recipes don't always give a point." },
-        { key = "each", label = "Each", w = 88, justify = "RIGHT", tip = "One craft: the materials, minus what you get back. Below zero, it makes money." },
+        { key = "each", label = "Each", w = 88, justify = "RIGHT", tip = "One craft: the materials, minus what you get back. Green: it makes money." },
         { key = "how", label = "Get back by", w = 82, tip = "The best of selling it, disenchanting it, or a vendor." },
         { key = "per", label = "Per point", w = 84, justify = "RIGHT" },
         { key = "total", label = "Total", w = 88, justify = "RIGHT" },
@@ -80,10 +80,10 @@ local function planCell(s, key)
     end
     if key == "make" then return recipeText(s.r) end
     if key == "crafts" then return tostring(s.crafts) end
-    if key == "each" then return ns.Money(s.each) end
+    if key == "each" then return ns.Net(s.each) end
     if key == "how" then return s.how or grey("-") end
-    if key == "per" then return ns.Money(s.cost / math.max(s.to - s.from, 1)) end
-    if key == "total" then return ns.Money(s.cost) end
+    if key == "per" then return ns.Net(s.cost / math.max(s.to - s.from, 1)) end
+    if key == "total" then return ns.Net(s.cost) end
     if key == "learn" then return learnText(s.r) end
     return ""
 end
@@ -96,7 +96,7 @@ local function nowCell(o, key)
     if key == "mats" then return c.missing and grey("no price") or ns.Money(c.cost) end
     if key == "back" then return c.back > 0 and ns.Money(c.back) or grey("-") end
     if key == "how" then return c.how or grey("-") end
-    if key == "per" then return o.perPoint and ns.Money(o.perPoint) or grey("-") end
+    if key == "per" then return o.perPoint and ns.Net(o.perPoint) or grey("-") end
     if key == "learn" then return learnText(o.r) end
     return ""
 end
@@ -126,7 +126,8 @@ local function recipeTooltip(row)
     GameTooltip:AddDoubleLine("Materials", ns.Money(c.cost))
     if c.how then GameTooltip:AddDoubleLine("Get back (" .. c.how .. ")", ns.Money(c.back)) end
     if c.listed then GameTooltip:AddDoubleLine("Listed on the auction house", tostring(c.listed), 0.7, 0.7, 0.7, 0.7, 0.7, 0.7) end
-    GameTooltip:AddDoubleLine("Each craft", ns.Money(c.net))
+    GameTooltip:AddDoubleLine("Each craft", ns.Net(c.net, true))
+    if e.pattern then GameTooltip:AddDoubleLine("Pattern to buy (in the total)", ns.Money(e.pattern)) end
     GameTooltip:Show()
 end
 
@@ -192,7 +193,7 @@ local function refresh()
     local age = ScannerKing and ("Prices " .. (last and ScannerKing.PriceAge(last) or "not scanned yet") .. ".")
         or (UI.Hex(C.bad) .. "Skill-ups needs the Scanner module for prices.|r")
     if plan then
-        footer:SetText(from .. " to " .. to .. ": about " .. ns.Money(plan.cost) .. " over " .. math.floor(plan.crafts + 0.5)
+        footer:SetText(from .. " to " .. to .. ": about " .. ns.Net(plan.cost, true) .. " over " .. math.floor(plan.crafts + 0.5)
             .. " crafts" .. (plan.gaps > 0 and ("  |cffff6060" .. plan.gaps .. " points with nothing priced|r") or "")
             .. ".  " .. age)
         shopBtn:Show()
