@@ -244,13 +244,23 @@ local function findNear(mapID, t, x, y)
 end
 
 -- Deleted spots are remembered so guild sync doesn't bring them back.
+-- Returns the remembered spot.
 local function isDeleted(mapID, t, x, y)
     for _, d in ipairs(ns.db.deleted[mapID] or {}) do
         if d.t == t and math.abs(d.x - x) <= MERGE_DISTANCE and math.abs(d.y - y) <= MERGE_DISTANCE then
-            return true
+            return d
         end
     end
-    return false
+    return nil
+end
+
+-- Two people who marked the same node have slightly different coordinates. When one hears of the other's, both
+-- keep the smaller of the two (as sent: hundredths of a percent), so their lists end up identical and guild sync
+-- can tell they agree.
+local function q(v) return math.floor(v * 10000 + 0.5) end
+local function settle(spot, x, y)
+    local qx, qy, sx, sy = q(x), q(y), q(spot.x), q(spot.y)
+    if qx < sx or (qx == sx and qy < sy) then spot.x, spot.y = x, y end
 end
 
 local function forget(mapID, node)
@@ -356,14 +366,19 @@ end
 -- force: an import you chose to paste, so it also restores spots you deleted.
 function ns.MergeShared(mapID, t, x, y, name, from, force, itemID)
     if not ns.TYPES[t] then return false end
-    if isDeleted(mapID, t, x, y) then
-        if not force then return false end
+    local gone = isDeleted(mapID, t, x, y)
+    if gone then
+        if not force then
+            settle(gone, x, y)
+            return false
+        end
         clearDeletedNear(mapID, t, x, y)
     end
     local list = ns.db.nodes[mapID]
     local idx = list and findNear(mapID, t, x, y)
     if idx then
         local node = list[idx]
+        settle(node, x, y)
         if name and not node.n then
             local _, known = ns.LookupKnown(name)
             node.n = known and known[2] or name

@@ -134,21 +134,82 @@ gt("herb peacebloom"); assert nodes() == before
 w = L.eval("PINS.world"); gt("profile new Mine only"); L.execute("GatherKingDB.profiles['Mine only'].showShared = false"); gt("size 16")
 assert L.eval("PINS.world") == w - 1, (L.eval("PINS.world"), w)
 gt("profile Default")
-# hello -> whisper our list back once
+# old hello (gather_king 1.x): a claim on the guild channel, then our list whispered back, once
+def sent_list():
+    s = L.eval("SENT"); return [s[i] for i in range(1, len(s) + 1)]
+def heard(text, sender, chan="GUILD"):
+    L.execute('FIRE("CHAT_MSG_ADDON", "GatherKing1", "%s", "%s", "%s")' % (text, chan, sender))
+def all_nodes():
+    return sum(len(L.eval("GatherKingDB.nodes")[m]) for m in L.eval("GatherKingDB.nodes").keys())
+def n_entries(msgs):
+    return sum(len(m.text[1:].split(";")) for m in msgs if m.text.startswith("N"))
 L.execute("SENT = {}")
-L.execute('FIRE("CHAT_MSG_ADDON", "GatherKing1", "H", "GUILD", "Amy-Realm")'); L.execute("RUN_TIMERS()")
-sent = L.eval("SENT"); assert len(sent) >= 1 and all(sent[i].chan == "WHISPER" and sent[i].target == "Amy-Realm" for i in range(1, len(sent) + 1))
-total = sum(len(sent[i].text[1:].split(";")) for i in range(1, len(sent) + 1) if sent[i].text.startswith("N"))
-assert total == sum(L.eval("#GatherKingDB.nodes[%d]" % m) for m in (1423, 1440)), total
-L.execute("SENT = {}"); L.execute('FIRE("CHAT_MSG_ADDON", "GatherKing1", "H", "GUILD", "Amy-Realm")'); L.execute("RUN_TIMERS()"); assert len(L.eval("SENT")) == 0
+heard("H", "Amy-Realm"); L.execute("RUN_TIMERS()")
+sent = sent_list(); assert sent[0].chan == "GUILD" and sent[0].text == "CAmy", sent[0].text
+assert all(m.chan == "WHISPER" and m.target == "Amy-Realm" for m in sent[1:])
+assert n_entries(sent) == all_nodes(), n_entries(sent)
+L.execute("SENT = {}"); heard("H", "Amy-Realm"); L.execute("RUN_TIMERS()"); assert len(sent_list()) == 0
+# a guildmate said they're answering: we stay quiet
+L.execute("SENT = {}"); heard("H", "Zed-Realm"); heard("CZed", "Bob-Realm"); L.execute("RUN_TIMERS()"); assert len(sent_list()) == 0
 # own messages ignored, sync off ignores incoming
 L.execute('FIRE("CHAT_MSG_ADDON", "GatherKing1", "N1450,m,100,100,Tin", "GUILD", "Jay-Realm")'); assert L.eval("GatherKingDB.nodes[1450]") is None
 gt("sync off"); L.execute('FIRE("CHAT_MSG_ADDON", "GatherKing1", "N1450,m,100,100,Tin", "GUILD", "Bob-Realm")'); assert L.eval("GatherKingDB.nodes[1450]") is None
 gt("sync on"); L.execute("RUN_TIMERS()")
-# a big list splits into several messages under the size limit
-L.execute("SENT = {}; for i = 1, 60 do table.insert(GatherKingDB.nodes[1423], { t = 'mine', n = 'Thorium', x = i / 100, y = 0.9 }) end")
-gt("sync now"); L.execute("RUN_TIMERS()")
-sent = L.eval("SENT"); assert len(sent) > 3 and all(len(sent[i].text) <= 240 for i in range(1, len(sent) + 1))
+
+# fingerprints: sync now (and login, and every half hour) posts one short message, not the list
+L.execute("SENT = {}"); gt("sync now"); L.execute("RUN_TIMERS()")
+sent = sent_list(); assert len(sent) == 1 and sent[0].chan == "GUILD" and sent[0].text.startswith("Q"), sent
+fp = sent[0].text[1:]
+assert "Asked guildmates online" in last(L)
+# the same fingerprint from a guildmate: nobody answers
+L.execute("SENT = {}"); heard("Q" + fp, "Bob-Realm"); L.execute("RUN_TIMERS()"); assert len(sent_list()) == 0
+# a brand-new member gets the whole list straight away, split under the size limit
+L.execute("for i = 1, 60 do table.insert(GatherKingDB.nodes[1423], { t = 'mine', n = 'Thorium', x = i / 100, y = 0.9 }) end")
+L.execute("SENT = {}"); heard("Q0:0", "Newt-Realm"); L.execute("RUN_TIMERS()")
+sent = sent_list(); assert sent[0].text == "CNewt" and len(sent) > 4
+assert all(m.chan == "WHISPER" and m.target == "Newt-Realm" and len(m.text) <= 240 for m in sent[1:])
+assert n_entries(sent) == all_nodes()
+# the same two lists aren't compared twice in a session
+L.execute("SENT = {}"); heard("Q0:0", "Newt-Realm"); L.execute("RUN_TIMERS()"); assert len(sent_list()) == 0
+
+# answering someone with a different list: our fingerprint per zone, then their W asks for zones
+L.execute("SENT = {}"); heard("Q5:abc", "Cal-Realm"); L.execute("RUN_TIMERS()")
+sent = sent_list(); assert sent[0].text == "CCal" and sent[-1].text == "E" and sent[-1].target == "Cal-Realm"
+zones = ";".join(m.text[1:] for m in sent if m.text.startswith("R"))
+assert "1423:" in zones and "1440:" in zones and not any(m.text.startswith("N") for m in sent)
+L.execute("SENT = {}"); heard("W1440", "Cal-Realm", "WHISPER"); L.execute("RUN_TIMERS()")
+sent = sent_list(); assert n_entries(sent) == L.eval("#GatherKingDB.nodes[1440]") and sent[0].text.startswith("N1440,")
+# a W from someone we aren't answering is ignored
+L.execute("SENT = {}"); heard("W1423", "Eve-Realm", "WHISPER"); L.execute("RUN_TIMERS()"); assert len(sent_list()) == 0
+
+# asking: a guildmate's zone fingerprints come back; we send our markers where they differ and ask for theirs
+L.execute("SENT = {}"); gt("sync now"); L.execute("RUN_TIMERS(); SENT = {}")
+z1440 = ns.SyncFingerprint()[0][1440]
+def b36(n):
+    s = ""
+    while True:
+        n, d = divmod(int(n), 36); s = "0123456789abcdefghijklmnopqrstuvwxyz"[d] + s
+        if n == 0: return s
+heard("R1440:%s:%s;1423:1:1" % (b36(z1440.n), b36(z1440.h)), "Dee-Realm", "WHISPER")
+heard("R1999:3:zz", "Dee-Realm", "WHISPER"); heard("E", "Dee-Realm", "WHISPER"); L.execute("RUN_TIMERS()")
+sent = sent_list()
+assert sent[0].text == "W1423,1999" and sent[0].target == "Dee-Realm", sent[0].text
+assert n_entries(sent) == L.eval("#GatherKingDB.nodes[1423]") and all(m.text.startswith(("N1423,", "W", "S")) for m in sent)
+# zone fingerprints nobody asked for are ignored
+L.execute("SENT = {}"); heard("R1999:3:zz", "Eve-Realm", "WHISPER"); heard("E", "Eve-Realm", "WHISPER"); L.execute("RUN_TIMERS()")
+
+# the same node marked by two people settles on the smaller coordinates, so both lists match
+L.execute("GatherKingDB.nodes[1460] = { { t = 'herb', n = 'Peacebloom', x = 0.5012, y = 0.5 } }")
+before_fp = ns.SyncFingerprint()[1]
+heard("N1460,h,5030,5000,Peacebloom", "Bob-Realm"); L.execute("RUN_TIMERS()")
+assert L.eval("GatherKingDB.nodes[1460][1].x") == 0.5012 and ns.SyncFingerprint()[1] == before_fp
+heard("N1460,h,5000,5001,Peacebloom", "Bob-Realm"); L.execute("RUN_TIMERS()")
+assert L.eval("#GatherKingDB.nodes[1460]") == 1 and L.eval("GatherKingDB.nodes[1460][1].x") == 0.5
+# a deleted spot settles too, and still counts in the fingerprint
+L.execute("GatherKingDB.deleted[1461] = { { t = 'mine', x = 0.3002, y = 0.3 } }")
+heard("N1461,m,3000,3000,Copper", "Bob-Realm"); L.execute("RUN_TIMERS()")
+assert L.eval("GatherKingDB.nodes[1461]") is None and L.eval("GatherKingDB.deleted[1461][1].x") == 0.3
+assert ns.SyncFingerprint()[0][1461].n == 1
 print("SYNC OK")
 
 # ---- harvest fade + hide near ----

@@ -42,7 +42,7 @@ Stand at the node and type one of these:
 | `/gt opacity 50` | How solid minimap markers are, 10 to 100%. (default 100%) |
 | `/gt size 20` | Changes marker size on the world map (8 to 32) |
 | `/gt ledger` | Shows or hides the farming ledger (`on`, `off`, `reset`, `timer` work too) |
-| `/gt sync now` | Resends your whole marker list to the guild |
+| `/gt sync now` | Checks your markers against guildmates online right now and swaps what's missing |
 | `/gt button` | Says where the button went: the King Maker crown (`/km button`) |
 | `/gt help` | Lists every command |
 
@@ -144,12 +144,14 @@ To get one-click buttons, make a macro (`/macro`) with the text `/gt mine` (or `
 Everyone in your guild who runs King Maker (or Gather King 1.x) shares markers automatically. There's nothing to set up.
 
 - A marker you add (by command or by harvesting) goes out to guildmates who are online right then.
-- When you log in, your markers go out to the guild, and guildmates who are online send you theirs.
+- When you log in, and every 30 minutes after, King Maker checks your list against guildmates who are online. If they match, nothing is sent. If not, one guildmate answers and you swap only the zones that differ: you get their markers there and they get yours.
+- New to the guild, or just installed King Maker? The first guildmate to answer sends you everything they have, so you start with the whole guild's map.
 - Shared markers say "Shared by <name>" when you hover them. Untick *Show markers shared by guildmates* in a profile to hide them there.
 - Deletes stay personal. A marker you delete won't come back from a guildmate's sync, and it isn't deleted for them.
-- `/gt sync off` turns it off, and `/gt sync now` resends your whole list.
+- `/gt sync off` turns it off, and `/gt sync now` checks again right away.
+- If you mark a node someone else already marked, you both end up with the same spot (the coordinates may shift by a hair), so your lists match.
 
-Sending a large list takes a little while, about one message per second, because the game limits how fast addons can talk.
+Syncing only works with guildmates who are online at the same time, since the game has no place to store shared data. Everyone carries a full copy, though, so any one of them can catch you up. A big first sync takes a little while, about one message per second, because the game limits how fast addons can talk.
 
 ## Sharing with friends outside your guild
 
