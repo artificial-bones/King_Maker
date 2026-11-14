@@ -94,7 +94,7 @@ assert L.eval("ScannerKingDB.prices[2589].q") == 20
 p, t, q = SK.GetPrice(10940); assert p == 900 and t and q == 20
 assert L.eval("ScannerKingDB.lastScan") and L.eval("ScannerKingDB.lastQuick") and L.eval("KIND") == "material"
 assert tb.scan.label.text == "Scan" and tb.scan.enabled2, "button back to rest after the scan"
-assert any("Last quick scan: 0 min ago" in x for x in hover(L, tb.scan))
+assert any("Last quick scan: just now" in x for x in hover(L, tb.scan))
 ev = [L.eval("EVENTS")[i] for i in range(1, len(L.eval("EVENTS")) + 1)]
 assert ev[0] == "SCAN_STARTED" and "SCAN_FINISHED" in ev and ev[-1] == "PRICES_UPDATED", ev
 assert SK.FormatMoney(12345) == "|cffffd7001g|r |cffc7c7cf23s|r |cffeda55f45c|r"
@@ -458,7 +458,9 @@ ScannerKing.AddTooltipProvider("econ", function(tt, id) tt:AddLine("econ " .. id
 TT_HOOK(TT, { id = 2589 })
 """)
 lines = [L4.eval("TT.lines")[i] for i in range(1, len(L4.eval("TT.lines")) + 1)]
-assert lines[0].startswith("Market price|") and lines[1].startswith("Lowest buyout|") and lines[2] == "Listed|100 in 4 auctions", lines
+assert lines[0] == " " and lines[1] == "King Maker| ", lines        # a gap, then the header (no vendor price: no tag)
+assert lines[2].startswith("Auction house|") and ("min ago" in lines[2] or "just now" in lines[2]), lines
+assert lines[3].startswith("Lowest buyout|") and lines[4] == "Listed|100 in 4 auctions", lines
 assert lines[-1] == "econ 2589"
 # the same item again before the tooltip is cleared adds nothing
 L4.execute("TT.lines = {}; TT_HOOK(TT, { id = 2589 })"); assert len(L4.eval("TT.lines")) == 0
@@ -533,7 +535,7 @@ print("SCAN RESULTS OK")
 
 # /sk status and help
 L4.eval("SlashCmdList.SCANNERKING")("status")
-st = L4.eval("OUTPUT[#OUTPUT]"); assert "prices stored" in st and "Last full scan: 0 min ago" in st and "Full scan ready in 15 min" in st, st
+st = L4.eval("OUTPUT[#OUTPUT]"); assert "prices stored" in st and "Last full scan: just now" in st and "Full scan ready in 15 min" in st, st
 L4.eval("SlashCmdList.SCANNERKING")("help")
 helps = [str(o) for o in outputs(L4)]
 for cmd in ("/sk scan", "/sk deep", "/sk material", "/sk market"):
@@ -552,5 +554,41 @@ L6, KM6 = fresh(only=["Scanner"], stubs={"Scanner_King": "ScannerKingDB = { pric
 assert L6.eval("ScannerKingDB.prices[2770].p") == 42 and L6.eval("ScannerKingDB.sync.guild") is False
 assert L6.eval("(ScannerKing.GetPrice(2770))") == 42 and L6.eval("ScannerKingDB.ui.tooltip") is True
 print("INITDB OK")
+
+# King Maker's section with everything in it: which pays more, vendor, drops, recipes, what you own
+L7, KM7 = fresh(only=["Scanner", "Econ", "Farm", "Market", "Inventory"], seed="""
+ITEM(13463, "Dreamfoil", { sell = 100, class = 7, subclass = 9 })
+ScannerKingDB = { prices = { [13463] = { p = 3589, m = 3594, q = 722, n = 31, t = (GetServerTime and GetServerTime() or time()) - 7200, from = "Abram Gaunt" } } }
+FarmKingDB = { mobs = { [5850] = { name = "Flamebringer Stalker", k = 20, i = { [13463] = { 3, 3 } } },
+  [5851] = { name = "Dust Stormer", k = 50, i = { [13463] = { 2, 2 } } }, [5852] = { name = "Scorpid", k = 10, i = { [13463] = { 1, 1 } } } } }
+MarketKingDB = { learned = { [99001] = { 99002, 4, 270, { 13463, 2, 2453, 1 }, 1 } }, vendor = { [13463] = 5000 } }
+InventoryKingDB = { stock = { ["Alt Two-Forever"] = { bags = { [13463] = 4 }, bank = { [13463] = 8 } } },
+  chars = { ["Alt Two-Forever"] = { class = "MAGE", level = 30 } } }
+""")
+L7.execute("""
+TT = { lines = {} }
+function TT:AddDoubleLine(l, r) self.lines[#self.lines+1] = l .. "|" .. r end
+function TT:AddLine(l) self.lines[#self.lines+1] = l end
+TT_HOOK(TT, { id = 13463 })
+""")
+lines = [L7.eval("TT.lines")[i] for i in range(1, len(L7.eval("TT.lines")) + 1)]
+row = lambda k: next((l for l in lines if l.startswith(k + "|")), None)
+assert lines[1] == "King Maker|AUCTION" and lines[2].startswith("Pays ") and "more than vendoring" in lines[2], lines
+assert "2 h ago, Abram Gaunt" in row("Auction house"), lines
+assert row("Vendor") and row("Vendors sell"), lines
+d = row("Drops")
+assert d.index("Flamebringer Stalker") < d.index("Scorpid") < d.index("+1 more") and "15%" in d and "Dust Stormer" not in d, d
+assert row("Used in").startswith("Used in|Alchemy ("), lines
+assert row("You own").startswith("You own|12") and any("bags 4, bank 8" in l for l in lines), lines
+order = [l.split("|")[0] for l in lines]
+assert order.index("Listed") < order.index("Vendor") < order.index("Drops") < order.index("You own"), order
+# a vendor pays more: VENDOR, and /sk sources off drops Vendor / Drops / Used in
+L7.execute("ITEMS[13463].sell = 9000; TT.lines = {}; TT.skItem = nil; TT_HOOK(TT, { id = 13463 })")
+assert L7.eval("TT.lines[2]") == "King Maker|VENDOR" and L7.eval("TT.lines[3]").startswith("Vendor it: ")
+L7.eval("SlashCmdList.SCANNERKING")("sources off"); assert L7.eval("ScannerKingDB.ui.sources") is False
+L7.execute("TT.lines = {}; TT.skItem = nil; TT_HOOK(TT, { id = 13463 })")
+lines = [L7.eval("TT.lines")[i] for i in range(1, len(L7.eval("TT.lines")) + 1)]
+assert not any(l.split("|")[0] in ("Vendor", "Drops", "Used in") for l in lines) and row("Auction house"), lines
+print("SECTION OK")
 
 print("scanner: ok")

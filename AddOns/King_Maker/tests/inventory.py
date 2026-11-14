@@ -115,7 +115,8 @@ print("HISTORY OK")
 # Tooltips: how many you own and where, under the Scanner module's lines
 first, lines = L.eval("HOVER(2589)")
 lines = [str(x) for x in lines.values()]
-assert any(l.startswith("Inventory King: 45 owned|worth") for l in lines), lines
+assert any(l.startswith("You own|45  ") and "worth" in l for l in lines), lines
+assert any("bags 35, on AH 10" in l for l in lines), lines
 assert any("Jay" in l and l.endswith("|bags 35, on AH 10") for l in lines), lines
 ik("tooltip off"); assert L.eval("InventoryKingDB.ui.tooltip") is False
 _, lines = L.eval("HOVER(2589)")
@@ -295,7 +296,7 @@ assert L.eval("InventoryKingDB.ui.button") is None and L.eval("InventoryKingDB.u
 L, KM, ns = load(only=("Inventory",), seed=None)
 assert ns.Price(2589) == (10, "vendor")
 _, lines = L.eval("HOVER(2589)")
-assert any(str(l).startswith("Inventory King: 35 owned") for l in lines.values()), list(lines.values())
+assert any(str(l).startswith("You own|35") or str(l) == "You own" for l in lines.values()), list(lines.values())
 KM.Show("inventory"); ns.SelectTab("items"); assert not KM.errorShown and not L.eval("SIDE('LEDGER STRATEGIES')"), last(L)
 print("INITDB OK")
 

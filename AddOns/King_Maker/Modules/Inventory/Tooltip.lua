@@ -3,11 +3,11 @@ local ns = KM.Module("Inventory")
 
 -- Item tooltips: how many you own and where.
 --
---   Inventory King: 85 owned                 worth 8g 50s
---     Jay        bags 20, bank 40, mail 10
---     Alt        bags 15
+--   You own                         85  worth 8g 50s
+--      Jay                bags 20, bank 40, mail 10
+--      Alt                                  bags 15
 --
--- Under Scanner King's prices when it's installed, on its own otherwise.
+-- The last rows of King Maker's section (Scanner's Tooltip.lua, in its colours); on its own if that's missing.
 -- /ik tooltip off turns it off.
 
 local SHORT = { bags = "bags", bank = "bank", mail = "mail", ah = "on AH" }
@@ -19,14 +19,19 @@ function ns.AddTooltipLines(tt, id)
     local total, by = ns.API.GetCount(id)
     if total == 0 then return end
     local each = ns.Price(id)
-    tt:AddDoubleLine("Inventory King: " .. total .. " owned", each and ("worth " .. ns.Money(each * total)) or " ",
-        0.38, 0.75, 1, 1, 1, 1)
+    local row = ScannerKing and ScannerKing.TooltipLine
+    local worth = each and ("  |cff8c8c8cworth|r " .. ns.Money(each * total)) or ""
+    if row then
+        row(tt, "You own", total .. worth)
+    else
+        tt:AddDoubleLine("You own", total .. worth, 0.78, 0.78, 0.78, 1, 1, 1)
+    end
     local list = {}
     for who, n in pairs(by) do table.insert(list, { who, n }) end
     table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
     for i, c in ipairs(list) do
         if i > MAX_CHARS then
-            tt:AddLine("  and " .. (#list - MAX_CHARS) .. " more", 0.6, 0.6, 0.6)
+            tt:AddLine("     and " .. (#list - MAX_CHARS) .. " more", 0.55, 0.55, 0.55)
             break
         end
         local s, bits = ns.db.stock[c[1]] or {}, {}
@@ -34,7 +39,7 @@ function ns.AddTooltipLines(tt, id)
             local n = (s[place] or {})[id]
             if n and n > 0 then table.insert(bits, SHORT[place] .. " " .. n) end
         end
-        tt:AddDoubleLine("  " .. ns.CharText(c[1]), table.concat(bits, ", "), 1, 1, 1, 0.8, 0.8, 0.8)
+        tt:AddDoubleLine("     " .. ns.CharText(c[1]), table.concat(bits, ", "), 1, 1, 1, 0.65, 0.65, 0.65)
     end
 end
 

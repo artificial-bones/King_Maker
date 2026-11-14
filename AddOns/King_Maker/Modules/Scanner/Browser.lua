@@ -290,6 +290,8 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
     { type = "header", label = "Tooltips" },
     { type = "check", label = "Prices in item tooltips", tip = "Market price, lowest buyout, how many are listed and when it was scanned.",
       get = function() return ns.db.ui.tooltip end, set = function(v) ns.db.ui.tooltip = v end },
+    { type = "check", label = "Vendor, drops and recipes in item tooltips", tip = "Under the prices: what a vendor pays, what vendors charge, the mobs that drop it (best chance first) and the professions that use it.",
+      get = function() return ns.db.ui.sources end, set = function(v) ns.db.ui.sources = v end },
     { type = "header", label = "Guild" },
     { type = "check", label = "Share prices with my guild", tip = "Your Trade Goods prices go to guildmates running King Maker (or Scanner King) after each scan; theirs come to you. The newest price wins.",
       get = function() return ns.db.sync.guild end, set = function(v) ns.db.sync.guild = v end },
@@ -297,7 +299,7 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
     { type = "header", label = "Commands" },
     { type = "text", label = "/sk   open the Prices page\n/sk scan   Scan (at the auction house): full when the game allows it, else quick\n"
         .. "/sk deep   force a full scan (progress window)\n/sk material   force a quick scan of Trade Goods and watched items\n"
-        .. "/sk market   the same plus Crafting Profits' ticked professions\n/sk tooltip on|off   prices in tooltips\n"
+        .. "/sk market   the same plus Crafting Profits' ticked professions\n/sk tooltip on|off   prices in tooltips\n/sk sources on|off   vendor, drops and recipes in tooltips\n"
         .. "/sk sync [on|off]   share now, or turn sharing on/off\n/sk status   how many prices and how old" },
 } })
 

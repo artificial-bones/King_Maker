@@ -69,10 +69,22 @@ Everything Scanner has a price for, not just raw materials.
 
 ## Tooltips
 
-Every item tooltip (bags, bank, loot, links, the auction house) shows what
-Scanner knows: market price, lowest buyout, how many are listed and when it
-was scanned. Price History adds its averages and trend underneath.
-`/sk tooltip off` (or the setting) turns it off.
+Every item tooltip (bags, bank, loot, links, the auction house) gets a
+**King Maker** section, laid out like this:
+
+| Row | What it shows |
+|---|---|
+| **King Maker** ... **AUCTION** / **VENDOR** | Which pays more for one, after the auction house's 5% cut, and by how much |
+| Auction house | The market price (or lowest buyout) and when it was scanned, and by which guildmate if it came from one |
+| Lowest buyout, Listed | The cheapest listing, and how many are up in how many auctions |
+| 30-day average, 7-day trend | From Price History |
+| Vendor, Vendors sell | What a vendor pays you for one, and what you paid a vendor for one |
+| Drops | The two mobs with the best drop chance (your kills and your guild's), with zone; QuestieDB fills in the rest |
+| Used in | The professions with recipes that take it, and how many recipes |
+| You own | How many, what they're worth, and on which characters |
+
+`/sk tooltip off` hides the prices, `/sk sources off` hides Vendor, Drops and
+Used in (both are in **Settings > Scanner**).
 
 | Command | What it does |
 |---|---|
@@ -82,6 +94,7 @@ was scanned. Price History adds its averages and trend underneath.
 | `/sk material` | Force a quick scan of Trade Goods and watched items only |
 | `/sk market` | Force a quick scan with the professions ticked on Crafting Profits |
 | `/sk tooltip on` / `off` | Prices in item tooltips |
+| `/sk sources on` / `off` | Vendor price, drops and recipes in item tooltips |
 | `/sk status` | How many prices you have, when the last full and quick scans ran, and when a full scan is ready |
 | `/sk sync` | Send your prices to your guild now |
 | `/sk sync on` / `off` | Turn guild price sharing on or off |

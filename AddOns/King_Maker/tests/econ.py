@@ -141,11 +141,11 @@ function TT:AddLine(l) self.lines[#self.lines+1] = l end
 TT_HOOK(TT, { id = 2770 })
 """)
 lines = [L.eval("TT.lines")[i] for i in range(1, len(L.eval("TT.lines")) + 1)]
-assert lines[0].startswith("Market price|") and any(l.startswith("30-day average|") for l in lines), lines
+assert lines[1] == "King Maker| " and lines[2].startswith("Auction house|") and any(l.startswith("30-day average|") for l in lines), lines
 ek("tooltip off"); assert L.eval("EconKingDB.ui.tooltip") is False
 L.execute("TT.lines = {}; TT.skItem = nil; TT_HOOK(TT, { id = 2770 })")
 lines = [L.eval("TT.lines")[i] for i in range(1, len(L.eval("TT.lines")) + 1)]
-assert lines[0].startswith("Market price|") and not any(l.startswith("30-day average|") for l in lines), lines
+assert lines[2].startswith("Auction house|") and not any(l.startswith("30-day average|") for l in lines), lines
 ek("tooltip on"); assert L.eval("EconKingDB.ui.tooltip") is True
 print("TOOLTIP OK")
 

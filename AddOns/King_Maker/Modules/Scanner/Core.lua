@@ -141,6 +141,7 @@ end
 function API.PriceAge(t)
     if not t then return "Auctionator" end
     local mins = math.max(0, math.floor((ns.Now() - t) / 60))
+    if mins < 1 then return "just now" end
     if mins < 60 then return mins .. " min ago" end
     if mins < 60 * 48 then return math.floor(mins / 60) .. " h ago" end
     return math.floor(mins / 1440) .. " days ago"
@@ -159,6 +160,7 @@ function ns.InitDB()
     db.ui = db.ui or {}
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     if db.ui.tooltip == nil then db.ui.tooltip = true end
+    if db.ui.sources == nil then db.ui.sources = true end -- tooltip: Vendor, Drops, Used in
     db.sync = db.sync or {}
     if db.sync.guild == nil then db.sync.guild = true end
     ns.db = db
@@ -187,6 +189,11 @@ SlashCmdList.SCANNERKING = function(msg)
         if arg == "on" then ns.db.ui.tooltip = true elseif arg == "off" then ns.db.ui.tooltip = false
         else ns.db.ui.tooltip = not ns.db.ui.tooltip end
         KM.Print(ns, "Prices in item tooltips " .. (ns.db.ui.tooltip and "on." or "off."))
+    elseif cmd == "sources" then
+        local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
+        if arg == "on" then ns.db.ui.sources = true elseif arg == "off" then ns.db.ui.sources = false
+        else ns.db.ui.sources = not ns.db.ui.sources end
+        KM.Print(ns, "Vendor, drops and recipes in item tooltips " .. (ns.db.ui.sources and "on." or "off."))
     elseif cmd == "sync" then
         local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
         if arg == "on" or arg == "off" then
@@ -213,6 +220,7 @@ SlashCmdList.SCANNERKING = function(msg)
         KM.Print(ns, "/sk material   force a quick scan of Trade Goods and watched items only")
         KM.Print(ns, "/sk market   force a quick scan of those plus the professions ticked on Crafting Profits")
         KM.Print(ns, "/sk tooltip [on|off]   prices in item tooltips")
+        KM.Print(ns, "/sk sources [on|off]   vendor price, drops and recipes in item tooltips")
         KM.Print(ns, "/sk status   how many prices you have and how old")
         KM.Print(ns, "/sk sync [on|off]   share prices with your guild now, or turn sharing on/off")
     end

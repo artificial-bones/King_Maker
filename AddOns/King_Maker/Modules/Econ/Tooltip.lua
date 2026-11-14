@@ -8,11 +8,12 @@ local function addLines(tt, id)
     if not (ns.db and ns.db.ui.tooltip) then return end
     local s = ns.Stats(id)
     if not s or not s.avg30 then return end
-    tt:AddDoubleLine("30-day average", ns.Money(s.avg30) .. (s.vs30 and ("  (now " .. ns.Percent(s.vs30, true) .. ")") or ""),
-        1, 0.82, 0, 1, 1, 1)
+    local function row(l, r)
+        if ScannerKing and ScannerKing.TooltipLine then ScannerKing.TooltipLine(tt, l, r) else tt:AddDoubleLine(l, r, 1, 0.82, 0, 1, 1, 1) end
+    end
+    row("30-day average", ns.Money(s.avg30) .. (s.vs30 and ("  (now " .. ns.Percent(s.vs30, true) .. ")") or ""))
     if s.trend7 or s.supply then
-        tt:AddDoubleLine("7-day trend", ns.Percent(s.trend7) .. (s.supply and ("   supply " .. ns.Percent(s.supply)) or ""),
-            1, 0.82, 0, 1, 1, 1)
+        row("7-day trend", ns.Percent(s.trend7) .. (s.supply and ("   supply " .. ns.Percent(s.supply)) or ""))
     end
     if ns.db.fav[id] then tt:AddLine("|T" .. ns.STAR .. ":12|t Price History favorite", 0.6, 0.6, 0.6) end
 end
