@@ -288,4 +288,38 @@ assert L3.eval("QuestKingDB.dqDone") is None and L3.eval("QuestKingDB.dqView") i
 KM3.Show("questgold"); assert not KM3.errorShown, last(L3)
 print("INITDB OK")
 
+# Bag cleanup from the quest data (Data/QuestItems.lua): which quests use each item, done or not
+L4, KM4 = fresh(only=["Quest"], seed=NO_CLASSIC + 'PLAYER.faction, PLAYER.classID = "Horde", 1')
+q4 = KM4.mods.Quest
+assert len(list(q4.QUEST_ITEMS)) > 2000 and L4.eval('QuestKing.QUEST_ITEMS[12840]:find("5402r")'), "the generated data loads"
+L4.execute("""
+QuestKing.QUEST_ITEMS = { [200] = "71 72", [201] = "73r", [202] = "74a", [203] = "75 76", [204] = "77:256", [205] = "78" }
+QuestKing.QUEST_EXCLUSIVE = { "75 76" }
+ITEM(200, "Chain Relic", { class = 12 })   -- quest 71 done, 72 (next in the chain) not: keep
+ITEM(201, "Scourge Shard", { class = 12 }) -- a repeatable quest takes it
+ITEM(202, "Alliance Badge", { class = 12 }) -- only an Alliance quest uses it
+ITEM(203, "Either Token", { class = 12 })  -- 75 done, so 76 (same exclusive group) is closed
+ITEM(204, "Warlock Shard", { class = 12 }) -- a warlock quest, we're a warrior
+ITEM(205, "Old Relic", { class = 12 })     -- its quest is done, but a quest in the log names it (Forever changed it)
+COMPLETED[71] = true; COMPLETED[75] = true; COMPLETED[78] = true
+LOG = { { questID = 900, title = "A Forever Quest", objectives = { { text = "Old Relic: 0/1" } } } }
+BAGS[0][1] = { id = 200 }; BAGS[0][2] = { id = 201 }; BAGS[0][3] = { id = 202 }
+BAGS[0][4] = { id = 203 }; BAGS[0][5] = { id = 204 }; BAGS[0][6] = { id = 205 }
+FIRE("BAG_UPDATE_DELAYED"); RUN_TIMERS()
+""")
+S4 = lambda b, s: L4.eval(f"QuestKing.Status({b}, {s})")
+assert S4(0, 1) == "later" and "haven't done" in q4.LaterReason(200), S4(0, 1)
+assert S4(0, 2) == "needed" and S4(0, 3) == "unneeded" and S4(0, 4) == "unneeded" and S4(0, 5) == "unneeded"
+assert S4(0, 6) == "needed", "the quest log has the last word"
+assert "every quest that uses it" in q4.UnneededReason(203)
+# picking up quest 72 makes the relic needed; finishing it frees it
+L4.execute('LOG[2] = { questID = 72, title = "Chain Two" }; FIRE("QUEST_LOG_UPDATE"); RUN_TIMERS()')
+assert S4(0, 1) == "needed"
+L4.execute('table.remove(LOG, 2); COMPLETED[72] = true; FIRE("QUEST_LOG_UPDATE"); RUN_TIMERS()')
+assert S4(0, 1) == "unneeded"
+# the tooltip says why to keep it
+L4.execute('COMPLETED[72] = nil; FIRE("QUEST_LOG_UPDATE"); RUN_TIMERS()')
+assert q4.LaterReason(200)
+print("QUEST ITEM DATA OK")
+
 print("quest: ok")

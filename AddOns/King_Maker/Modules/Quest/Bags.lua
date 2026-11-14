@@ -76,6 +76,8 @@ local function addLine(tooltip, itemID)
         tooltip:AddLine("Quest King: safe to delete, " .. why .. ".", 1, 0.3, 0.3, true)
     elseif ns.SellReason(itemID) then
         tooltip:AddLine("Quest King: sell it to a vendor, " .. ns.SellReason(itemID) .. ".", 1, 0.82, 0, true)
+    elseif ns.LaterReason(itemID) then
+        tooltip:AddLine("Quest King: keep it, " .. ns.LaterReason(itemID) .. ".", 0.6, 0.8, 1, true)
     end
 end
 

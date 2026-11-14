@@ -178,7 +178,8 @@ worth and where the most is left for the character you're on.
 - **Done, in your log, ready, your level too low, or after another quest**, for the character you're logged in on.
 - **Forever's real quest gold** is learned as you quest (quest givers, your log, turn-ins), and **Ask the game**
   fetches a whole zone's at once. Amounts not seen yet are estimates, marked ~.
-- **Bag cleanup** marks quest items you no longer need (Bagnon too).
+- **Bag cleanup** marks quest items you no longer need (Bagnon too). It knows which quests use each item, Forever's
+  own quests included, so it won't mark the item for the next quest in a chain or a repeatable turn-in.
 
 Dungeon Quests is gone in 2.4.0: other addons do dungeon quests better.
 

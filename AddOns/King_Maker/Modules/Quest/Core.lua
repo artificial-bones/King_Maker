@@ -83,11 +83,13 @@ end
 ---------------------------------------------------------------------------
 
 -- Per slot: nil (not a quest item, or we can't tell), "needed", "starter"
--- (starts a quest you haven't done), "unneeded" (no quest needs it and no vendor buys it: safe to delete, red X)
+-- (starts a quest you haven't done), "later" (a quest you haven't done uses it: keep, no X),
+-- "unneeded" (no quest needs it and no vendor buys it: safe to delete, red X)
 -- or "sell" (no quest needs it, but a vendor buys it: sell it, no X).
 local status = {}
 local unneededIDs = {}
 local sellIDs = {}
+local laterIDs = {}
 
 -- Does a vendor buy it? The item's sell price once the game has it, else the bag's own "no value" flag.
 local function sellable(info)
@@ -104,7 +106,74 @@ function ns.IsQuestItem(itemID, questInfo)
     return classID == QUEST_CLASS
 end
 
+local function mySide()
+    local f = UnitFactionGroup and UnitFactionGroup("player")
+    return f == "Alliance" and "a" or f == "Horde" and "h" or nil
+end
+
+local function myClassBit()
+    local _, _, id = UnitClass("player")
+    return id and 2 ^ (id - 1) or 0
+end
+
+-- Done, or another quest of its exclusive group is (so it can't be done any more).
+local exclusiveOf
+local function closed(q)
+    if questDone(q) then return true end
+    if not exclusiveOf then
+        exclusiveOf = {}
+        for _, group in ipairs(ns.QUEST_EXCLUSIVE or {}) do
+            local members = {}
+            for id in group:gmatch("%d+") do members[#members + 1] = tonumber(id) end
+            for _, id in ipairs(members) do exclusiveOf[id] = members end
+        end
+    end
+    for _, other in ipairs(exclusiveOf[q] or {}) do
+        if other ~= q and questDone(other) then return true end
+    end
+    return false
+end
+
+local function questTitle(q)
+    local t = C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(q)
+    if (not t or t == "") and ns.QUESTS and ns.QUESTS[q] then t = ns.QUESTS[q][12] end
+    return t ~= "" and t or nil
+end
+
+-- What the quest data (Data/QuestItems.lua) says about an item: "needed" (a quest in your log or a repeatable one takes
+-- it), "later" (a quest you haven't done uses it), "done" (you've done every quest that uses it, or none is for you),
+-- or nil when the data doesn't know the item. Second return: the reason.
+function ns.ItemUses(itemID)
+    local uses = ns.QUEST_ITEMS and ns.QUEST_ITEMS[itemID]
+    if not uses then return nil end
+    local side, bit = mySide(), myClassBit()
+    local later, repeatable
+    for id, tags, classes in uses:gmatch("(%d+)(%a*):?(%d*)") do
+        local q = tonumber(id)
+        local mine = true
+        if (tags:find("a") and side == "h") or (tags:find("h") and side == "a") then mine = false end
+        classes = tonumber(classes)
+        if mine and classes and classes > 0 and bit > 0 and math.floor(classes / bit) % 2 == 0 then mine = false end
+        if mine then
+            if onQuest(q) then return "needed", "its quest is in your log" end
+            if tags:find("r") then repeatable = repeatable or q
+            elseif not later and not closed(q) then later = q end
+        end
+    end
+    if repeatable then
+        local t = questTitle(repeatable)
+        return "needed", t and ("a repeatable quest takes it: " .. t) or "a repeatable quest takes it"
+    end
+    if later then
+        local t = questTitle(later)
+        return "later", t and (t .. " uses it and you haven't done it") or "a quest you haven't done uses it"
+    end
+    return "done", "you've done every quest that uses it"
+end
+
 -- Why a quest item is or isn't needed. Returns status, reason.
+-- Status "later": no quest in your log needs it, but one you haven't done does (next in a chain, or one you dropped):
+-- no red X.
 function ns.Judge(itemID, link, questInfo)
     if not ns.IsQuestItem(itemID, questInfo) then return nil end
     local questID = questInfo and questInfo.questID
@@ -113,11 +182,19 @@ function ns.Judge(itemID, link, questInfo)
         if questDone(questID) then return "unneeded", "you already did the quest it starts" end
         return "starter", "it starts a quest"
     end
+    local data, why = ns.ItemUses(itemID)
+    if data == "needed" or data == "later" then return data, why end
+    -- The data says it's done with, or doesn't know it: the quest log has the last word (Forever changed quests).
     if not logComplete then return nil end
     local name = linkName(link) or (C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID))
     if not name then return nil end
     if questText:find(name:lower(), 1, true) then return "needed", "a quest in your log mentions it" end
-    return "unneeded", "no quest in your log needs it"
+    return "unneeded", data and why or "no quest in your log needs it"
+end
+
+-- Reason text when no quest in your log needs it but one you haven't done does, else nil.
+function ns.LaterReason(itemID)
+    return itemID and laterIDs[itemID]
 end
 
 local function lastBag()
@@ -125,7 +202,7 @@ local function lastBag()
 end
 
 function ns.ScanBags()
-    wipe(status); wipe(unneededIDs); wipe(sellIDs)
+    wipe(status); wipe(unneededIDs); wipe(sellIDs); wipe(laterIDs)
     for bag = 0, lastBag() do
         for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
             local info = C_Container.GetContainerItemInfo(bag, slot)
@@ -136,6 +213,7 @@ function ns.ScanBags()
                 if s then
                     status[bag * 1000 + slot] = s
                     if s == "unneeded" then unneededIDs[info.itemID] = why end
+                    if s == "later" then laterIDs[info.itemID] = why end
                 end
             end
         end
