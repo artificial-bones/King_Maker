@@ -1,5 +1,5 @@
-# Quest (was Quest King): bag marks, the tooltip line, /qk, dungeon quest logic (29 dungeons, chains, levels, XP,
-# waypoints, QuestieDB) and the Dungeon Quests page.
+# Quest (was Quest King): bag marks, the tooltip line, /qk, and Quest Gold (the 48+ quests' worth per zone for this
+# character, learning Forever's real quest gold, Ask the game) and its page.
 import os, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from km import fresh, last, outputs
 
@@ -8,7 +8,6 @@ NO_CLASSIC = """
 for _, name in ipairs({ "GetItemInfo", "GetContainerItemInfo", "GetContainerNumSlots", "GetQuestLogTitle" }) do _G[name] = nil end
 function BTN(text) for _, f in ipairs(FRAMES) do if type(rawget(f, "label")) == "table" and f.label.text == text and f.SetLabel then return f end end end
 function CHECK(text) for _, f in ipairs(FRAMES) do if type(rawget(f, "label")) == "table" and f.label.text == text and rawget(f, "mark") then return f end end end
-function DUNGEON_BTN(name) for _, f in ipairs(FRAMES) do if rawget(f, "dungeon") and f.dungeon.name == name then return f end end end
 """
 
 L, KM = fresh(only=["Quest"], seed=NO_CLASSIC)
@@ -167,164 +166,115 @@ assert "safe to delete" in L2.eval("GameTooltip.lines[1]")
 print("CLASSIC BAGS OK")
 
 
-# ---------------------------------------------------------------- dungeon quests
-DQ = NO_CLASSIC + """
-PLAYER.level, PLAYER.class = 16, "WARRIOR"
-MAP_CHILDREN[1414] = { { mapID = 1454, name = "Orgrimmar" }, { mapID = 1456, name = "Thunder Bluff" }, { mapID = 1413, name = "The Barrens" } }
-MAP_CHILDREN[1415] = { { mapID = 1458, name = "Undercity" }, { mapID = 1420, name = "Tirisfal Glades" }, { mapID = 1421, name = "Silverpine Forest" } }
+# ---------------------------------------------------------------- Quest Gold
+QG = NO_CLASSIC + """
+PLAYER.level, PLAYER.class, PLAYER.classID, PLAYER.faction = 55, "WARRIOR", 1, "Horde"
+MAPS = MAPS or {}; MAPS[1446] = "Tanaris"; MAPS[1422] = "Western Plaguelands"
+ITEM(5001, "Sand Blade", { sell = 500 }); ITEM(5002, "Sand Ring", { sell = 3000 }); ITEM(5003, "Sand Potion", { sell = 10 })
+ITEM(5004, "Thorium Bar", { sell = 100 })
+ScannerKingDB = { prices = { [5001] = { p = 20000, t = 1 }, [5003] = { p = 1000, t = 1 }, [5004] = { p = 500, t = 1 } } }
 """
-L, KM = fresh(only=["Quest"], seed=DQ)
-ns = L.eval("QuestKing")
+L, KM = fresh(only=["Scanner", "Quest"], seed=QG)
+ns = KM.mods.Quest
 qk = L.eval("SlashCmdList.QUESTKING")
-D = {d.key: d for d in ns.DUNGEONS.values()}
-assert len(D) == 29
-rfc, rol = D["rfc"], D["rol"]
-quests = lambda d: {q.name: q for q in d.quests.values()}
-he = quests(rfc)["Hidden Enemies"]
-# status: ready, in the log, a chain step in the log, done, ticked off
-assert ns.QuestState(rfc, he) == "ready"
-L.execute('LOG = { { questID = 5726, title = "Hidden Enemies" } }')
-assert ns.QuestState(rfc, he) == "active"
-assert [ns.StepState(he, st) for st in he.chain.values()][:2] == ["active", None]
-L.execute('LOG = {}; COMPLETED[5726] = true; COMPLETED[5727] = true')
-assert ns.QuestState(rfc, he) == "chain"
-L.execute('COMPLETED[5728] = true'); assert ns.QuestState(rfc, he) == "done"
-slay = quests(rfc)["Slaying the Beast"]
-ns.SetTicked(rfc, slay, True); assert ns.QuestState(rfc, slay) == "done"
-ns.SetTicked(rfc, slay, False); assert ns.QuestState(rfc, slay) == "ready"
-# levels: without QuestieDB the pickup level is an estimate
-assert tuple(ns.MinLevel(slay)) == (10, True) and ns.FullXPUntil(slay) == 21
-L.execute("PLAYER.level = 8"); assert ns.QuestState(rfc, slay) == "low"; L.execute("PLAYER.level = 16")
-f, t, n, tot = ns.BestLevels(rfc)
-assert (n, tot) == (5, 5) and f == 10 and t == 20, (f, t, n, tot)
-# class quests only for that class; endgame ones can be hidden
-assert not any(q["class"] for q in ns.VisibleQuests(D["bfd"]).values())
-L.execute('PLAYER.class = "WARLOCK"'); assert any(q["class"] == "WARLOCK" for q in ns.VisibleQuests(D["sfk"]).values()); L.execute('PLAYER.class = "WARRIOR"')
-strat = D["strat"]; n60 = len(ns.VisibleQuests(strat))
-L.execute("QuestKingDB.dqHide60 = true"); assert len(ns.VisibleQuests(strat)) < n60; L.execute("QuestKingDB.dqHide60 = false")
-p = ns.Progress(rfc); assert p.total == 5 and p.done == 1 and p.ready == 4, (p.total, p.done, p.ready)
-# waypoints from the log's coordinates: the last place named before them
-lj = quests(rol)["Light's Justice"]
-m, x, y, src = ns.GiverPoint(lj); assert (m, x, y) == (1458, 57.8, 89.7) and src == "the dungeon log", (m, x, y, src)
-rath = quests(rol)["The Wrath of Rath'mael"]
-assert ns.GiverPoint(rath)[0] == 1420  # "between Undercity and Brill, Tirisfal (65.2, 60.1)"
-ns.WaypointToGiver(lj); assert L.eval("WAYPOINT.m") == 1458 and L.eval("TRACKED") is True
-assert "Waypoint: Light's Justice, Undercity 57.8, 89.7" in last(L), last(L)
-ns.WaypointToGiver(slay); assert "No coordinates" in last(L)
-# QuestieDB: exact pickup level, IDs by name, the giver's spawn point, the dungeon entrance
-L.execute('''
-QuestDB = { Exists = function(id) return QDATA[id] ~= nil end,
-  requiredLevel = function(id) return QDATA[id] and QDATA[id].min or 0 end,
-  questLevel = function(id) return QDATA[id] and QDATA[id].lv or 0 end,
-  startedBy = function(id) return QDATA[id] and QDATA[id].by or {} end,
-  IdsByName = function(name) return NAMES[name] end }
-QDATA = { [5761] = { min = 9, lv = 16, by = { { 3216 } } }, [2418] = { min = 35, lv = 40 }, [9999] = { min = 20, lv = 25 } }
-NAMES = {}
-NpcDB = { spawns = function(id) if id == 3216 then return { [1637] = { { 49.6, 50.4 } } } end end }
-XPDB = { [5726] = { 16, 300 }, [5727] = { 16, 350 }, [5728] = { 16, 1150 }, [5729] = { 16, 400 }, [5761] = { 16, 1050 } }
-LibQuestieDB = { Support = { Get = function(n) if n == "QuestXP" then return { db = XPDB } end return { private = { areaIdToUiMapId = "return { [1637] = 1454, [1337] = 1418 }",
-  dungeons = { [1337] = { "Uldaman", nil, 3, { { 1337, 44.4, 12.2 } } } } } } end } }
-''')
-assert tuple(ns.MinLevel(slay)) == (9, False)
-assert tuple(ns.GiverPoint(slay)) == (1454, 49.6, 50.4, "QuestieDB")
-ulda = D["ulda"]
-uq = list(ulda.quests.values())[0]
-L.execute("NAMES[...] = { 9999, 2418 }", uq.name)
-assert ns.QuestID(uq) in (9999, 2418)
-ns.WaypointToEntrance(ulda); assert L.eval("WAYPOINT.m") == 1418
-# XP: the game's rule for outlevelled quests, rounded like the game; per quest, per step, per dungeon
-assert ns.AdjustXP(1150, 16, 16) == 1150 and ns.AdjustXP(1150, 16, 21) == 1150
-assert ns.AdjustXP(1150, 16, 22) == 925 and ns.AdjustXP(1150, 16, 26) == 120 and ns.AdjustXP(1150, 16, 40) == 120
-assert ns.AdjustXP(1150, 16, 60) == 0 and ns.AdjustXP(87, 10, 16) == 70
-assert tuple(ns.QuestXP(slay)) == (1050, 1050)
-L.execute("PLAYER.level = 23"); assert tuple(ns.QuestXP(slay)) == (1050, 625); L.execute("PLAYER.level = 16")
-L.execute("COMPLETED = {}; COMPLETED[5726] = true")
-xp, known, total = ns.DungeonXP(rfc)
-assert xp == 350 + 1150 + 400 + 1050 and known == 4, (xp, known, total)
-assert "XP left" in ns.DungeonXPText(rfc) and "1,050" not in ns.DungeonXPText(rfc) and "2,950" in ns.DungeonXPText(rfc), ns.DungeonXPText(rfc)
-assert ns.Commas(1234567) == "1,234,567"
-print("DUNGEON LOGIC OK")
+assert len(list(ns.QUESTS)) > 500, "the generated data loads"
+L.globals().QNS = ns
+L.execute("""
+QNS.QUESTS = {
+  [9001] = { 1446, 50, 45, "", 0, { 5001, 1, 5002, 1 }, {}, 0, "", {}, 0, "Sand Quest" },
+  [9002] = { 1446, 52, 45, "A", 0, {}, {}, 0, "", {}, 0, "Alliance Only" },
+  [9003] = { 1446, 52, 45, "", 7000, {}, { 5003, 2 }, 9001, "", { 5004, 5 }, 0, "Second Sand Quest" },
+  [9004] = { 1422, 58, 50, "", 0, {}, {}, 0, "e", {}, 1, "Warriors Only" },
+  [9005] = { 1422, 60, 58, "", 0, {}, {}, 0, "", {}, 0, "Too High" },
+  [9006] = { 1422, 59, 50, "", 0, {}, {}, 0, "", {}, 256, "Warlocks Only" },
+}
+""")
+# values: an unseen quest's gold is at least 1g; the best choice by what it fetches (AH after the cut vs vendor)
+v = ns.QuestValue(9001)
+assert v.gold == 10000 and v.guess and v.best.item == 5001 and v.best.value == 19000 and v.worth == 29000, (v.gold, v.worth)
+v = ns.QuestValue(9003)
+assert v.gold == 10000 and v["items"] == 1900 and v.cost == 2375 and v.worth == 10000 + 1900 - 2375, (v["items"], v.cost, v.worth)
+# this character: faction and class; states
+assert ns.ForMe(9001) and not ns.ForMe(9002) and ns.ForMe(9004) and not ns.ForMe(9006)
+assert ns.QuestState(9001) == "ready" and ns.QuestState(9003) == "locked" and ns.QuestState(9005) == "low"
+L.execute("LOG = { { questID = 9004 } }"); assert ns.QuestState(9004) == "log"
+# zones: Horde warrior sees 2 in Tanaris, 2 in Western Plaguelands; most worth first
+Z = ns.Zones()
+assert [Z[i].name for i in range(1, len(Z) + 1)] == ["Tanaris", "Western Plaguelands"], [Z[i].name for i in range(1, len(Z) + 1)]
+assert Z[1].total == 2 and Z[1].left == 2 and Z[1].guesses == 2 and Z[1].worth == 29000 + 9525
+
+# learning the real gold: what a turn-in paid; the quest is done and drops out of what's left
+L.execute("COMPLETED[9001] = true; FIRE('QUEST_TURNED_IN', 9001, 0, 15500)")
+assert L.eval("QuestKingDB.gold[9001]") == 15500
+v = ns.QuestValue(9001); assert v.gold == 15500 and not v.guess
+assert ns.QuestState(9003) == "ready", "the quest before it is done"
+Z = ns.Zones(); tan = [Z[i] for i in range(1, len(Z) + 1) if Z[i].name == "Tanaris"][0]
+assert tan.left == 1 and Z[1].name == "Western Plaguelands", "Tanaris has less left now: it drops below"
+# the quest giver's window (offer or turn-in)
+L.execute("GetQuestID = function() return 9004 end; GetRewardMoney = function() return 21000 end; FIRE('QUEST_DETAIL')")
+assert L.eval("QuestKingDB.gold[9004]") == 21000
+# with 3 real amounts near a level, unseen quests there use their median
+L.execute("QuestKingDB.gold[9005] = 30000"); ns.LearnGold(9006, 18000)
+L.execute('QNS.QUESTS[9007] = { 1422, 59, 50, "", 0, {}, {}, 0, "", {}, 0, "Unseen 59" }')
+assert L.eval("(QNS.QuestGold(9007))") == 21000, "median of 18000, 21000, 30000 (levels 57-61)"
+assert L.eval("(QNS.QuestGold(9003))") == 10000, "level 52: one real amount nearby is too few, so 1g"
+
+# Ask the game: one request per unknown quest in the zone, answers fill the gold in
+L.execute("""
+ASKED = {}
+C_QuestLog.RequestLoadQuestByID = function(q) ASKED[#ASKED + 1] = q end
+GetQuestLogRewardMoney = function(q) return q == 9003 and 12000 or 0 end
+QuestKingDB.gold[9003] = nil
+""")
+assert ns.CanAsk()
+n = ns.AskZone(1446); L.execute("RUN_TIMERS()")
+assert n == 1 and L.eval("ASKED[1]") == 9003, n
+L.execute("FIRE('QUEST_DATA_LOAD_RESULT', 9003, true)")
+assert L.eval("QuestKingDB.gold[9003]") == 12000
+print("QUEST GOLD LOGIC OK")
 
 
-# ---------------------------------------------------------------- the Dungeon Quests page
+# ---------------------------------------------------------------- the Quest Gold page
 def texts():
     fs = L.eval("FONTS")
     return [str(fs[i].text) for i in range(1, len(fs) + 1) if fs[i].text]
 
 
-def click(b, which="LeftButton"):
-    b.RunScript(b, "OnClick", which)
-
-
-qk("dungeons")
-assert KM.IsShown("dungeons") and not KM.errorShown, last(L)
-ns.table.SetHeight(ns.table, 600); ns.table.Layout(ns.table)  # the mock's frames don't size themselves: room for every row
-assert any(x.startswith("Best at level") for x in texts())
-assert any("Ragefire Chasm" in x for x in texts())
-assert L.eval('BTN("Dungeons")') and L.eval('BTN("Route")') and L.eval('BTN("Entrance waypoint")')
-assert L.eval('CHECK("Hide level 60")') and L.eval('CHECK("Hide done")')
-qk("route"); assert any("Start these chains early" in x for x in texts())
-assert L.eval('BTN("Route")').active and ns.table.parent.shown is False, "the route takes the dungeon's place"
-click(L.eval('BTN("Dungeons")')); assert L.eval("QuestKingDB.dqView") == "dungeons"
-# chains inline: under the quest, last step first, the step to do next marked, a pin per step
-L.execute('COMPLETED = {}; COMPLETED[5726] = true')
-ns.VisibleQuests(rfc); assert ns.NextStep(he) == 2, ns.NextStep(he)
-assert ns.StepText(he.chain[1])[0] != he.chain[1][1] or ":" not in he.chain[1][1]
-click(L.eval('DUNGEON_BTN("Ragefire Chasm")'))
-assert L.eval('DUNGEON_BTN("Ragefire Chasm")').active
-rows = lambda: [r for r in ns.table.rows.values() if r.data and r.shown]
-hrow = [r for r in rows() if r.data.q.name == he.name and not r.data.step][0]
-click(hrow)  # select it
-click(hrow)  # click again: its chain opens (not done, so it starts open; this folds it)
-assert not any(r.data.step for r in rows() if r.data.q.name == he.name), "folded"
-hrow = [r for r in rows() if r.data.q.name == he.name and not r.data.step][0]
-click(hrow)  # open again
-assert any("Next >" in x for x in texts()), "no next step marked"
-step1 = ns.StepText(he.chain[1])[0]
-assert any(step1 in x for x in texts())
-steps = [r for r in rows() if r.data.q.name == he.name and r.data.step]
-assert len(steps) == len(list(he.chain.values())) and steps[-1].data.index == 1, "the first step sits last (deepest)"
-# a pin per row; the giver pin sets a waypoint
-assert hrow.pin is not None
-# right-click ticks a quest off, and a step
-srow = [r for r in rows() if r.data.q.name == he.name and r.data.step and r.data.index == 2][0]
-click(srow, "RightButton"); assert ns.StepState(he, he.chain[2]) == "done" and ns.NextStep(he) == 3
-srow = [r for r in rows() if r.data.q.name == he.name and r.data.step and r.data.index == 2][0]
-click(srow, "RightButton"); assert ns.StepState(he, he.chain[2]) != "done"
-slayrow = [r for r in rows() if r.data.q.name == slay.name][0]
-click(slayrow, "RightButton"); assert ns.QuestState(rfc, slay) == "done" and "Slaying the Beast" in ns.detailText.text
-click([r for r in rows() if r.data.q.name == slay.name][0], "RightButton"); assert ns.QuestState(rfc, slay) == "ready"
-# the giver pin of a quest with coordinates
-click(L.eval('DUNGEON_BTN("Ruins of Lordaeron")'))
-ljrow = [r for r in rows() if r.data.q.name == lj.name][0]
-assert ljrow.pin.shown is not False
-L.execute("WAYPOINT = nil"); click(ljrow.pin); assert L.eval("WAYPOINT.m") == 1458
-# the filters
-hd = L.eval('CHECK("Hide done")'); hd.GetScript(hd, "OnClick")(hd); assert L.eval("QuestKingDB.dqHideDone") is True
-hd.GetScript(hd, "OnClick")(hd); assert L.eval("QuestKingDB.dqHideDone") is False
-assert ns.StepPoint(he, he.chain[1], 1) is not None or ns.GiverPoint(he) is None
-L.execute('FIRE("PLAYER_LEVEL_UP"); RUN_TIMERS()')
-assert not KM.errorShown, last(L)
-qk("dungeons"); assert not KM.IsShown(), "/qk dungeons toggles it closed"
+qk("gold")
+assert KM.IsShown("questgold") and not KM.errorShown, last(L)
+ns.goldTable.SetHeight(ns.goldTable, 600); ns.goldTable.Layout(ns.goldTable)
+assert any("Western Plaguelands" in x for x in texts()), "opens on the zone with the most left"
+L.execute('for _, f in ipairs(FRAMES) do if rawget(f, "zone") and f.zone.name == "Tanaris" then f:Click() end end')
+T = texts()
+assert any("Tanaris" in x for x in T) and any("quests left, worth" in x for x in T), [x for x in T if "Tanaris" in x][:3]
+assert any("Second Sand Quest" in x for x in T) and any("Sand Blade" in x or "Sand Potion" in x for x in T)
+assert any(x == "Done" or "Done" in x for x in T) and any("Ready" in x for x in T)
+assert not any("Alliance Only" in x for x in T) and not any("Warlocks Only" in x for x in T)
+L.execute("QuestKingDB.qgHideDone = true"); ns.RefreshQuestGold()
+rows = ns.goldTable.data
+assert [rows[i].id for i in range(1, len(rows) + 1)] == [9003] and not KM.errorShown, last(L)  # Sand Quest (done) hidden
+L.execute("QuestKingDB.qgHideDone = false")
+qk("dungeons"); assert "Quest Gold took its place" in last(L)
+qk("gold"); assert not KM.IsShown(), "/qk gold toggles it closed"
 print("PAGE OK")
 
 # The crown: quick action and tooltip line; Home tile; Settings
 L.execute('KingMakerMinimapButton:Click("RightButton")')
-assert L.eval('MENU_ITEM("Dungeon Quests") ~= nil')
-L.execute('MENU_ITEM("Dungeon Quests").fn()'); assert KM.IsShown("dungeons")
+assert L.eval('MENU_ITEM("Quest Gold") ~= nil') and L.eval('MENU_ITEM("Dungeon Quests") == nil')
+L.execute('MENU_ITEM("Quest Gold").fn()'); assert KM.IsShown("questgold")
 L.execute('GameTooltip.lines = {}; KingMakerMinimapButton:RunScript("OnEnter")')
-assert any("Dungeon quests:" in str(x) and "ready" in str(x) for x in L.eval("GameTooltip.lines").values())
-KM.Show("home"); assert "DUNGEON QUESTS" in texts() and not KM.errorShown, last(L)
-KM.OpenSettings("quest"); assert "Hide level 60 quests" in texts() and not KM.errorShown
+assert any("Quest gold:" in str(x) for x in L.eval("GameTooltip.lines").values())
+KM.Show("home"); assert "QUEST GOLD" in texts() and not KM.errorShown, last(L)
+KM.OpenSettings("quest"); assert "Hide quests you've done" in texts() and not KM.errorShown
 print("SHELL OK")
 
-# InitDB is safe twice and keeps the table; the 1.x button keys go
-L3, KM3 = fresh(only=["Quest"], seed=NO_CLASSIC + "QuestKingDB = { marks = false, button = true, buttonAngle = 250, dqDone = { ['rfc:Slaying the Beast'] = true } }")
+# InitDB is safe twice and keeps the table; the 1.x button keys and Dungeon Quests' keys go
+L3, KM3 = fresh(only=["Quest"], seed=NO_CLASSIC + "QuestKingDB = { marks = false, button = true, buttonAngle = 250, dqDone = { ['rfc:Slaying the Beast'] = true }, dqView = 'route' }")
 L3.execute("HELD = QuestKingDB"); KM3.mods.Quest.InitDB()
 assert L3.eval("QuestKingDB == HELD") and L3.eval("QuestKingDB.marks") is False and L3.eval("QuestKingDB.tooltip") is True
 assert L3.eval("QuestKingDB.button") is None and L3.eval("QuestKingDB.buttonAngle") is None
-assert L3.eval("QuestKingDB.dqDone['rfc:Slaying the Beast']") is True
-KM3.Show("dungeons"); assert not KM3.errorShown, last(L3)
+assert L3.eval("QuestKingDB.dqDone") is None and L3.eval("QuestKingDB.dqView") is None and L3.eval("QuestKingDB.gold") is not None
+KM3.Show("questgold"); assert not KM3.errorShown, last(L3)
 print("INITDB OK")
 
 print("quest: ok")

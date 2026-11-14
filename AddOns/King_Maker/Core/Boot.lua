@@ -161,7 +161,7 @@ SlashCmdList.KINGMAKER = function(msg)
     elseif cmd == "help" or cmd == "?" then
         KM.Print("commands:")
         KM.Print("/km   open or close the window")
-        KM.Print("/km <page>   open a page (prices, history, crafting, skillups, ledger, inventory, mobs, gathering, dungeons, rested)")
+        KM.Print("/km <page>   open a page (prices, history, crafting, skillups, ledger, inventory, questgold, mobs, gathering, rested)")
         KM.Print("/km settings   settings")
         KM.Print("/km button [on|off]   minimap button")
         KM.Print("/km status   version and what was moved in from the old addons")

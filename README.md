@@ -2,7 +2,7 @@
 
 One addon for **World of Warcraft: Forever** that does the lot: auction house prices and price history, crafting
 profits, the cheapest way to level a profession, your sales ledger, everything you own and your net worth, which mobs
-are worth farming, gathering spots, dungeon quests and rested XP. All of it in one window, one minimap button and
+are worth farming, gathering spots, what quests are worth and rested XP. All of it in one window, one minimap button and
 one set of auction house prices.
 
 **[Download the latest release](https://github.com/artificial-bones/King_Maker/releases/latest)** (`King_Maker.zip`),
@@ -45,12 +45,9 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 [Questie](https://github.com/Questie/Questie) and its database,
 [QuestieDB](https://github.com/Questie/QuestieDB/releases), aren't part of King Maker but make it much better:
 
-- **Dungeon Quests** reads exact pickup levels, quest IDs, quest giver locations, dungeon entrances and each quest's
-  XP from QuestieDB, so waypoints, levels and XP are exact instead of estimated.
 - **Mob Farming** gets every mob in the game from QuestieDB (levels, zones, spawn points, drops) instead of only the
   mobs you've seen yourself.
 
-[TomTom](https://www.curseforge.com/wow/addons/tomtom) is optional too: Dungeon Quests uses its arrow for waypoints.
 
 ## The pages
 
@@ -63,9 +60,9 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 | Crafting | Crafting Profits | `/mk` | The most profitable crafts for your professions |
 | Crafting | Skill-ups | `/suk` | The cheapest way to level a profession |
 | Gold | Inventory | `/ik` | Everything on every character, and your net worth |
+| Gold | Quest Gold | `/qk gold` | What the level 48+ quests left are worth, zone by zone |
 | Farming | Mob Farming, White Items | `/fk` | Which mobs and white items are worth farming |
 | Farming | Gathering | `/gt` | Mining, herb, fishing and treasure spots on your maps |
-| Characters | Dungeon Quests | `/qk` | Every Horde dungeon quest from 13 to 60 |
 | Characters | Rested XP | `/rk` | Rested XP on all your characters |
 | | Settings | `/km settings` | Everything, module by module |
 
@@ -169,13 +166,21 @@ Marks mining, herb, fishing and treasure spots on your world map and minimap, an
 
 [Full guide](AddOns/King_Maker/Modules/Gather#readme)
 
-### Dungeon Quests (was Quest King)
+### Quest Gold (was Quest King)
 
-Every Horde dungeon quest from level 13 to 60, with what you've done, what's next and where to go.
+Since Forever's November hotfix, most quests of level 48 and up pay gold. Quest Gold works out what each one is
+worth and where the most is left for the character you're on.
 
-- **Every dungeon** in level order with its quests, chains laid out inline, the step to do **Next** marked.
-- **The levels that matter**, **XP for every quest at your level**, **waypoints** to givers and entrances.
-- **The route** through the dungeons, and **bag cleanup** marks for quest items you no longer need (Bagnon too).
+- **Every 48+ quest** (853 of them, in 40 zones) for your faction and class, with the zones ranked by the gold
+  you have left to earn there: quests left of total, and what they're worth.
+- **Each quest's worth**: its gold, plus the best reward item at today's prices (auction house after the cut, or
+  a vendor), plus any item it always gives, minus what the items you hand in would sell for.
+- **Done, in your log, ready, your level too low, or after another quest**, for the character you're logged in on.
+- **Forever's real quest gold** is learned as you quest (quest givers, your log, turn-ins), and **Ask the game**
+  fetches a whole zone's at once. Amounts not seen yet are estimates, marked ~.
+- **Bag cleanup** marks quest items you no longer need (Bagnon too).
+
+Dungeon Quests is gone in 2.4.0: other addons do dungeon quests better.
 
 [Full guide](AddOns/King_Maker/Modules/Quest#readme)
 
@@ -188,16 +193,18 @@ How much rested XP every character has built up, when each one is full, and wher
 ## Credits
 
 Thank you to the [Questie](https://github.com/Questie/Questie) team for Questie and
-[QuestieDB](https://github.com/Questie/QuestieDB). Their quest, NPC and item database is what lets Dungeon Quests and
-Mob Farming know every quest, mob, spawn point and quest reward in the game. King Maker only reads that data; it
+[QuestieDB](https://github.com/Questie/QuestieDB). Their quest, NPC and item database is what lets Mob Farming know
+every mob, spawn point and drop in the game. King Maker only reads that data; it
 doesn't include or change any of it, so install Questie and QuestieDB from their own pages and support their authors.
 
 **Recipe data from [ForeverDB.net](https://foreverdb.net)** (GPL-3.0): every Forever recipe, its reagents, skill
 ranges and where it's learned, used by Crafting Profits, Skill-ups and the item tooltips. Thank you to ForeverDB for
 collecting it and sharing it.
 
-Thanks also to the author of [TomTom](https://www.curseforge.com/wow/addons/tomtom), whose arrow Dungeon Quests uses
-for waypoints, and to the authors of LibStub, CallbackHandler and HereBeDragons, which King Maker includes.
+**Quest data from [CMaNGOS classic-db](https://github.com/cmangos/classic-db)** (GPL-3.0), the open Classic world
+database: quest levels, requirements and rewards for Quest Gold, with zones and Forever's own quests from ForeverDB.net.
+
+Thanks also to the authors of LibStub, CallbackHandler and HereBeDragons, which King Maker includes.
 
 King Maker is free software under the [GNU General Public License v3](LICENSE).
 

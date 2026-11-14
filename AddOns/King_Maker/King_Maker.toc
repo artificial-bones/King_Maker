@@ -97,11 +97,11 @@ Modules\Mail\UI.lua
 Modules\Mail\Alts.lua
 
 # Quest
-Modules\Quest\Data\Dungeons.lua
+Modules\Quest\Data\Quests.lua
 Modules\Quest\Core.lua
 Modules\Quest\Bags.lua
-Modules\Quest\Dungeon.lua
-Modules\Quest\DungeonUI.lua
+Modules\Quest\Money.lua
+Modules\Quest\MoneyUI.lua
 
 # Rested
 Modules\Rested\Core.lua

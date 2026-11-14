@@ -335,7 +335,7 @@ GROUP, IN_GUILD = false, true
 -- Forever: the second value is the surname (PLAYER.surname; nil = none), not a realm.
 function UnitName(u) if u == "player" or u == nil then return PLAYER.name, PLAYER.surname end return UNITS[u] and UNITS[u].name end
 function UnitFullName(u) if u == "player" then return PLAYER.name, PLAYER.realm end return UnitName(u) end
-function UnitClass(u) if u == "player" or u == nil then return PLAYER.classLocal, PLAYER.class end return UNITS[u] and UNITS[u].className, UNITS[u] and UNITS[u].class end
+function UnitClass(u) if u == "player" or u == nil then return PLAYER.classLocal, PLAYER.class, PLAYER.classID end return UNITS[u] and UNITS[u].className, UNITS[u] and UNITS[u].class end
 function UnitLevel(u) if u == "player" or u == nil then return PLAYER.level end return UNITS[u] and UNITS[u].level or 0 end
 function UnitGUID(u) return GUIDS[u] or (UNITS[u] and UNITS[u].guid) end
 function UnitExists(u) return u == "player" or UNITS[u] ~= nil end

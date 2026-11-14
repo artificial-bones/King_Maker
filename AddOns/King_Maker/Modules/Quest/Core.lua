@@ -2,7 +2,8 @@ local _, KM = ...
 local ns = KM.Module("Quest", { title = "Quest King", short = "Quest", legacy = "Quest_King", db = "QuestKingDB" })
 
 -- Quest King: the quest items in your bags that no quest needs (red X on the slot, a tooltip line, /qk), and the
--- Dungeon Quests page of the King Maker window (Characters > Dungeon Quests, Dungeon.lua and DungeonUI.lua).
+-- Quest Gold page of the King Maker window (Gold > Quest Gold: Money.lua and MoneyUI.lua, data in Data/Quests.lua).
+-- King Maker 2.4.0 replaced the Dungeon Quests page with Quest Gold.
 -- Its public face is the whole module: QuestKing = ns, as in 1.x. It has no minimap button of its own any more:
 -- the King Maker crown's quick actions open the page.
 
@@ -11,7 +12,7 @@ local QUEST_CLASS = 12 -- Enum.ItemClass.Questitem
 local DEFAULTS = {
     marks = true,   -- show the mark on bag slots
     tooltip = true, -- add a line to the item tooltip
-    dqHide60 = false, dqHideDone = false, dqView = "dungeons",
+    qgHideDone = false, -- Quest Gold: leave out quests you've done
 }
 
 QuestKing = ns
@@ -179,7 +180,7 @@ function ns.Refresh()
     ns.ScanQuestLog()
     ns.ScanBags()
     if ns.UpdateBagButtons then ns.UpdateBagButtons() end
-    if ns.RefreshDungeons then ns.RefreshDungeons() end -- redraws the Dungeon Quests page when it's open
+    if ns.RefreshQuestGold then ns.RefreshQuestGold() end -- redraws the Quest Gold page when it's open
 end
 
 -- Bag and quest events come in bursts; refresh once after they settle.
@@ -226,11 +227,10 @@ SlashCmdList.QUESTKING = function(msg)
     local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(%S*)")
     if cmd == "" or cmd == "list" then
         list()
-    elseif cmd == "dungeons" or cmd == "d" or cmd == "dungeon" then
-        ns.ToggleDungeons()
-    elseif cmd == "route" then
-        QuestKingDB.dqView = "route"
-        ns.ToggleDungeons(true)
+    elseif cmd == "gold" or cmd == "g" then
+        ns.ToggleQuestGold()
+    elseif cmd == "dungeons" or cmd == "route" then
+        KM.Print(ns, "Dungeon Quests is gone (other addons do it better); Quest Gold took its place: /qk gold")
     elseif cmd == "button" then
         KM.Print(ns, "The King Maker crown on the minimap replaces this button: /km button")
     elseif cmd == "marks" then
@@ -239,8 +239,7 @@ SlashCmdList.QUESTKING = function(msg)
         onOff(arg, "tooltip", "Tooltip line")
     else
         KM.Print(ns, "/qk   list quest items no quest in your log needs")
-        KM.Print(ns, "/qk dungeons   Dungeon Quests: what you've done, what's next, where to go (or /km dungeons)")
-        KM.Print(ns, "/qk route   the dungeon route: what to pick up before each run")
+        KM.Print(ns, "/qk gold   Quest Gold: the 48+ quests left for this character and what each zone is worth")
         KM.Print(ns, "/qk marks on|off   show or hide the red X on bag slots")
         KM.Print(ns, "/qk tooltip on|off   show or hide the tooltip line")
     end
@@ -257,7 +256,8 @@ function ns.InitDB()
     for k, v in pairs(DEFAULTS) do
         if db[k] == nil then db[k] = v end
     end
-    db.dqDone = db.dqDone or {} -- dungeon quests you ticked off yourself
+    db.gold = db.gold or {} -- quest ID -> copper: Forever's real quest gold, learned in game (Money.lua), every character
+    db.dqDone, db.dqHide60, db.dqHideDone, db.dqView = nil, nil, nil, nil -- Dungeon Quests (gone in 2.4.0)
     db.button, db.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     ns.db = db
 end
