@@ -25,9 +25,9 @@ local function moneyFull(c) return KM.Money(c) end
 
 local STATES = {
     ready = { "Ready", C.good }, log = { "In your log", C.accent }, low = { "Level ", C.bad },
-    locked = { "After another", C.muted }, done = { "Done", C.muted },
+    locked = { "After another", C.muted }, done = { "Done", C.muted }, nodata = { "Not in Forever", C.muted },
 }
-local ORDER = { log = 1, ready = 2, low = 3, locked = 4, done = 5 }
+local ORDER = { log = 1, ready = 2, low = 3, locked = 4, done = 5, nodata = 6 }
 
 local COLS = {
     { key = "status", label = "Status", w = 80 },
@@ -64,7 +64,7 @@ end
 
 local function fillRow(r, row, cells)
     local v, i = row.value, row.info
-    local dim = row.state == "done"
+    local dim = row.state == "done" or row.state == "nodata"
     cells.status:SetText(stateText(row))
     cells.quest:SetText((dim and grey(i.title) or gold(i.title))
         .. (i.flags:find("d") and grey("  dungeon") or i.flags:find("e") and grey("  group") or ""))
@@ -121,8 +121,9 @@ local function refreshZone(z)
     sumLine:SetText("Level " .. z.lo .. (z.hi ~= z.lo and ("-" .. z.hi) or "") .. "     "
         .. z.left .. " of " .. z.total .. " quests left, worth " .. gold(money(z.worth))
         .. grey("  (gold " .. money(z.gold) .. ")"))
-    noteLine:SetText(z.guesses > 0 and grey(z.guesses .. " of those use an estimated gold amount (~). Ask the game for the real ones, or they're learned as you quest.")
+    noteLine:SetText((z.guesses > 0 and grey(z.guesses .. " of those use an estimated gold amount (~). Ask the game for the real ones, or they're learned as you quest.")
         or grey("Every gold amount here is Forever's real one."))
+        .. (z.missing > 0 and grey("  " .. z.missing .. " more the game has no data on (not in Forever yet): listed last, not counted.") or ""))
     askButton:SetEnabled(ns.CanAsk() and z.guesses > 0)
 
     local rows = {}

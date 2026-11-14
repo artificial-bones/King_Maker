@@ -177,9 +177,11 @@ function ns.ForMe(q)
     return true
 end
 
--- "done", "log" (in your quest log), "ready", "low" (your level's too low), "locked" (the quest before it isn't done).
+-- "done", "log" (in your quest log), "ready", "low" (your level's too low), "locked" (the quest before it isn't done),
+-- "nodata" (the server knows nothing about it: not in Forever yet).
 function ns.QuestState(q)
     if done(q) then return "done" end
+    if ns.db.noData[q] and not inLog(q) then return "nodata" end
     if inLog(q) then return "log" end
     local i = info(q)
     if i.prev ~= 0 and not done(i.prev) then return "locked" end
@@ -206,14 +208,19 @@ function ns.Zones()
             local z = by[r[1]]
             if not z then
                 z = { map = r[1], name = zoneName(r[1]), quests = {}, total = 0, left = 0, worth = 0, gold = 0, guesses = 0,
-                      lo = r[2], hi = r[2] }
+                      missing = 0, lo = r[2], hi = r[2] }
                 by[r[1]] = z
                 out[#out + 1] = z
             end
             table.insert(z.quests, q)
-            z.total = z.total + 1
-            z.lo, z.hi = math.min(z.lo, r[2]), math.max(z.hi, r[2])
-            if not done(q) then
+            local missing = ns.db.noData[q] and not done(q) and not inLog(q)
+            if missing then
+                z.missing = z.missing + 1 -- listed (greyed), but not counted: the server says it isn't in Forever
+            else
+                z.total = z.total + 1
+                z.lo, z.hi = math.min(z.lo, r[2]), math.max(z.hi, r[2])
+            end
+            if not done(q) and not missing then
                 local v = ns.QuestValue(q)
                 z.left = z.left + 1
                 z.worth = z.worth + v.worth
@@ -235,6 +242,7 @@ end
 
 local function learn(q, copper)
     if not (ns.db and q and ns.QUESTS[q] and type(copper) == "number" and copper >= 0) then return false end
+    ns.db.noData[q] = nil -- it's real after all
     if ns.db.gold[q] == copper then return false end
     ns.db.gold[q] = copper
     typicalCache = nil
@@ -281,12 +289,25 @@ function ns.AskZone(map)
 end
 function ns.CanAsk() return C_QuestLog and C_QuestLog.RequestLoadQuestByID and GetQuestLogRewardMoney and true or false end
 
+-- The server's answer. No data at all: the quest isn't in Forever (yet), set aside (db.noData) and left out of the
+-- totals. Data that says 0: it really pays nothing (once the client says its reward data is in).
 local function answer(q, success)
     if not asking[q] then return end
     asking[q] = nil
-    if not success then return end
+    if not success then
+        if not ns.db.noData[q] then
+            ns.db.noData[q] = true
+            if ns.RefreshQuestGold then ns.RefreshQuestGold() end
+        end
+        return
+    end
     local ok, money = pcall(GetQuestLogRewardMoney, q)
-    if ok and type(money) == "number" and money > 0 then learn(q, money) end
+    if not (ok and type(money) == "number") then return end
+    if money > 0 then
+        learn(q, money)
+    elseif not HaveQuestRewardData or select(2, pcall(HaveQuestRewardData, q)) then
+        learn(q, 0)
+    end
 end
 
 local function questID()

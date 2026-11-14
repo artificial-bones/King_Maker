@@ -257,6 +257,7 @@ function ns.InitDB()
         if db[k] == nil then db[k] = v end
     end
     db.gold = db.gold or {} -- quest ID -> copper: Forever's real quest gold, learned in game (Money.lua), every character
+    db.noData = db.noData or {} -- quest ID -> true: the server had nothing on it (not in Forever yet); out of the totals
     db.dqDone, db.dqHide60, db.dqHideDone, db.dqView = nil, nil, nil, nil -- Dungeon Quests (gone in 2.4.0)
     db.button, db.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     ns.db = db

@@ -231,6 +231,17 @@ n = ns.AskZone(1446); L.execute("RUN_TIMERS()")
 assert n == 1 and L.eval("ASKED[1]") == 9003, n
 L.execute("FIRE('QUEST_DATA_LOAD_RESULT', 9003, true)")
 assert L.eval("QuestKingDB.gold[9003]") == 12000
+# the server knows nothing about a quest: set aside, out of the zone's totals; one that says 0 pays 0 for real
+L.execute("QNS.QUESTS[9008] = { 1446, 60, 55, '', 0, {}, {}, 0, '', {}, 0, 'Not Out Yet' }; QNS.QUESTS[9009] = { 1446, 60, 55, '', 0, {}, {}, 0, '', {}, 0, 'Pays Nothing' }")
+L.execute("GetQuestLogRewardMoney = function(q) return 0 end; HaveQuestRewardData = function() return true end")
+before = [z for z in ns.Zones().values() if z.name == "Tanaris"][0].total
+ns.AskZone(1446); L.execute("RUN_TIMERS(); FIRE('QUEST_DATA_LOAD_RESULT', 9008, false); FIRE('QUEST_DATA_LOAD_RESULT', 9009, true)")
+assert L.eval("QuestKingDB.noData[9008]") is True and L.eval("QuestKingDB.gold[9008]") is None
+assert L.eval("QuestKingDB.gold[9009]") == 0 and ns.QuestState(9008) == "nodata"
+tan = [z for z in ns.Zones().values() if z.name == "Tanaris"][0]
+assert tan.total == before - 1 and tan.missing == 1, (before, tan.total, tan.missing)
+# seeing it for real later (picked up, gold shown) brings it back
+ns.LearnGold(9008, 20000); assert L.eval("QuestKingDB.noData[9008]") is None
 print("QUEST GOLD LOGIC OK")
 
 
@@ -252,7 +263,7 @@ assert any(x == "Done" or "Done" in x for x in T) and any("Ready" in x for x in 
 assert not any("Alliance Only" in x for x in T) and not any("Warlocks Only" in x for x in T)
 L.execute("QuestKingDB.qgHideDone = true"); ns.RefreshQuestGold()
 rows = ns.goldTable.data
-assert [rows[i].id for i in range(1, len(rows) + 1)] == [9003] and not KM.errorShown, last(L)  # Sand Quest (done) hidden
+assert [rows[i].id for i in range(1, len(rows) + 1)] == [9008, 9003, 9009] and not KM.errorShown, last(L)  # Sand Quest (done) hidden; most worth first
 L.execute("QuestKingDB.qgHideDone = false")
 qk("dungeons"); assert "Quest Gold took its place" in last(L)
 qk("gold"); assert not KM.IsShown(), "/qk gold toggles it closed"
