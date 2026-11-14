@@ -25,6 +25,7 @@ Modules\Scanner\Scan.lua
 Modules\Scanner\DeepScan.lua
 Modules\Scanner\Sync.lua
 Modules\Scanner\MarketScan.lua
+Modules\Scanner\TooltipCraft.lua
 Modules\Scanner\Tooltip.lua
 Modules\Scanner\Browser.lua
 

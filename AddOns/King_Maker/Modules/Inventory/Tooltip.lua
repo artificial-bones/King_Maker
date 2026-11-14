@@ -26,6 +26,7 @@ function ns.AddTooltipLines(tt, id)
     else
         tt:AddDoubleLine("You own", total .. worth, 0.78, 0.78, 0.78, 1, 1, 1)
     end
+    if ScannerKing and ScannerKing.TooltipShort and ScannerKing.TooltipShort() then return end -- Shift for the rest
     local list = {}
     for who, n in pairs(by) do table.insert(list, { who, n }) end
     table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)

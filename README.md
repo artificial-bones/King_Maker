@@ -78,8 +78,10 @@ The price engine every other page reads from.
   - **Market Scan** prices your chosen professions: everything they make and use.
   - **Deep Scan** prices every item on the auction house. Its **market price** comes from the cheapest 15 to 30% of
     listings, so one silly listing doesn't decide it, and it keeps the lowest buyout and how many are listed.
-- **A King Maker section in every item tooltip**: auction house or vendor (which pays more, and by how much), market
-  price and when it was scanned, the 30-day average and trend, who drops it, what it's used in, and how many you own.
+- **A King Maker section in every item tooltip**: auction house, vendor or disenchant (which pays most, and by how
+  much), market price and when it was scanned, the 30-day average and trend, who drops it, the 3 most valuable things
+  to craft from it, what it costs to craft and which of your characters can, what a recipe teaches and who can learn
+  it, your shopping-list goal, and how many you own. Each part can be switched off, or held back until you press Shift.
 - **The price list**, grouped like the auction house, with search and sortable columns.
 - **Guild sharing**: Trade Goods prices go to guildmates running King Maker after every scan.
 

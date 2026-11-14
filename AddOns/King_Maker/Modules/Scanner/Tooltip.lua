@@ -12,9 +12,15 @@ local API = ns.API
 -- Laid out like a crafting addon's block: light grey labels, white values (API.TooltipLine for providers).
 --   Vendor        what a vendor pays you for one
 --   Vendors sell  what you paid a vendor for one (Crafting Profits saw it)
+--   Disenchant    the average value of disenchanting one (also in the verdict: DISENCHANT)
+--   Craft cost    to make one, and the profit after the cut; You can craft it: which of your characters
+--   Teaches       a recipe item: what it teaches, who knows it, who can learn it, whose skill is too low
 --   Drops         the mobs with the best drop chance (Farm: your kills and your guild's, QuestieDB)
---   Used in       professions with recipes that take it (Crafting Profits' recipes)
---   You own         how many, and on which character (Inventory's provider), then anyone else's lines
+--   Used in       professions with recipes that take it, then the 3 most valuable things made from it
+--   Shopping list on one of your lists: how many you have of how many you want
+--   You own       how many, and on which character (Inventory's provider), then anyone else's lines
+-- The crafting rows come from TooltipCraft.lua. Each group can be switched off (ui.tip, /sk tip), and the short
+-- tooltip shows only the header, verdict, price and what you own until you hold Shift.
 --
 -- Other addons can add their own lines under ours:
 --
@@ -30,7 +36,7 @@ end
 
 local LABEL, WHITE = { 0.78, 0.78, 0.78 }, { 1, 1, 1 }
 local HEAD = { 0.94, 0.77, 0.30 }                       -- the crown's gold
-local TAG = { AUCTION = { 1, 0.82, 0 }, VENDOR = { 1, 0.6, 0.25 } }
+local TAG = { AUCTION = { 1, 0.82, 0 }, VENDOR = { 1, 0.6, 0.25 }, DISENCHANT = { 0.75, 0.55, 1 } }
 local CUT = 0.95                                        -- the auction house keeps 5% of a sale
 local FIRST = "Econ_King"                               -- averages and trend sit right under the prices
 
@@ -116,65 +122,155 @@ local function vendorBuy(id)
     return market and market.db and market.db.vendor and market.db.vendor[id]
 end
 
--- Drops and Used in, worked out once per item for a little while (Drops walks every mob you know).
+-- Drops and Used in, and the crafting rows (TooltipCraft.lua), worked out once per item for a little while: Drops
+-- walks every mob you know and the crafting rows every recipe that uses the item.
 local cache, cacheAt = {}, 0
-local function sources(id)
+local function try(fn, id)
+    if not fn then return nil end
+    local ok, v = pcall(fn, id)
+    return ok and v or nil
+end
+local function extras(id)
     local now = GetTime and GetTime() or 0
     if now - cacheAt > 30 then wipe(cache); cacheAt = now end
-    if cache[id] == nil then
-        local rows = {}
-        local ok, d = pcall(drops, id)
-        if ok and d then rows[#rows + 1] = { "Drops", d } end
-        local ok2, u = pcall(uses, id)
-        if ok2 and u then rows[#rows + 1] = { "Used in", u } end
-        cache[id] = rows
+    local x = cache[id]
+    if not x then
+        x = { drops = try(drops, id), uses = try(uses, id), best = try(ns.TipBestCrafts, id), make = try(ns.TipMake, id),
+              pattern = try(ns.TipPattern, id), de = try(ns.TipDisenchant, id), goal = try(ns.TipGoal, id) }
+        cache[id] = x
     end
-    return cache[id]
+    return x
 end
-ns.TooltipSources = sources
+function ns.TooltipSources(id)
+    local x, rows = extras(id), {}
+    if x.drops then rows[#rows + 1] = { "Drops", x.drops } end
+    if x.uses then rows[#rows + 1] = { "Used in", x.uses } end
+    return rows
+end
+function ns.ClearTooltipCache() wipe(cache) end
+
+-- Which rows show (Settings > Scanner, /sk tip): ui.tip[key].
+local function on(key) return ns.db.ui.tip and ns.db.ui.tip[key] end
+
+-- Short tooltip: only the header, the verdict, the price and how many you own, until you hold Shift.
+local function short()
+    return on("short") and not (IsShiftKeyDown and IsShiftKeyDown())
+end
+API.TooltipShort = short
+
+local function signed(v)
+    if v >= 0 then return "|cff4cff4c+|r" .. API.FormatMoney(v) end
+    return "|cffff5050-|r" .. API.FormatMoney(-v)
+end
+
+local function itemText(id)
+    local name, q
+    if C_Item and C_Item.GetItemInfo then
+        local ok, n, _, quality = pcall(C_Item.GetItemInfo, id)
+        if ok then name, q = n, quality end
+    end
+    if not name and C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, id) end
+    local hex = KM.UI and KM.UI.QUALITY and KM.UI.QUALITY[q or 1] or "ffffff"
+    return "|cff" .. hex .. (name or ("Item " .. id)) .. "|r"
+end
+
+-- Which pays most for one: the auction house after its cut, a vendor, or disenchanting it (when it can be).
+local LOSER = { AUCTION = "the auction house", VENDOR = "vendoring", DISENCHANT = "disenchanting" }
+local function verdict(ah, sell, de)
+    local opts = {}
+    if ah then opts[#opts + 1] = { "AUCTION", math.floor(ah * CUT) } end
+    if sell then opts[#opts + 1] = { "VENDOR", sell } end
+    if de then opts[#opts + 1] = { "DISENCHANT", math.floor(de) } end
+    if #opts < 2 then return nil end
+    table.sort(opts, function(a, b) return a[2] > b[2] end)
+    local best, second = opts[1], opts[2]
+    local diff = API.FormatMoney(best[2] - second[2])
+    if best[1] == "AUCTION" then return "AUCTION", "Pays " .. diff .. " more than " .. LOSER[second[1]] .. "." end
+    if best[1] == "VENDOR" then return "VENDOR", "Vendor it: " .. diff .. " more than " .. LOSER[second[1]] .. "." end
+    return "DISENCHANT", "Disenchant it: about " .. diff .. " more than " .. LOSER[second[1]] .. "."
+end
 
 function ns.AddTooltipLines(tt, id)
     if not (ns.db and tt and id) then return end
     local pr = ns.db.ui.tooltip and ns.db.prices[id]
     local more = ns.db.ui.sources
-    local rows = more and sources(id) or {}
+    local x = extras(id)
     local buy = more and vendorBuy(id)
     local sell = vendorSell(id)
+    local de = on("de") and x.de
+    local make = on("make") and x.make
+    local pattern = on("pattern") and x.pattern
+    local best = on("crafts") and x.best
+    local goal = on("goal") and x.goal
     local owned = InventoryKing and InventoryKing.GetCount and select(2, pcall(InventoryKing.GetCount, id))
-    local section = pr or #rows > 0 or buy or (type(owned) == "number" and owned > 0)
+    local section = pr or buy or make or pattern or goal or (more and (x.drops or x.uses))
+        or (type(owned) == "number" and owned > 0)
+    local brief = section and short()
     if section then
         tt:AddLine(" ") -- a gap between the game's lines (or another addon's) and ours
-        -- the header, and which pays more: the auction house (after its cut) or a vendor
-        local value = pr and (pr.m or pr.p)
-        local tag, verdict
-        if value and sell then
-            local diff = math.floor(value * CUT) - sell
-            if diff > 0 then
-                tag, verdict = "AUCTION", "Pays " .. API.FormatMoney(diff) .. " more than vendoring."
-            else
-                tag, verdict = "VENDOR", "Vendor it: " .. API.FormatMoney(-diff) .. " more than the auction house."
-            end
-        end
+        local tag, says = verdict(pr and (pr.m or pr.p), sell, de)
         local tc = tag and TAG[tag] or WHITE
         line(tt, "King Maker", tag or " ", HEAD, tc)
-        if verdict then tt:AddLine(verdict, tc[1], tc[2], tc[3]) end
+        if says then tt:AddLine(says, tc[1], tc[2], tc[3]) end
         if pr then
             local age = API.PriceAge(pr.t) .. (pr.from and (", " .. pr.from) or "")
             line(tt, "Auction house", API.FormatMoney(pr.m or pr.p) .. "  " .. grey(age))
-            if pr.m then line(tt, "Lowest buyout", API.FormatMoney(pr.p)) end
-            if pr.q then line(tt, "Listed", pr.q .. (pr.n and (" in " .. pr.n .. " auction" .. (pr.n == 1 and "" or "s")) or "")) end
+            if not brief then
+                if pr.m then line(tt, "Lowest buyout", API.FormatMoney(pr.p)) end
+                if pr.q then line(tt, "Listed", pr.q .. (pr.n and (" in " .. pr.n .. " auction" .. (pr.n == 1 and "" or "s")) or "")) end
+            end
         end
     end
-    if providers[FIRST] then pcall(providers[FIRST], tt, id) end
-    if section and more then
-        if sell then line(tt, "Vendor", API.FormatMoney(sell)) end
-        if buy then line(tt, "Vendors sell", API.FormatMoney(buy)) end
-        for _, r in ipairs(rows) do line(tt, r[1], r[2]) end
+    if brief then
+        tt:AddLine("Hold Shift for details", 0.55, 0.55, 0.55)
+    else
+        if providers[FIRST] then pcall(providers[FIRST], tt, id) end
+        if section then
+            if more and sell then line(tt, "Vendor", API.FormatMoney(sell)) end
+            if buy then line(tt, "Vendors sell", API.FormatMoney(buy)) end
+            if de then line(tt, "Disenchant", "about " .. API.FormatMoney(de)) end
+            if make then
+                if make.cost then
+                    line(tt, "Craft cost", API.FormatMoney(make.cost)
+                        .. (make.profit and ("  " .. grey("profit") .. " " .. signed(make.profit)) or ""))
+                end
+                if make.who then line(tt, "You can craft it", make.who) end
+            end
+            if pattern then
+                line(tt, "Teaches", pattern.teaches
+                    .. (pattern.prof and grey("  " .. pattern.prof .. " " .. (pattern.skill or "")) or ""))
+                if pattern.known then line(tt, "Known by", pattern.known) end
+                if pattern.can then line(tt, "Can learn it", pattern.can) end
+                if pattern.low then line(tt, "Skill too low", pattern.low) end
+            end
+            if more and x.drops then line(tt, "Drops", x.drops) end
+            if more and x.uses then line(tt, "Used in", x.uses) end
+            if best then
+                if not (more and x.uses) then line(tt, "Used in", " ") end
+                for _, b in ipairs(best) do
+                    line(tt, "   " .. itemText(b.item) .. (b.made > 1 and grey(" x" .. b.made) or ""),
+                        API.FormatMoney(b.value) .. (b.profit and ("  " .. signed(b.profit)) or ""))
+                end
+            end
+            if goal then line(tt, "Shopping list", goal) end
+        end
     end
     for owner, fn in pairs(providers) do
         if owner ~= FIRST then pcall(fn, tt, id) end
     end
 end
+
+-- Holding or letting go of Shift redraws a short tooltip.
+local mf = CreateFrame("Frame")
+KM.Register(mf, "MODIFIER_STATE_CHANGED")
+mf:SetScript("OnEvent", function(_, _, key)
+    if not (ns.db and on("short")) or not (key == "LSHIFT" or key == "RSHIFT") then return end
+    local tt = GameTooltip
+    if tt and tt.IsShown and tt:IsShown() and tt.skItem and tt.RefreshData then
+        tt.skItem = nil
+        pcall(tt.RefreshData, tt)
+    end
+end)
 
 local function linkID(link)
     return link and tonumber(link:match("item:(%d+)"))

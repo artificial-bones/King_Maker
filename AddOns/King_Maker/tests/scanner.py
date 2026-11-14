@@ -591,4 +591,89 @@ lines = [L7.eval("TT.lines")[i] for i in range(1, len(L7.eval("TT.lines")) + 1)]
 assert not any(l.split("|")[0] in ("Vendor", "Drops", "Used in") for l in lines) and row("Auction house"), lines
 print("SECTION OK")
 
+# The crafting rows: best crafts, craft cost and who can craft it, recipe items, disenchant, shopping goal, Shift
+L8, KM8 = fresh(only=["Scanner", "Econ", "Farm", "Market", "Skillup", "Inventory", "Shopping"], seed="""
+ITEM(13463, "Dreamfoil", { sell = 100, class = 7, subclass = 9 })
+ITEM(99004, "Fake Elixir", { sell = 10 }); ITEM(99006, "Fake Cloth", { sell = 10 }); ITEM(99008, "Fake Flask", { sell = 10 })
+ITEM(99002, "Fake Potion", { sell = 10 })
+ITEM(99100, "Green Boots", { quality = 2, ilvl = 20, class = 4, sell = 50 })
+local now = (GetServerTime and GetServerTime() or time())
+ScannerKingDB = { prices = {
+  [13463] = { p = 3589, t = now }, [99002] = { p = 50000, t = now }, [99004] = { p = 9000, t = now },
+  [99006] = { p = 100, t = now }, [99008] = { p = 30000, t = now }, [99100] = { p = 200, t = now },
+  [10940] = { p = 1000, t = now }, [10939] = { p = 1000, t = now }, [10978] = { p = 1000, t = now } } }
+MarketKingDB = { learned = {
+  [99001] = { 99002, 4, 270, { 13463, 2, 2453, 1 }, 1 },   -- a reagent with no price: no profit, not ranked first
+  [99003] = { 99004, 4, 280, { 13463, 1 }, 2 },            -- makes 2: 18000 a craft
+  [99005] = { 99006, 8, 200, { 13463, 3 }, 1 },            -- a loss
+  [99007] = { 99008, 4, 1, { 13463, 1 }, 1 } } }           -- the best
+SkillupKingDB = { chars = { ["Alt Two-Forever"] = { known = {}, skills = { [4] = { cur = 300, max = 300 } } } } }
+InventoryKingDB = { stock = { ["Alt Two-Forever"] = { bags = { [13463] = 12 } } },
+  chars = { ["Alt Two-Forever"] = { class = "MAGE", level = 30 } } }
+""")
+L8.execute("""
+TT = { lines = {} }
+function TT:AddDoubleLine(l, r) self.lines[#self.lines+1] = l .. "|" .. r end
+function TT:AddLine(l) self.lines[#self.lines+1] = l end
+function HOVER8(id) TT.lines = {}; TT.skItem = nil; TT_HOOK(TT, { id = id }); return TT.lines end
+""")
+def hover8(id_):
+    t = L8.eval("HOVER8(%d)" % id_)
+    return [t[i] for i in range(1, len(t) + 1)]
+def row8(lines, k):
+    return next((l for l in lines if l.split("|")[0] == k), None)
+sk8 = L8.eval("SlashCmdList.SCANNERKING")
+
+# Dreamfoil: Used in, then the 3 best crafts, profit first (Fake Flask, Fake Elixir x2, Fake Cloth at a loss);
+# Fake Potion has no profit (a reagent without a price) so it isn't in the top 3
+lines = hover8(13463)
+i = [l.split("|")[0] for l in lines].index("Used in")
+top = lines[i + 1:i + 4]
+assert "Fake Flask" in top[0] and "Fake Elixir" in top[1] and " x2" in top[1] and "Fake Cloth" in top[2], top
+assert "4cff4c+" in top[0] and "ff5050-" in top[2], top   # profit green, loss red
+assert not any("Fake Potion" in l for l in lines), lines
+
+# Fake Flask: craft cost from Dreamfoil's price, the profit, and Alt Two can make it (trainer recipe, skill 300)
+lines = hover8(99008)
+assert row8(lines, "Craft cost") and "35" in row8(lines, "Craft cost") and "profit" in row8(lines, "Craft cost"), lines
+assert "Alt Two" in row8(lines, "You can craft it"), lines
+
+# A recipe item: what it teaches, who knows it, who can learn it
+s = KM8.mods.Skillup
+spell = next(sp for sp in s.PATTERNS.keys() if s.RECIPES[sp] and s.RECIPES[sp][2] == 4 and s.RECIPES[sp][3] <= 300)
+item = s.PATTERNS[spell][1]
+L8.execute("ITEM(%d, 'Recipe: Something', { class = 9 })" % item)
+lines = hover8(item)
+assert row8(lines, "Teaches") and "Alchemy" in row8(lines, "Teaches"), lines
+assert "Alt Two" in row8(lines, "Can learn it") and "(300)" in row8(lines, "Can learn it"), lines
+L8.execute("SkillupKingDB.chars['Alt Two-Forever'].known[%d] = true" % spell); KM8.mods.Scanner.ClearTooltipCache()
+lines = hover8(item)
+assert "Alt Two" in row8(lines, "Known by") and row8(lines, "Can learn it") is None, lines
+
+# Green boots: disenchanting pays more than the auction house and the vendor
+lines = hover8(99100)
+assert lines[1] == "King Maker|DISENCHANT" and lines[2].startswith("Disenchant it: about "), lines
+assert row8(lines, "Disenchant").startswith("Disenchant|about "), lines
+
+# On a shopping list: have / want
+L8.execute("ShoppingKing.Add(13463, 20, nil, 'Favorites')"); KM8.mods.Scanner.ClearTooltipCache()
+assert row8(hover8(13463), "Shopping list") == "Shopping list|Favorites: 12 / 20"
+
+# /sk tip turns a row off
+sk8("tip crafts off"); assert L8.eval("ScannerKingDB.ui.tip.crafts") is False
+assert not any("Fake Flask" in l for l in hover8(13463))
+sk8("tip crafts on")
+
+# Short tooltip: verdict, price and the total you own; Shift shows the rest
+sk8("tip short on")
+L8.execute("SHIFT = false")
+lines = hover8(13463)
+assert "Hold Shift for details" in lines and row8(lines, "Drops") is None and row8(lines, "Used in") is None, lines
+assert row8(lines, "Auction house") and row8(lines, "You own") and not any("bags 12" in l for l in lines), lines
+L8.execute("SHIFT = true")
+lines = hover8(13463)
+assert "Hold Shift for details" not in lines and row8(lines, "Used in") and any("bags 12" in l for l in lines), lines
+L8.execute("SHIFT = false"); sk8("tip short off")
+print("CRAFT ROWS OK")
+
 print("scanner: ok")

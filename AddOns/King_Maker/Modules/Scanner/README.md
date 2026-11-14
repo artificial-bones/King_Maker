@@ -74,17 +74,25 @@ Every item tooltip (bags, bank, loot, links, the auction house) gets a
 
 | Row | What it shows |
 |---|---|
-| **King Maker** ... **AUCTION** / **VENDOR** | Which pays more for one, after the auction house's 5% cut, and by how much |
+| **King Maker** ... **AUCTION** / **VENDOR** / **DISENCHANT** | Which pays most for one (the auction house after its 5% cut, a vendor, or disenchanting it), and by how much |
 | Auction house | The market price (or lowest buyout) and when it was scanned, and by which guildmate if it came from one |
 | Lowest buyout, Listed | The cheapest listing, and how many are up in how many auctions |
 | 30-day average, 7-day trend | From Price History |
 | Vendor, Vendors sell | What a vendor pays you for one, and what you paid a vendor for one |
+| Disenchant | On gear: what disenchanting one is worth on average, at today's prices |
+| Craft cost, You can craft it | On crafted items: what one costs to make from today's prices, the profit after the cut, and which of your characters can make it |
+| Teaches, Known by, Can learn it, Skill too low | On patterns, plans, formulas and recipes: the recipe and its skill, and where each of your characters stands |
 | Drops | The two mobs with the best drop chance (your kills and your guild's), with zone; QuestieDB fills in the rest |
-| Used in | The professions with recipes that take it, and how many recipes |
+| Used in | The professions with recipes that take it, then the **3 most valuable things to make from it**: what each sells for and the profit after the cut (best profit first) |
+| Shopping list | On one of your lists: how many you have of how many you want |
 | You own | How many, what they're worth, and on which characters |
 
-`/sk tooltip off` hides the prices, `/sk sources off` hides Vendor, Drops and
-Used in (both are in **Settings > Scanner**).
+Every group has its own switch in **Settings > Scanner**: `/sk tooltip off` hides
+the prices, `/sk sources off` hides Vendor, Drops and Used in, and
+`/sk tip crafts|make|pattern|de|goal off` hides the others. **Short tooltip**
+(`/sk tip short on`) shows only the verdict, the price and how many you own
+until you hold Shift. Your characters' skills and known recipes come from
+opening their profession windows once.
 
 | Command | What it does |
 |---|---|
@@ -95,6 +103,7 @@ Used in (both are in **Settings > Scanner**).
 | `/sk market` | Force a quick scan with the professions ticked on Crafting Profits |
 | `/sk tooltip on` / `off` | Prices in item tooltips |
 | `/sk sources on` / `off` | Vendor price, drops and recipes in item tooltips |
+| `/sk tip crafts\|make\|pattern\|de\|goal\|short` `on` / `off` | Best crafts, craft cost, recipe items, disenchant value, shopping goal; short = details with Shift |
 | `/sk status` | How many prices you have, when the last full and quick scans ran, and when a full scan is ready |
 | `/sk sync` | Send your prices to your guild now |
 | `/sk sync on` / `off` | Turn guild price sharing on or off |

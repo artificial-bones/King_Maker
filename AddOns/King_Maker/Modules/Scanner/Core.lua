@@ -161,6 +161,10 @@ function ns.InitDB()
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     if db.ui.tooltip == nil then db.ui.tooltip = true end
     if db.ui.sources == nil then db.ui.sources = true end -- tooltip: Vendor, Drops, Used in
+    db.ui.tip = db.ui.tip or {} -- tooltip rows: best crafts, craft cost, recipe items, disenchant, shopping goal, short
+    for k, v in pairs({ crafts = true, make = true, pattern = true, de = true, goal = true, short = false }) do
+        if db.ui.tip[k] == nil then db.ui.tip[k] = v end
+    end
     db.sync = db.sync or {}
     if db.sync.guild == nil then db.sync.guild = true end
     ns.db = db
@@ -189,6 +193,15 @@ SlashCmdList.SCANNERKING = function(msg)
         if arg == "on" then ns.db.ui.tooltip = true elseif arg == "off" then ns.db.ui.tooltip = false
         else ns.db.ui.tooltip = not ns.db.ui.tooltip end
         KM.Print(ns, "Prices in item tooltips " .. (ns.db.ui.tooltip and "on." or "off."))
+    elseif cmd == "tip" then
+        local key, arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)%s*(%S*)")
+        if key and ns.db.ui.tip[key] ~= nil then
+            if arg == "on" then ns.db.ui.tip[key] = true elseif arg == "off" then ns.db.ui.tip[key] = false
+            else ns.db.ui.tip[key] = not ns.db.ui.tip[key] end
+            KM.Print(ns, "Tooltip " .. key .. ": " .. (ns.db.ui.tip[key] and "on." or "off."))
+        else
+            KM.Print(ns, "/sk tip crafts|make|pattern|de|goal|short [on|off]")
+        end
     elseif cmd == "sources" then
         local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
         if arg == "on" then ns.db.ui.sources = true elseif arg == "off" then ns.db.ui.sources = false
@@ -221,6 +234,7 @@ SlashCmdList.SCANNERKING = function(msg)
         KM.Print(ns, "/sk market   force a quick scan of those plus the professions ticked on Crafting Profits")
         KM.Print(ns, "/sk tooltip [on|off]   prices in item tooltips")
         KM.Print(ns, "/sk sources [on|off]   vendor price, drops and recipes in item tooltips")
+        KM.Print(ns, "/sk tip crafts|make|pattern|de|goal|short [on|off]   more tooltip rows; short = details with Shift")
         KM.Print(ns, "/sk status   how many prices you have and how old")
         KM.Print(ns, "/sk sync [on|off]   share prices with your guild now, or turn sharing on/off")
     end

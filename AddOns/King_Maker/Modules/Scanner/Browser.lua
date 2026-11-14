@@ -292,6 +292,18 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
       get = function() return ns.db.ui.tooltip end, set = function(v) ns.db.ui.tooltip = v end },
     { type = "check", label = "Vendor, drops and recipes in item tooltips", tip = "Under the prices: what a vendor pays, what vendors charge, the mobs that drop it (best chance first) and the professions that use it.",
       get = function() return ns.db.ui.sources end, set = function(v) ns.db.ui.sources = v end },
+    { type = "check", label = "Most valuable crafts it's used in", tip = "Under Used in: the 3 best things to make from it, what each sells for and the profit after the cut.",
+      get = function() return ns.db.ui.tip.crafts end, set = function(v) ns.db.ui.tip.crafts = v end },
+    { type = "check", label = "Cost to craft and who can craft it", tip = "On crafted items: what one costs to make from today's prices, the profit, and which of your characters can make it.",
+      get = function() return ns.db.ui.tip.make end, set = function(v) ns.db.ui.tip.make = v end },
+    { type = "check", label = "Recipe items: what they teach and who can learn them", tip = "On patterns, plans, formulas and recipes: the recipe, which of your characters know it, can learn it, or need more skill.",
+      get = function() return ns.db.ui.tip.pattern end, set = function(v) ns.db.ui.tip.pattern = v end },
+    { type = "check", label = "Disenchant value", tip = "On gear: what disenchanting it is worth on average, and DISENCHANT in the verdict when that pays most.",
+      get = function() return ns.db.ui.tip.de end, set = function(v) ns.db.ui.tip.de = v end },
+    { type = "check", label = "Shopping list goal", tip = "When it's on one of your shopping lists: how many you have of how many you want.",
+      get = function() return ns.db.ui.tip.goal end, set = function(v) ns.db.ui.tip.goal = v end },
+    { type = "check", label = "Short tooltip: details with Shift", tip = "Only the verdict, the price and how many you own; hold Shift for everything else.",
+      get = function() return ns.db.ui.tip.short end, set = function(v) ns.db.ui.tip.short = v end },
     { type = "header", label = "Guild" },
     { type = "check", label = "Share prices with my guild", tip = "Your Trade Goods prices go to guildmates running King Maker (or Scanner King) after each scan; theirs come to you. The newest price wins.",
       get = function() return ns.db.sync.guild end, set = function(v) ns.db.sync.guild = v end },
@@ -299,7 +311,7 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
     { type = "header", label = "Commands" },
     { type = "text", label = "/sk   open the Prices page\n/sk scan   Scan (at the auction house): full when the game allows it, else quick\n"
         .. "/sk deep   force a full scan (progress window)\n/sk material   force a quick scan of Trade Goods and watched items\n"
-        .. "/sk market   the same plus Crafting Profits' ticked professions\n/sk tooltip on|off   prices in tooltips\n/sk sources on|off   vendor, drops and recipes in tooltips\n"
+        .. "/sk market   the same plus Crafting Profits' ticked professions\n/sk tooltip on|off   prices in tooltips\n/sk sources on|off   vendor, drops and recipes in tooltips\n/sk tip crafts|make|pattern|de|goal|short   more tooltip rows\n"
         .. "/sk sync [on|off]   share now, or turn sharing on/off\n/sk status   how many prices and how old" },
 } })
 
