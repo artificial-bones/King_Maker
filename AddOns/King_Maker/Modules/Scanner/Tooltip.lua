@@ -60,6 +60,7 @@ end
 ---------------------------------------------------------------------------
 
 local MAX_MOBS = 2
+local MAX_PROFS = 3 -- Used in: the professions with the most recipes, then "+2 more"
 
 -- "Flamebringer Stalker (Searing Gorge) 15%, Dust Stormer 4%, +3 more" or nil
 local function drops(id)
@@ -113,7 +114,10 @@ local function uses(id)
     local names = {}
     for name in pairs(by) do names[#names + 1] = name end
     table.sort(names, function(a, b) if by[a] ~= by[b] then return by[a] > by[b] end return a < b end)
+    local more = #names - MAX_PROFS
+    while #names > MAX_PROFS do table.remove(names) end
     for i, name in ipairs(names) do names[i] = name .. " (" .. by[name] .. ")" end
+    if more > 0 then names[#names + 1] = "+" .. more .. " more" end
     return table.concat(names, ", ")
 end
 
@@ -158,9 +162,10 @@ local function short()
 end
 API.TooltipShort = short
 
-local function signed(v)
-    if v >= 0 then return "|cff4cff4c+|r" .. API.FormatMoney(v) end
-    return "|cffff5050-|r" .. API.FormatMoney(-v)
+-- "profit 20s 72c" in green or "loss 20s 72c" in red: selling what you make, after the cut, minus what it cost.
+local function gain(v)
+    if v >= 0 then return "|cff4cff4cprofit|r " .. API.FormatMoney(v) end
+    return "|cffff5050loss|r " .. API.FormatMoney(-v)
 end
 
 local function itemText(id)
@@ -232,7 +237,7 @@ function ns.AddTooltipLines(tt, id)
             if make then
                 if make.cost then
                     line(tt, "Craft cost", API.FormatMoney(make.cost)
-                        .. (make.profit and ("  " .. grey("profit") .. " " .. signed(make.profit)) or ""))
+                        .. (make.profit and ("  " .. gain(make.profit)) or ""))
                 end
                 if make.who then line(tt, "You can craft it", make.who) end
             end
@@ -249,7 +254,7 @@ function ns.AddTooltipLines(tt, id)
                 if not (more and x.uses) then line(tt, "Used in", " ") end
                 for _, b in ipairs(best) do
                     line(tt, "   " .. itemText(b.item) .. (b.made > 1 and grey(" x" .. b.made) or ""),
-                        API.FormatMoney(b.value) .. (b.profit and ("  " .. signed(b.profit)) or ""))
+                        API.FormatMoney(b.value) .. (b.profit and ("  " .. gain(b.profit)) or ""))
                 end
             end
             if goal then line(tt, "Shopping list", goal) end

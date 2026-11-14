@@ -630,7 +630,7 @@ lines = hover8(13463)
 i = [l.split("|")[0] for l in lines].index("Used in")
 top = lines[i + 1:i + 4]
 assert "Fake Flask" in top[0] and "Fake Elixir" in top[1] and " x2" in top[1] and "Fake Cloth" in top[2], top
-assert "4cff4c+" in top[0] and "ff5050-" in top[2], top   # profit green, loss red
+assert "4cff4cprofit" in top[0] and "ff5050loss" in top[2], top   # profit in green, loss in red, in words
 assert not any("Fake Potion" in l for l in lines), lines
 
 # Fake Flask: craft cost from Dreamfoil's price, the profit, and Alt Two can make it (trainer recipe, skill 300)
