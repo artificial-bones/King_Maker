@@ -13,10 +13,11 @@ local API = ns.API
 --   Vendor        what a vendor pays you for one
 --   Vendors sell  what you paid a vendor for one (Crafting Profits saw it)
 --   Disenchant    the average value of disenchanting one (also in the verdict: DISENCHANT)
---   Cost to make  crafted gear, potions, bags (not materials): to make one, profit or loss; You can craft it: who
+--   Materials to craft  crafted gear, potions, bags (not materials): what one costs to make, then whether crafting
+--                 one to sell makes or loses money (or buying is cheaper); You can craft it: who
 --   Teaches       a recipe item: what it teaches, who knows it, who can learn it, whose skill is too low
 --   Drops         the mobs with the best drop chance (Farm: your kills and your guild's, QuestieDB)
---   Used in       professions with recipes that take it, then the 3 most valuable things made from it
+--   Used in       professions with recipes that take it (and, when ticked, the 3 most valuable things made from it)
 --   Shopping list on one of your lists: how many you have of how many you want
 --   You own       how many, and on which character (Inventory's provider), then anyone else's lines
 -- The crafting rows come from TooltipCraft.lua. Each group can be switched off (ui.tip, /sk tip), and the short
@@ -236,8 +237,16 @@ function ns.AddTooltipLines(tt, id)
             if de then line(tt, "Disenchant", "about " .. API.FormatMoney(de)) end
             if make then
                 if make.cost then
-                    line(tt, "Cost to make", API.FormatMoney(make.cost)
-                        .. (make.profit and ("  " .. gain(make.profit)) or ""))
+                    line(tt, "Materials to craft", API.FormatMoney(make.cost))
+                    if make.profit and make.profit >= 0 then
+                        tt:AddLine("Crafting one to sell makes about " .. API.FormatMoney(make.profit) .. " (after the cut).",
+                            0.3, 1, 0.3)
+                    elseif make.profit and make.price and make.cost > make.price then
+                        tt:AddLine("Buying one is cheaper than crafting it.", 1, 0.31, 0.31)
+                    elseif make.profit then
+                        tt:AddLine("Crafting one to sell loses about " .. API.FormatMoney(-make.profit) .. " (after the cut).",
+                            1, 0.31, 0.31)
+                    end
                 end
                 if make.who then line(tt, "You can craft it", make.who) end
             end

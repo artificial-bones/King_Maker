@@ -162,8 +162,12 @@ function ns.InitDB()
     if db.ui.tooltip == nil then db.ui.tooltip = true end
     if db.ui.sources == nil then db.ui.sources = true end -- tooltip: Vendor, Drops, Used in
     db.ui.tip = db.ui.tip or {} -- tooltip rows: best crafts, craft cost, recipe items, disenchant, shopping goal, short
-    for k, v in pairs({ crafts = true, make = true, pattern = true, de = true, goal = true, short = false }) do
+    for k, v in pairs({ crafts = false, make = true, pattern = true, de = true, goal = true, short = false }) do
         if db.ui.tip[k] == nil then db.ui.tip[k] = v end
+    end
+    if (db.ui.tipVersion or 1) < 2 then -- 2.5.0: the 3 best crafts under Used in crowded the tooltip; off by default
+        db.ui.tip.crafts = false
+        db.ui.tipVersion = 2
     end
     db.sync = db.sync or {}
     if db.sync.guild == nil then db.sync.guild = true end

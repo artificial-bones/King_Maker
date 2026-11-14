@@ -7,7 +7,7 @@ local ns = KM.Module("Scanner")
 -- Every function returns nil when a module or the data isn't there, and the caller pcalls it.
 --
 --   ns.TipBestCrafts(id)  the 3 most valuable things made from it: { { item, value, profit }, ... }
---   ns.TipMake(id)        a crafted end product: cost to make one, the profit after the cut, who can make it
+--   ns.TipMake(id)        a crafted end product: materials for one, its price, the profit after the cut, who can make it
 --   ns.TipPattern(id)     a recipe item: what it teaches, who knows it, who can learn it
 --   ns.TipDisenchant(id)  what disenchanting one is worth on average
 --   ns.TipGoal(id)        on a shopping list: "Favorites: 12 / 20"
@@ -183,7 +183,8 @@ function ns.TipMake(id)
     table.sort(who)
     local each = price(id)
     if not cheapest and #who == 0 then return nil end
-    return { cost = cheapest, profit = cheapest and each and (each * CUT - cheapest), who = #who > 0 and names(who) or nil }
+    return { cost = cheapest, price = each, profit = cheapest and each and (each * CUT - cheapest),
+             who = #who > 0 and names(who) or nil }
 end
 
 -- A recipe item: { teaches = "Elixir of Giants", prof = "Alchemy", skill = 245, known = "Jay", can = "Alt (250)" }.

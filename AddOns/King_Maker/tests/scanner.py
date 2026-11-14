@@ -624,6 +624,13 @@ def row8(lines, k):
     return next((l for l in lines if l.split("|")[0] == k), None)
 sk8 = L8.eval("SlashCmdList.SCANNERKING")
 
+# the 3 best crafts are off by default (and turned off once for existing settings)
+assert L8.eval("ScannerKingDB.ui.tip.crafts") is False and not any("Fake Flask" in l for l in hover8(13463))
+sk8("tip crafts on")
+Lm, _ = fresh(only=["Scanner"], seed="ScannerKingDB = { prices = {}, ui = { tip = { crafts = true } } }")
+assert Lm.eval("ScannerKingDB.ui.tip.crafts") is False and Lm.eval("ScannerKingDB.ui.tipVersion") == 2
+Lm, _ = fresh(only=["Scanner"], seed="ScannerKingDB = { prices = {}, ui = { tipVersion = 2, tip = { crafts = true } } }")
+assert Lm.eval("ScannerKingDB.ui.tip.crafts") is True   # turned back on after the change: stays on
 # Dreamfoil: Used in, then the 3 best crafts, profit first (Fake Flask, Fake Elixir x2, Fake Cloth at a loss);
 # Fake Potion has no profit (a reagent without a price) so it isn't in the top 3
 lines = hover8(13463)
@@ -635,10 +642,13 @@ assert not any("Fake Potion" in l for l in lines), lines
 
 # Fake Flask: craft cost from Dreamfoil's price, the profit, and Alt Two can make it (trainer recipe, skill 300)
 lines = hover8(99008)
-assert row8(lines, "Cost to make") and "35" in row8(lines, "Cost to make") and "profit" in row8(lines, "Cost to make"), lines
-# a material other recipes use (Fake Elixir goes into Fake Flask here): no Cost to make on it
+assert row8(lines, "Materials to craft") and "35" in row8(lines, "Materials to craft"), lines
+assert any(l.startswith("Crafting one to sell makes about ") for l in lines), lines
+# Fake Cloth: three Dreamfoil cost more than one sells for
+assert "Buying one is cheaper than crafting it." in hover8(99006), hover8(99006)
+# a material other recipes use (Fake Elixir goes into Fake Flask here): no crafting rows on it
 L8.execute("MarketKingDB.learned[99009] = { 99010, 4, 1, { 99004, 1 }, 1 }"); KM8.mods.Scanner.ClearTooltipCache()
-assert row8(hover8(99004), "Cost to make") is None
+assert row8(hover8(99004), "Materials to craft") is None
 assert "Alt Two" in row8(lines, "You can craft it"), lines
 
 # A recipe item: what it teaches, who knows it, who can learn it
