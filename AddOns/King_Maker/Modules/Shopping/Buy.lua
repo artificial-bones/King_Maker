@@ -149,6 +149,24 @@ function ns.Search(id, opts)
     return true
 end
 
+-- Fills Blizzard's own auction house search bar with the item's name and runs that search, so its results show in
+-- Blizzard's window and the player can buy there too (clicking a result opens Blizzard's buy window). Runs only from
+-- the player's click on a row's Search button. Searching isn't protected; nothing here buys. Returns true if the
+-- search was started.
+function ns.SearchInAH(id)
+    local f = AuctionHouseFrame
+    local bar = type(f) == "table" and rawget(f, "SearchBar") or nil
+    local box = type(bar) == "table" and rawget(bar, "SearchBox") or nil
+    if not (ns.AHOpen() and type(box) == "table" and box.SetText) then return false end
+    local name = ns.Name(id)
+    if not name or name:find("^Item %d+$") then return false end
+    if not pcall(box.SetText, box, name) then return false end
+    if type(bar.StartSearch) == "function" and pcall(bar.StartSearch, bar) then return true end
+    local btn = rawget(bar, "SearchButton")
+    if type(btn) == "table" and btn.Click and pcall(btn.Click, btn) then return true end
+    return false
+end
+
 local function store(id, kind, rows, listed)
     ns.live[id] = { p = rows[1] and rows[1].unit or nil, q = listed, t = KM.Now(), kind = kind }
     local c = ns.cur
@@ -177,17 +195,36 @@ local function commodityResults(id)
     store(id, "commodity", rows, listed)
 end
 
+-- How many of an item fit in one stack (nil when the game hasn't loaded the item yet).
+local function maxStack(id)
+    if C_Item and C_Item.GetItemMaxStackByID then
+        local ok, n = pcall(C_Item.GetItemMaxStackByID, id)
+        if ok and tonumber(n) and n > 0 then return n end
+    end
+    local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    if info then
+        local r = { pcall(info, id) }
+        local n = r[1] and tonumber(r[9])
+        if n and n > 0 then return n end
+    end
+end
+
+-- Forever can report an item auction's quantity as the count of matching auctions (24 Pattern: Big Voodoo Cloak at
+-- 14s came back as one row of quantity 24, so 14s / 24 showed 58c). An auction never holds more than one stack,
+-- so the unit price divides by at most the item's stack size: 1 for patterns and gear.
 local function itemResults(key)
     local ah = AH()
     local id = key.itemID
     local n = ah.GetNumItemSearchResults and select(2, pcall(ah.GetNumItemSearchResults, key)) or 0
     n = tonumber(n) or 0
     local rows, listed = {}, 0
+    local stack = maxStack(id)
     for i = 1, math.min(n, 50) do
         local ok, info = pcall(ah.GetItemSearchResultInfo, key, i)
         if ok and type(info) == "table" and info.buyoutAmount and info.buyoutAmount > 0 then
-            local q = math.max(1, info.quantity or 1)
-            listed = listed + q
+            local raw = math.max(1, info.quantity or 1)
+            local q = stack and math.min(raw, stack) or raw
+            listed = listed + raw
             rows[#rows + 1] = { unit = math.floor(info.buyoutAmount / q), buyout = info.buyoutAmount, qty = q,
                 auctionID = info.auctionID, link = info.itemLink }
         end

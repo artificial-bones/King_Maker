@@ -64,8 +64,21 @@ local function makeRow(parent, i)
     r.price = UI.Text(r, 11, C.text, "RIGHT")
     r.price:SetPoint("RIGHT", -60, 0)
     r.price:SetWidth(80)
+    -- Search: Blizzard's search bar gets the name and runs (buy in Blizzard's window), then the panel looks the item
+    -- up too (its price, max and buy buttons) once the shared AH throttle allows.
     r.search = UI.Button(r, "Search", 54, ROW_H - 4, function(self)
-        if r.entry then ns.Select(r.entry.id, ns.Active()); ns.Search(r.entry.id, { select = true }) end
+        if not r.entry then return end
+        local id = r.entry.id
+        ns.Select(id, ns.Active())
+        if not ns.SearchInAH(id) then return ns.Search(id, { select = true }) end
+        local tries = 0
+        local function lookup()
+            if ns.cur.id ~= id or not ns.AHOpen() or ns.SearchAllRunning() then return end
+            tries = tries + 1
+            if ns.ThrottleReady() or tries >= 5 then ns.Search(id, { select = true }) -- still busy: it says so
+            else C_Timer.After(0.5, lookup) end
+        end
+        C_Timer.After(0.5, lookup)
     end)
     r.search:SetPoint("RIGHT", 0, 0)
     r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -104,7 +117,7 @@ local function buildDetail(p)
     d.info:SetPoint("RIGHT", p, "RIGHT", -10, 0)
     d.empty = UI.Para(p, 11, C.dim, W - 24)
     d.empty:SetPoint("TOPLEFT", 12, top - 8)
-    d.empty:SetText("Click Search on an item to see its auctions and buy it here.")
+    d.empty:SetText("Click Search on an item: the auction house searches for it, and you can buy there or here.")
 
     -- commodities: quantity, Buy, Confirm, Cancel, override
     local y = top - 44

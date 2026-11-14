@@ -27,8 +27,10 @@ price is at or under your max.
 The Shopping panel docks to the right of the auction house (close it with x; the **Shopping** button brings it
 back). Pick a list, then:
 
-- **Search** on an item shows what's listed. **Search all** searches the whole list one item after another and
-  highlights what's under your max. Searching never buys anything.
+- **Search** on an item types its name into the auction house's own search bar and runs that search, so the results
+  show in the auction house window and you can buy there as usual (click a result to open its buy window). The
+  panel looks the item up as well and shows what's listed beside your max. **Search all** searches the whole list
+  one item after another and highlights what's under your max. Searching never buys anything.
 - **Commodities** (cloth, ore, herbs...): set the quantity (it starts at how many you want), click **Buy**. The
   auction house tells you the real price, the panel shows `Confirm: 10 for 1g 20s (each 12s)`, and only your
   click on **Confirm** buys. **Cancel** backs out.

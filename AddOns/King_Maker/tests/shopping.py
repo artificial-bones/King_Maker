@@ -232,8 +232,18 @@ d = ns.detail
 cur = ns.cur
 
 # --- a commodity: two clicks, never one --------------------------------------------
+# a row's Search fills Blizzard's search bar and runs its search, then the panel looks the item up too
+L.execute("""
+  AH_SEARCHED = {}
+  AuctionHouseFrame.SearchBar = CreateFrame("Frame")
+  AuctionHouseFrame.SearchBar.SearchBox = CreateFrame("EditBox")
+  function AuctionHouseFrame.SearchBar:StartSearch() table.insert(AH_SEARCHED, self.SearchBox:GetText()) end
+""")
 r1 = [r for r in lst(rows) if r.entry and r.entry.id == 2589][0]
 r1.search.Click(r1.search)
+name = L.eval("AuctionHouseFrame.SearchBar.SearchBox:GetText()")
+assert name and not name.startswith("Item "), name
+assert L.eval("AH_SEARCHED[1]") == name and n("#AH_SEARCHED") == 1, "Blizzard's search ran once with the name"
 run()
 assert cur.id == 2589 and cur.kind == "commodity" and lst(cur.rows)[0].unit == 100, cur.kind
 assert n("SEARCHES[#SEARCHES]") == 2589
@@ -316,6 +326,24 @@ run()
 assert ns.Find("Shopping", 6000).qty == 1 and "Bought" in cur.msg
 assert ns.BuyItem(lst(cur.rows)[0]) is False and n("#BIDS") == 1, "guarded in code too, not just greyed"
 print("ITEM OK")
+
+# Blizzard's search bar missing (or the AH closed): Search falls back to the panel's own search, nothing breaks
+L.execute("AuctionHouseFrame.SearchBar = nil; SEARCHES = {}")
+r1.search.Click(r1.search); run()
+assert n("SEARCHES[#SEARCHES]") == 2589
+L.execute("AH_SEARCHED = {}")
+assert ns.SearchInAH(2589) is False
+print("AH SEARCH OK")
+
+# a pattern (stack of 1) whose auction row reports quantity 24: the unit price is the buyout, not buyout / 24
+L.execute("""
+  ITEM(8390, "Pattern: Big Voodoo Cloak", { quality = 2, class = 9, subclass = 1, stack = 1 })
+  LOTS[8390] = { { aid = 950, buyout = 1400, n = 24 } }
+""")
+ns.Select(8390, "Shopping"); ns.Search(8390, L.eval("{ select = true }")); run()
+assert lst(cur.rows)[0].unit == 1400 and lst(cur.rows)[0].qty == 1, lst(cur.rows)[0].unit
+assert ns.live[8390].p == 1400 and ns.live[8390].q == 24, "listed still counts what the game reported"
+print("STACK OK")
 
 # --- Search all only searches -------------------------------------------------------
 L.execute("SEARCHES = {}")
