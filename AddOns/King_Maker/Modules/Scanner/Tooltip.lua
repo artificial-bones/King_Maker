@@ -13,7 +13,7 @@ local API = ns.API
 --   Vendor        what a vendor pays you for one
 --   Vendors sell  what you paid a vendor for one (Crafting Profits saw it)
 --   Disenchant    the average value of disenchanting one (also in the verdict: DISENCHANT)
---   Craft cost    to make one, and the profit after the cut; You can craft it: which of your characters
+--   Cost to make  crafted gear, potions, bags (not materials): to make one, profit or loss; You can craft it: who
 --   Teaches       a recipe item: what it teaches, who knows it, who can learn it, whose skill is too low
 --   Drops         the mobs with the best drop chance (Farm: your kills and your guild's, QuestieDB)
 --   Used in       professions with recipes that take it, then the 3 most valuable things made from it
@@ -236,7 +236,7 @@ function ns.AddTooltipLines(tt, id)
             if de then line(tt, "Disenchant", "about " .. API.FormatMoney(de)) end
             if make then
                 if make.cost then
-                    line(tt, "Craft cost", API.FormatMoney(make.cost)
+                    line(tt, "Cost to make", API.FormatMoney(make.cost)
                         .. (make.profit and ("  " .. gain(make.profit)) or ""))
                 end
                 if make.who then line(tt, "You can craft it", make.who) end

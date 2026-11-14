@@ -80,7 +80,7 @@ Every item tooltip (bags, bank, loot, links, the auction house) gets a
 | 30-day average, 7-day trend | From Price History |
 | Vendor, Vendors sell | What a vendor pays you for one, and what you paid a vendor for one |
 | Disenchant | On gear: what disenchanting one is worth on average, at today's prices |
-| Craft cost, You can craft it | On crafted items: what one costs to make from today's prices, the profit after the cut, and which of your characters can make it |
+| Cost to make, You can craft it | On crafted gear, potions and bags (not on materials like leather or bars): what one costs to make from today's prices, the profit after the cut, and which of your characters can make it |
 | Teaches, Known by, Can learn it, Skill too low | On patterns, plans, formulas and recipes: the recipe and its skill, and where each of your characters stands |
 | Drops | The two mobs with the best drop chance (your kills and your guild's), with zone; QuestieDB fills in the rest |
 | Used in | The professions with recipes that take it, then the **3 most valuable things to make from it**: what each sells for and the profit after the cut (best profit first) |

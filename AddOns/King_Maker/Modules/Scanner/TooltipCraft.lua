@@ -7,7 +7,7 @@ local ns = KM.Module("Scanner")
 -- Every function returns nil when a module or the data isn't there, and the caller pcalls it.
 --
 --   ns.TipBestCrafts(id)  the 3 most valuable things made from it: { { item, value, profit }, ... }
---   ns.TipMake(id)        cost to craft one and the profit after the cut; your characters who can make it
+--   ns.TipMake(id)        a crafted end product: cost to make one, the profit after the cut, who can make it
 --   ns.TipPattern(id)     a recipe item: what it teaches, who knows it, who can learn it
 --   ns.TipDisenchant(id)  what disenchanting one is worth on average
 --   ns.TipGoal(id)        on a shopping list: "Favorites: 12 / 20"
@@ -157,13 +157,14 @@ function ns.TipBestCrafts(id)
     return #best > 0 and best or nil
 end
 
--- A crafted item: { cost = to make one, profit = per one after the cut (nil without a price), who = { names } }.
+-- A crafted end product (gear, potions, bags: not a material other recipes use, like leather or bars):
+-- { cost = to make one, profit = per one after the cut (nil without a price), who = { names } }.
 function ns.TipMake(id)
     local m = market()
     if not m then return nil end
     index(m)
     local list = madeBy[id]
-    if not list then return nil end
+    if not list or usedBy[id] then return nil end
     local s = skillup()
     local cheapest
     for _, r in ipairs(list) do

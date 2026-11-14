@@ -635,7 +635,10 @@ assert not any("Fake Potion" in l for l in lines), lines
 
 # Fake Flask: craft cost from Dreamfoil's price, the profit, and Alt Two can make it (trainer recipe, skill 300)
 lines = hover8(99008)
-assert row8(lines, "Craft cost") and "35" in row8(lines, "Craft cost") and "profit" in row8(lines, "Craft cost"), lines
+assert row8(lines, "Cost to make") and "35" in row8(lines, "Cost to make") and "profit" in row8(lines, "Cost to make"), lines
+# a material other recipes use (Fake Elixir goes into Fake Flask here): no Cost to make on it
+L8.execute("MarketKingDB.learned[99009] = { 99010, 4, 1, { 99004, 1 }, 1 }"); KM8.mods.Scanner.ClearTooltipCache()
+assert row8(hover8(99004), "Cost to make") is None
 assert "Alt Two" in row8(lines, "You can craft it"), lines
 
 # A recipe item: what it teaches, who knows it, who can learn it
