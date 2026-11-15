@@ -112,11 +112,11 @@ assert not ns.IsMax(me) and not ns.Estimate(me).max
 L.execute("FIRE('PLAYER_ENTERING_WORLD', false, true); RESTING = true; FIRE('PLAYER_UPDATE_RESTING')")
 L.execute("RESTING = false; FIRE('PLAYER_LOGOUT')")
 me = L.eval("RestedKingDB.chars['Jay-Forever']"); assert me.resting is True and me.online is False
-# fixing a character saved as outside: rest so far is banked, then it builds at the inn rate
+# fixing a character saved as outside: the whole time since logout counts at the inn rate
 L.execute("RestedKingDB.chars['Inn1-Forever'] = { name = 'Inn1', realm = 'Forever', level = 10, maxLevel = 60, xp = 0, xpMax = 8000, rested = 0, resting = false, t = NOW - 32 * 3600 }")
 ns.SetResting("Inn1-Forever", True)
 o = L.eval("RestedKingDB.chars['Inn1-Forever']")
-assert o.resting is True and o.rested == 400 and o.t == L.eval("NOW"), (o.rested, o.t)
+assert o.resting is True and ns.Estimate(o).rested == 1600, ns.Estimate(o).rested
 # /rk inn sets every logged-out character to the inn rate
 L.execute("RestedKingDB.chars['Inn2-Forever'] = { name = 'Inn2', realm = 'Forever', level = 10, maxLevel = 60, xp = 0, xpMax = 8000, rested = 0, resting = false, t = NOW }")
 L.execute('SlashCmdList.RESTEDKING("inn")')

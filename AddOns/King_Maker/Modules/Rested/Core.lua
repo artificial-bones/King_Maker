@@ -211,8 +211,7 @@ end
 function ns.SetResting(key, resting)
     local c = ns.db.chars[key]
     if not c or c.online then return end
-    local e = ns.Estimate(c)
-    if e.rested and not e.full then c.rested, c.t = e.rested, ns.Now() end -- bank what built up at the old rate
+    -- A logged-out character can't move, so this corrects where it has been since logout: the whole time counts.
     c.resting = resting and true or false
     if ns.Refresh then ns.Refresh() end
 end
