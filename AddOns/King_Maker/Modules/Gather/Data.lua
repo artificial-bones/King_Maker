@@ -39,7 +39,8 @@ end
 
 -- Known nodes: the name you type (or the item you loot) -> display name and
 -- the item whose icon is used for the pin.
--- [key] = { type, display name, itemID }
+-- [key] = { type, display name, itemID [, ring colour, tooltip note] }
+-- The ring colour tells apart nodes that share an ore (Small and Rich Thorium both give Thorium Ore).
 local KNOWN = {
     -- Mining
     copper       = { "mine", "Copper", 2770 },
@@ -50,13 +51,15 @@ local KNOWN = {
     mithril      = { "mine", "Mithril", 3858 },
     truesilver   = { "mine", "Truesilver", 7911 },
     ["dark iron"]= { "mine", "Dark Iron", 11370 },
-    thorium      = { "mine", "Thorium", 10620 },
+    thorium      = { "mine", "Thorium", 10620, nil, "Small or Rich Thorium Vein: mine it once to find out which" },
+    ["small thorium"] = { "mine", "Small Thorium", 10620, nil, "Small Thorium Vein: Mining 230" },
+    ["rich thorium"]  = { "mine", "Rich Thorium", 10620, { 1.00, 0.42, 0.10 }, "Rich Thorium Vein: Mining 255, more ore per harvest" },
     incendicite  = { "mine", "Incendicite", 3340 },
     bloodstone   = { "mine", "Lesser Bloodstone", 4278 },
     indurium     = { "mine", "Indurium", 5833 },
     obsidian     = { "mine", "Obsidian", 22202 },   -- Small/Large Obsidian Chunk (AQ, Silithus)
     -- New in WoW Forever
-    ["heavy thorium"] = { "mine", "Heavy Thorium", 248815 },
+    ["heavy thorium"] = { "mine", "Heavy Thorium", 248815, { 0.55, 0.75, 1.00 }, "Heavy Thorium Vein: new in WoW Forever" },
     -- Herbs
     peacebloom   = { "herb", "Peacebloom", 2447 },
     silverleaf   = { "herb", "Silverleaf", 765 },
@@ -116,6 +119,7 @@ for k, v in pairs(KNOWN) do
     if not ns.ITEM_TO_KEY[v[3]] then ns.ITEM_TO_KEY[v[3]] = k end
 end
 ns.ITEM_TO_KEY[22203] = "obsidian" -- Small Obsidian Shard
+ns.ITEM_TO_KEY[10620] = "thorium"  -- Thorium Ore comes from Small and Rich veins alike: the vein's name decides
 
 -- Extra loot that can come from any node, so it never names a node:
 -- Forever's Scarce materials, herb seeds, and mining stones.

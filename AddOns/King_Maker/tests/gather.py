@@ -245,6 +245,51 @@ n3 = L.eval("GatherKingDB.nodes[1451][3]"); assert n3.n == "Mystery" and n3.item
 c, _ = ns.ExportCode(1451); assert "Mystery,999999" in c and "Marefoil,248823" not in c, c
 L.execute("PLAYER.map = 1423")
 print("NEW GATHERABLES OK")
+# Small / Rich / Heavy Thorium: the vein's name comes with the cast, since Small and Rich both give Thorium Ore
+def mine_at(x, target, loot):
+    L.execute("PLAYER.x = %s; PLAYER.y = 0.7" % x)
+    if target is not None:
+        L.execute('FIRE("UNIT_SPELLCAST_SENT", "player", "%s", "g", 2575)' % target)
+    L.execute('FIRE("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 2575); LOOT = %s; LOOTINFO = {}; FIRE("LOOT_OPENED")' % loot)
+def node_at(x):
+    for n in L.eval("GatherKingDB.nodes[1452]").values():
+        if abs(n.x - x) < 1e-9 and abs(n.y - 0.7) < 1e-9: return n
+L.execute("PLAYER.map = 1452")
+mine_at(0.61, "Rich Thorium Vein", '{"|Hitem:10620|h"}'); assert node_at(0.61).n == "Rich Thorium", node_at(0.61).n
+mine_at(0.62, "Small Thorium Vein", '{"|Hitem:10620|h"}'); assert node_at(0.62).n == "Small Thorium"
+# Heavy Thorium from loot alone, even if Thorium Ore comes first
+mine_at(0.63, None, '{"|Hitem:10620|h", "|Hitem:248815|h"}'); assert node_at(0.63).n == "Heavy Thorium" and node_at(0.63).item == 248815
+# no name with the cast: plain Thorium; the next harvest with a name upgrades it, and a vague one never downgrades it
+mine_at(0.64, None, '{"|Hitem:10620|h"}'); assert node_at(0.64).n == "Thorium"
+mine_at(0.64, "Rich Thorium Vein", '{"|Hitem:10620|h"}'); assert node_at(0.64).n == "Rich Thorium" and not node_at(0.64).alt
+mine_at(0.64, None, '{"|Hitem:10620|h"}'); assert node_at(0.64).n == "Rich Thorium"
+# an old Thorium marker learns which vein it is even with auto-recording off
+gt("auto off"); L.execute("table.insert(GatherKingDB.nodes[1452], { t = 'mine', n = 'Thorium', item = 10620, x = 0.65, y = 0.7 })")
+mine_at(0.65, "Small Thorium Vein", '{"|Hitem:10620|h"}'); assert node_at(0.65).n == "Small Thorium"
+gt("auto on")
+# a spot that spawns both: the tooltip says so
+mine_at(0.62, "Rich Thorium Vein", '{"|Hitem:10620|h"}'); assert node_at(0.62).n == "Rich Thorium"
+# a guildmate's vaguer name doesn't replace ours; a more exact one does
+L.execute('FIRE("CHAT_MSG_ADDON", "GatherKing1", "N1452,m,6100,7000,Thorium", "GUILD", "Bob-Realm")'); assert node_at(0.61).n == "Rich Thorium"
+L.execute("table.insert(GatherKingDB.nodes[1452], { t = 'mine', n = 'Thorium', item = 10620, x = 0.66, y = 0.7 })")
+L.execute('FIRE("CHAT_MSG_ADDON", "GatherKing1", "N1452,m,6600,7000,Rich Thorium", "GUILD", "Bob-Realm")'); assert node_at(0.66).n == "Rich Thorium"
+# pins: Rich and Heavy get their own ring colour, Small keeps the mining colour; the tooltip tells them apart
+L.execute("NOW = NOW + 7200"); gt("size 16")
+def pin(x):
+    return L.eval("(function() for _, f in ipairs(FRAMES) do if f.node and not f.isMinimap and math.abs(f.node.x - %s) < 1e-9 and f.node.y == 0.7 then return f end end end)()" % x)
+mining = ns.TYPES.mine.color
+assert pin(0.62).ring.color[1] == 1.0 and abs(pin(0.62).ring.color[2] - 0.42) < 1e-9, "Rich Thorium: orange ring"
+assert abs(pin(0.65).ring.color[2] - mining[2]) < 1e-9, "Small Thorium: mining ring"
+assert abs(pin(0.63).ring.color[3] - 1.0) < 1e-9 and pin(0.63).icon.texture == 100000 + 248815, "Heavy Thorium: blue ring, its own ore icon"
+def tip(x):
+    L.execute("GameTooltip.lines = {}"); f = pin(x); f.scripts.OnEnter(f); return [str(v) for v in L.eval("GameTooltip.lines").values()]
+assert any("Rich Thorium Vein: Mining 255" in s for s in tip(0.61))
+assert any("Small Thorium Vein: Mining 230" in s for s in tip(0.65))
+assert any("Heavy Thorium Vein" in s for s in tip(0.63))
+assert any("Also spawns here: Small Thorium" in s for s in tip(0.62))
+assert not any("Also spawns here" in s for s in tip(0.64)), "plain Thorium isn't listed as another spawn"
+L.execute("GatherKingDB.nodes[1452] = nil; PLAYER.map = 1423")
+print("THORIUM OK")
 
 # ---- loot stats ----
 L.execute("PLAYER.map = 1451; PLAYER.x = 0.4; PLAYER.y = 0.3; SENT = {}")

@@ -57,6 +57,25 @@ local function cleanName(text)
     return (text:gsub("(%a)([%w']*)", function(a, b) return a:upper() .. b end))
 end
 
+-- Is name a vaguer form of other? "Thorium" is vaguer than "Rich Thorium" (an old marker, or one recorded
+-- from loot alone): the more exact name wins and isn't replaced by the vague one.
+function ns.IsVaguer(name, other)
+    local a, b = ns.LookupKnown(name), ns.LookupKnown(other)
+    return a ~= nil and b ~= nil and a ~= b and b:find(a, 1, true) ~= nil
+end
+
+-- Ring colour for a node: its own if it has one (Rich and Heavy Thorium), else its type's.
+function ns.NodeColor(node)
+    local _, known = ns.LookupKnown(node.n)
+    return (known and known[4]) or ns.TYPES[node.t].color
+end
+
+-- A line for the tooltip about what kind of node this is, or nil.
+function ns.NodeNote(node)
+    local _, known = ns.LookupKnown(node.n)
+    return known and known[5]
+end
+
 -- Icon for a node: the item icon if we know the name, otherwise the type icon.
 function ns.NodeIcon(node)
     if node.item then
@@ -317,8 +336,8 @@ function ns.AddNode(mapID, x, y, t, name, quiet, itemID)
     local idx = findNear(mapID, t, x, y)
     if idx then
         local node = list[idx]
-        if display and node.n ~= display then
-            if node.n then
+        if display and node.n ~= display and not ns.IsVaguer(display, node.n) then
+            if node.n and not ns.IsVaguer(node.n, display) then
                 node.alt = node.alt or {}
                 node.alt[node.n] = true
             end
@@ -379,7 +398,7 @@ function ns.MergeShared(mapID, t, x, y, name, from, force, itemID)
     if idx then
         local node = list[idx]
         settle(node, x, y)
-        if name and not node.n then
+        if name and (not node.n or ns.IsVaguer(node.n, name)) then
             local _, known = ns.LookupKnown(name)
             node.n = known and known[2] or name
             node.item = known and known[3] or itemID

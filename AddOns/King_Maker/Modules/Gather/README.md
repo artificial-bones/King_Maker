@@ -58,6 +58,19 @@ Hover a marker to see its name and coordinates.
 - To delete in bulk (every marker of a type in this zone, or everywhere), use the Gathering page. Each bulk delete asks you to confirm first.
 - Every delete can be undone with `/gt undo`, until you `/reload` or log out.
 
+### Small, Rich and Heavy Thorium
+
+Small and Rich Thorium Veins both give Thorium Ore, so Gathering reads the vein's own name as you start mining it and keeps them apart:
+
+| Marker | Ring | Hover says |
+|---|---|---|
+| Small Thorium | gold (like other mining nodes) | Small Thorium Vein: Mining 230 |
+| Rich Thorium | orange | Rich Thorium Vein: Mining 255, more ore per harvest |
+| Heavy Thorium | blue, with the Heavy Thorium Ore icon | Heavy Thorium Vein: new in WoW Forever |
+| Thorium | gold | Small or Rich: mine it once to find out which |
+
+Markers from before 2.5.1 just say Thorium; the next time you mine one it learns which vein it is (even with auto-tagging off) and tells your guild. A plain "Thorium" from an older guildmate never replaces a Small or Rich name. A spot that has spawned both shows "Also spawns here" when you hover it. `/gt only thorium` still shows all three; `/gt only rich thorium` shows just the Rich ones.
+
 ### Recently harvested nodes
 
 When you harvest a mining or herb node, its marker turns gray and faded for 5 minutes so you can tell at a glance which spots you just cleared. Hovering it shows how long ago you harvested it. Change the time (or turn it off) on the Gathering page. This works even with auto-tagging off, as long as the spot already has a marker.

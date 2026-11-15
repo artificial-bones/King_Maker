@@ -2,11 +2,14 @@ local _, KM = ...
 local ns = KM.Module("Gather")
 
 -- Notices when you harvest a mining or herb node. The gather spell tells us
--- the type; the loot window tells us what the node was. Every harvest stamps
+-- the type; the node's own name (sent with the cast, or the tooltip you clicked)
+-- tells us what it was, so Small and Rich Thorium Veins stay apart even though
+-- both give Thorium Ore; failing that, the loot window does. Every harvest stamps
 -- the marker so it shows faded while the node respawns; with auto-tagging on,
 -- unmarked nodes also get a new marker.
 
-local pending -- { t = "mine", at = GetTime(), mapID, x, y }
+local pending -- { t = "mine", at = GetTime(), mapID, x, y, target = "Rich Thorium Vein" }
+local sent    -- { target = node name, at = GetTime() } from UNIT_SPELLCAST_SENT
 
 local function spellName(spellID)
     if C_Spell and C_Spell.GetSpellName then
@@ -20,6 +23,25 @@ local function itemIDFromLink(link)
     return link and tonumber(link:match("item:(%d+)"))
 end
 
+local function plain(s)
+    if type(s) ~= "string" or s == "" then return nil end
+    if issecretvalue and issecretvalue(s) then return nil end
+    return s
+end
+
+-- The cast is starting: note the node's name. The game passes it as the target; if not, it's the world
+-- tooltip you had up when you clicked the node.
+local function onSent(unit, target, _, spellID)
+    if unit ~= "player" then return end
+    local name = spellName(spellID)
+    if not (name and ns.GATHER_SPELLS[name]) then return end
+    target = plain(target)
+    if not target and GameTooltip and GameTooltip:IsShown() and GameTooltip:GetOwner() == UIParent then
+        target = plain(GameTooltipTextLeft1 and GameTooltipTextLeft1:GetText())
+    end
+    sent = target and { target = target, at = GetTime() } or nil
+end
+
 local function onSpell(unit, spellID)
     if unit ~= "player" or not ns.db then return end
     local name = spellName(spellID)
@@ -28,7 +50,9 @@ local function onSpell(unit, spellID)
     local mapID, x, y = ns.PlayerPosition()
     if not mapID then return end
     pending = { t = t, at = GetTime(), mapID = mapID, x = x, y = y,
-        record = ns.S().auto and ns.S().record[t] }
+        record = ns.S().auto and ns.S().record[t],
+        target = sent and GetTime() - sent.at < 15 and sent.target or nil }
+    sent = nil
 end
 
 -- Everything in the loot window as { [itemID] = amount }.
@@ -61,28 +85,34 @@ local function onLoot()
     local nodeName, nodeItem
     local loot = readLoot() -- everything this harvest gave, for loot stats and the ledger
     if ns.LedgerAdd then ns.LedgerAdd(loot) end
+    local tkey, tknown = ns.LookupKnown(p.target)
+    if tknown and tknown[1] == p.t then nodeName = tkey end
+    local best -- the most exact known name among the loot (Heavy Thorium over Thorium)
     for slot = 1, GetNumLootItems() do
         local itemID = itemIDFromLink(GetLootSlotLink(slot))
-        if itemID and not ns.BONUS_ITEMS[itemID] then
+        if not nodeName and itemID and not ns.BONUS_ITEMS[itemID] then
             local key = ns.ITEM_TO_KEY[itemID]
             if key and ns.KNOWN[key][1] == p.t then
-                nodeName, nodeItem = key, nil
-                break
-            end
-            if not nodeName then
+                if not best or not ns.KNOWN[best] or #key > #best then best, nodeItem = key, nil end
+            elseif not best then
                 local _, itemName, _, _, quality = GetLootSlotInfo(slot)
                 if itemName and (quality or 1) <= 1 then
-                    nodeName, nodeItem = (itemName:gsub("%s+Ore$", "")), itemID
+                    best, nodeItem = (itemName:gsub("%s+Ore$", "")), itemID
                 end
             end
         end
     end
+    if not nodeName then nodeName = best end
 
     local node
     if p.record then
         node = ns.AddNode(p.mapID, p.x, p.y, p.t, nodeName, true, nodeItem)
     else
         node = ns.FindNode(p.mapID, p.t, p.x, p.y)
+        -- an old "Thorium" marker learns which vein it is
+        if node and nodeName and (not node.n or ns.IsVaguer(node.n, nodeName)) then
+            node = ns.AddNode(p.mapID, p.x, p.y, p.t, nodeName, true, nodeItem)
+        end
     end
     if node then
         node.lastHarvest = time()
@@ -94,10 +124,15 @@ end
 local f = CreateFrame("Frame")
 f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 f:RegisterEvent("LOOT_OPENED")
+if not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid("UNIT_SPELLCAST_SENT") then
+    pcall(f.RegisterUnitEvent, f, "UNIT_SPELLCAST_SENT", "player")
+end
 f:SetScript("OnEvent", function(self, event, ...)
     -- pcall: Forever runs Midnight's addon restrictions; never let a blocked
     -- value break the rest of the addon.
-    if event == "UNIT_SPELLCAST_SUCCEEDED" then
+    if event == "UNIT_SPELLCAST_SENT" then
+        pcall(onSent, ...)
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         local unit, _, spellID = ...
         pcall(onSpell, unit, spellID)
     elseif event == "LOOT_OPENED" then

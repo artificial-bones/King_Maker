@@ -14,8 +14,19 @@ local function onEnter(self)
     local info = ns.TYPES[node.t]
     self:SetAlpha(1)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(node.n or info.label, info.color[1], info.color[2], info.color[3])
+    local c = ns.NodeColor(node)
+    GameTooltip:AddLine(node.n or info.label, c[1], c[2], c[3])
     if node.n then GameTooltip:AddLine(info.label, 1, 1, 1) end
+    local note = ns.NodeNote(node)
+    if note then GameTooltip:AddLine(note, 1, 1, 1, true) end
+    if node.alt then
+        local also = {}
+        for name in pairs(node.alt) do
+            if name ~= node.n and not ns.IsVaguer(name, node.n) then table.insert(also, name) end
+        end
+        table.sort(also)
+        if #also > 0 then GameTooltip:AddLine("Also spawns here: " .. table.concat(also, ", "), 0.8, 0.8, 0.8, true) end
+    end
     GameTooltip:AddLine(ns.MapName(self.mapID) .. "  " .. ns.FormatCoords(node.x, node.y), 0.8, 0.8, 0.8)
     if node.from then
         GameTooltip:AddLine("Shared by " .. node.from, 0.4, 0.8, 1)
@@ -114,7 +125,7 @@ end
 
 local function acquire(mapID, node, size, alpha, ringOnly)
     local f = table.remove(pool) or newPin()
-    local c = ns.TYPES[node.t].color
+    local c = ns.NodeColor(node)
     f.mapID, f.node, f.isMinimap = mapID, node, ringOnly
     f:SetSize(size, size)
     f.baseAlpha = alpha or 1
@@ -152,7 +163,7 @@ local function applyState(f, s)
     local node = f.node
     if not node then return end
     local recent = isRecent(node, s)
-    local c = recent and { GRAY, GRAY, GRAY } or ns.TYPES[node.t].color
+    local c = recent and { GRAY, GRAY, GRAY } or ns.NodeColor(node)
     if f.isMinimap then
         f.hollow:SetVertexColor(c[1], c[2], c[3], 1)
     else
