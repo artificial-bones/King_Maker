@@ -20,6 +20,7 @@ MenuUtil.CreateContextMenu = function(owner, gen)
   local root = {}
   function root:CreateTitle(text) MENU_TITLE = text end
   function root:CreateButton(text, fn) return add({ text = text, fn = function() return fn and fn() end }) end
+  function root:CreateCheckbox(text, isSel, set) return add({ text = text, checked = isSel and isSel(), fn = function() return set and set() end }) end
   gen(owner, root)
   MENU, MENU_OWNER = items, owner
 end
@@ -107,6 +108,20 @@ L.execute("XP, XPMAX, EXHAUSTION = 0, 0, nil; FIRE('PLAYER_LOGOUT')")
 me = L.eval("RestedKingDB.chars['Jay-Forever']")
 assert me.xpMax == 11000 and me.xp > 0 and me.rested > 0 and me.online is False, "last real XP numbers kept"
 assert not ns.IsMax(me) and not ns.Estimate(me).max
+# The game also says "not resting" while you log out: an inn logout must stay at the inn rate.
+L.execute("FIRE('PLAYER_ENTERING_WORLD', false, true); RESTING = true; FIRE('PLAYER_UPDATE_RESTING')")
+L.execute("RESTING = false; FIRE('PLAYER_LOGOUT')")
+me = L.eval("RestedKingDB.chars['Jay-Forever']"); assert me.resting is True and me.online is False
+# fixing a character saved as outside: rest so far is banked, then it builds at the inn rate
+L.execute("RestedKingDB.chars['Inn1-Forever'] = { name = 'Inn1', realm = 'Forever', level = 10, maxLevel = 60, xp = 0, xpMax = 8000, rested = 0, resting = false, t = NOW - 32 * 3600 }")
+ns.SetResting("Inn1-Forever", True)
+o = L.eval("RestedKingDB.chars['Inn1-Forever']")
+assert o.resting is True and o.rested == 400 and o.t == L.eval("NOW"), (o.rested, o.t)
+# /rk inn sets every logged-out character to the inn rate
+L.execute("RestedKingDB.chars['Inn2-Forever'] = { name = 'Inn2', realm = 'Forever', level = 10, maxLevel = 60, xp = 0, xpMax = 8000, rested = 0, resting = false, t = NOW }")
+L.execute('SlashCmdList.RESTEDKING("inn")')
+assert L.eval("RestedKingDB.chars['Inn2-Forever'].resting") is True
+L.execute("RestedKingDB.chars['Inn1-Forever'], RestedKingDB.chars['Inn2-Forever'] = nil, nil")
 # Characters already saved that way (2.1 and older) still show up, marked to log in once.
 L.execute('RestedKingDB.chars["Zero-Forever"] = { name = "Zero", realm = "Forever", class = "MAGE", level = 42, maxLevel = 60, xp = 0, xpMax = 0, rested = 0, t = NOW }')
 z = L.eval("RestedKingDB.chars['Zero-Forever']")
@@ -165,6 +180,9 @@ row = [r for r in ns.table.rows.values() if r.data and r.data.key == "Alt-Foreve
 click(row, "RightButton")
 assert L.eval("MENU_TITLE") == "Alt-Forever" and L.eval('MENU_ITEM("Rank 2 (+8%)") ~= nil') and L.eval('MENU_ITEM("None").selected')
 L.execute('MENU_ITEM("Rank 2 (+8%)").fn()'); assert alt.perk == 2
+was = bool(alt.resting)
+click(row, "RightButton"); assert bool(L.eval('MENU_ITEM("Logged out in an inn or city").checked')) == was
+L.execute('MENU_ITEM("Logged out in an inn or city").fn()'); assert bool(alt.resting) != was
 row.RunScript(row, "OnEnter"); assert any("Rested now" in str(x) for x in L.eval("GameTooltip.lines").values())
 click(row, "RightButton"); L.execute('MENU_ITEM("Forget this character").fn()')
 assert L.eval("RestedKingDB.chars['Alt-Forever']") is None and "Alt" not in names()

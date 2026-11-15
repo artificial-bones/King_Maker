@@ -89,6 +89,10 @@ function ns.RowMenu(owner, key)
             perk:CreateRadio(r == 0 and "None" or ("Rank " .. r .. " (+" .. (r * 4) .. "%)"),
                 function() return (c.perk or 0) == r end, function() ns.SetPerk(key, r) end)
         end
+        if not c.online and not ns.IsMax(c) then
+            root:CreateCheckbox("Logged out in an inn or city", function() return c.resting == true end,
+                function() ns.SetResting(key, not c.resting) end)
+        end
         root:CreateButton("Forget this character", function() ns.Forget(key) end)
     end)
 end

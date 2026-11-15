@@ -145,7 +145,12 @@ function ns.Snapshot(loggingOut)
         c.xpMax = xpMax
         c.rested = (GetXPExhaustion and GetXPExhaustion()) or 0
     end
-    c.resting = IsResting and IsResting() and true or false
+    -- While you log out the game already reports "not resting", so a character logged out in an inn was saved as
+    -- outside and got a quarter of the rest. Keep what it said while you were still playing (PLAYER_UPDATE_RESTING
+    -- keeps that current when you walk in or out of an inn).
+    if not loggingOut or c.resting == nil then
+        c.resting = IsResting and IsResting() and true or false
+    end
     c.zone = (GetRealZoneText and GetRealZoneText()) or c.zone
     c.t = ns.Now()
     c.online = not loggingOut
@@ -202,6 +207,16 @@ function ns.SetPerk(key, rank)
     if ns.Refresh then ns.Refresh() end
 end
 
+-- Inn/city or outside, for a character you're not on (2.5.1 and older saved every character as outside at logout).
+function ns.SetResting(key, resting)
+    local c = ns.db.chars[key]
+    if not c or c.online then return end
+    local e = ns.Estimate(c)
+    if e.rested and not e.full then c.rested, c.t = e.rested, ns.Now() end -- bank what built up at the old rate
+    c.resting = resting and true or false
+    if ns.Refresh then ns.Refresh() end
+end
+
 -- For other addons: a character's rest as estimated now.
 function API.Get(key) local c = ns.db and ns.db.chars[key or ns.Char()]; return c and ns.Estimate(c) end
 
@@ -250,6 +265,12 @@ SlashCmdList.RESTEDKING = function(msg)
         if not ns.db.chars[ns.Char()] then ns.Snapshot() end
         ns.SetPerk(ns.Char(), tonumber(rest))
         KM.Print(ns, "Well Rested rank " .. (ns.db.chars[ns.Char()].perk or 0) .. " on " .. ns.Char() .. ".")
+    elseif cmd == "inn" then
+        local n = 0
+        for key, c in pairs(ns.db.chars) do
+            if not c.online and not ns.IsMax(c) and c.resting ~= true then ns.SetResting(key, true); n = n + 1 end
+        end
+        KM.Print(ns, n .. " logged-out character" .. (n == 1 and "" or "s") .. " now resting at the inn/city rate.")
     elseif cmd == "button" then
         KM.Print(ns, "The King Maker crown on the minimap replaces this button: /km button")
     elseif cmd == "forget" and rest ~= "" then
@@ -262,5 +283,6 @@ SlashCmdList.RESTEDKING = function(msg)
         KM.Print(ns, "/rk   open the Rested XP page (or /km rested)")
         KM.Print(ns, "/rk perk 0-5   your Well Rested legacy perk rank on this character")
         KM.Print(ns, "/rk forget First Last   stop tracking a character (or right-click it on the page)")
+        KM.Print(ns, "/rk inn   every logged-out character is in an inn or city (or right-click one on the page)")
     end
 end

@@ -49,7 +49,10 @@ and who fills up next. Under them, one line per character:
 
 - Click a column header to sort by it, click again to flip it (most rested first by default).
 - Hover a character for the details: rest out of the cap, XP left in the level, where it logged out.
-- Right-click a character to set its **Well Rested** perk rank, or to forget it.
+- Right-click a character to set its **Well Rested** perk rank, tick **Logged out in an inn or city**, or forget it.
+- Before 2.5.1 every character was saved as *Outside* when you logged out (the game says "not resting" while you
+  log out), so alts parked in inns got a quarter of their rest. Log each one in and out once, or type `/rk inn`
+  to mark every logged-out character as resting in an inn or city in one go.
 - Max-level characters are hidden; **Show max level** brings them back.
 - A character saved by 2.1 or older can show *log in once to read*: log in on it once and its rest shows up.
 - The numbers keep moving while the page is open.
@@ -61,6 +64,7 @@ and who fills up next. Under them, one line per character:
 | `/rk` | Open or close the Rested XP page |
 | `/rk perk 0-5` | Your Well Rested legacy perk rank on this character |
 | `/rk forget Name` | Stop tracking a character |
+| `/rk inn` | Every logged-out character is in an inn or city (fixes characters saved as Outside before 2.5.1) |
 
 `/rk button` now points you to the King Maker crown (`/km button`).
 
