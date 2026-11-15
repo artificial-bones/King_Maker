@@ -442,5 +442,36 @@ for pid in open_every_page(L2, KM2):
     pass
 print("INITDB OK")
 
+# Virtual lists (RegisterListProvider, for Oracle): live items, never saved, read-only here, purchases reported back
+L3, KM3 = fresh(only=["Scanner", "Econ", "Inventory", "Shopping"], extra=EXTRA, seed="""
+ShoppingKingDB = { lists = { ["Oracle Bank"] = { items = { { id = 2770, qty = 9 } } } }, order = { "Oracle Bank" } }
+""")
+SK3 = L3.eval("ShoppingKing")
+before = L3.eval("ShoppingKingDB.lists['Oracle Bank'].items[1].qty")
+L3.execute("""VB = {}; VQTY = 5
+ok = ShoppingKing.RegisterListProvider("Oracle Bank", {
+  items = function() return { { itemID = 2589, qty = VQTY, max = 150 } } end,
+  bought = function(id, n) VB[#VB + 1] = { id, n }; VQTY = VQTY - n end })""")
+assert L3.eval("ok") is True
+names = [SK3.Lists()[i] for i in range(1, len(SK3.Lists()) + 1)]
+assert names == ["Favorites", "Oracle Bank"], names
+items = SK3.Items("Oracle Bank")
+assert items[1].itemID == 2589 and items[1].qty == 5 and items[1].max == 150 and len(items) == 1, "the provider's items, not the saved ones"
+assert SK3.IsWanted(2589) == "Oracle Bank"
+assert SK3.Add(2770, 1, 1, "Oracle Bank") is False and SK3.Remove(2589, "Oracle Bank") is False, "read-only"
+KMS = KM3.mods.Shopping
+KMS.Bought("Oracle Bank", 2589, 2)
+assert L3.eval("VB[1][1]") == 2589 and L3.eval("VB[1][2]") == 2 and SK3.Items("Oracle Bank")[1].qty == 3, "purchase reported back"
+assert KMS.RenameList("Oracle Bank", "X") is False and KMS.DeleteList("Oracle Bank") is False
+assert L3.eval("ShoppingKingDB.lists['Oracle Bank'].items[1].qty") == before, "the saved list is untouched"
+for name in ["Favorites", "Shopping", "Oracle"]:
+    assert L3.eval(f'ShoppingKing.RegisterListProvider("{name}", {{ items = function() return {{}} end }})') is False, name
+for pid in open_every_page(L3, KM3):
+    pass
+L3.execute('ShoppingKing.UnregisterListProvider("Oracle Bank")')
+assert SK3.Items("Oracle Bank")[1].itemID == 2770, "unregistered: the saved list is back"
+assert "Oracle Bank" in [SK3.Lists()[i] for i in range(1, len(SK3.Lists()) + 1)]
+print("VIRTUAL LISTS OK")
+
 assert not KM.errorShown, last(L)
 print("shopping: ok")

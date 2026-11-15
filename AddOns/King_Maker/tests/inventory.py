@@ -55,6 +55,16 @@ assert me.bank is None, "the bank is only read while it's open"
 L.execute("BAGS[1][2] = { id = 118, count = 3 }; FIRE('BAG_UPDATE_DELAYED'); FIRE('BAG_UPDATE_DELAYED'); RUN_TIMERS()")
 assert stock()[ME].bags[118] == 8
 L.execute("BAGS[1][2] = nil; FIRE('BAG_UPDATE_DELAYED'); RUN_TIMERS()")
+# change callbacks (for Oracle): run after the recount, never without a registration
+L.execute("""CB = {}; InventoryKing.RegisterCallback("STOCK", function(e) CB[#CB + 1] = e .. ":" .. tostring(InventoryKingDB.stock[next(InventoryKingDB.stock)] ~= nil) end, "t")
+InventoryKing.RegisterCallback("MONEY", function(e) CB[#CB + 1] = e end, "t")""")
+assert IK.RegisterCallback("BOGUS", L.eval("function() end")) is False
+L.execute("FIRE('BAG_UPDATE_DELAYED'); FIRE('BAG_UPDATE_DELAYED'); FIRE('PLAYER_MONEY'); RUN_TIMERS()")
+cb = [L.eval(f"CB[{i}]") for i in range(1, int(L.eval("#CB")) + 1)]
+assert cb == ["STOCK:true", "MONEY"], cb
+L.execute('InventoryKing.UnregisterCallback("STOCK", "t"); InventoryKing.UnregisterCallback("MONEY", "t"); CB = {}')
+L.execute("FIRE('BAG_UPDATE_DELAYED'); RUN_TIMERS()")
+assert L.eval("#CB") == 0
 print("BAGS OK")
 
 # The bank and the warband bank, while the banker window is open

@@ -14,6 +14,8 @@ local ns = KM.Module("Shopping", { title = "Shopping", short = "Shopping", db = 
 --   ShoppingKing.Lists() -> { names }
 --   ShoppingKing.Items(listName) -> { { itemID, qty, max, note } }
 --   ShoppingKing.IsWanted(itemID) -> listName | nil
+--   ShoppingKing.RegisterListProvider(name, { items = fn, bought = fn }) -> bool   a live list another addon supplies,
+--   ShoppingKing.UnregisterListProvider(name), ShoppingKing.RefreshLists()        never saved (Lists.lua)
 
 ShoppingKing = { API_VERSION = 1 }
 local API = ShoppingKing

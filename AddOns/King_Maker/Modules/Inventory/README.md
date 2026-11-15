@@ -106,6 +106,8 @@ InventoryKing.GetCount(itemID)    -- total, { ["Name-Realm"] = n } across bags, 
 InventoryKing.NetWorth()          -- { total, gold, mail, assets, items, chars }, in copper
 InventoryKing.GetCharacters()     -- { { who, class, level, gold, mail, assets, items, worth, seen, bankSeen } }
 InventoryKing.GetHistory(days, who) -- { { day, gold, assets, total } }, oldest first
+InventoryKing.RegisterCallback("STOCK" | "MONEY", fn, owner) -- fn(event) right after this character's counts or
+                                  -- gold were re-read; InventoryKing.UnregisterCallback(event, owner)
 ```
 
 ## Limits

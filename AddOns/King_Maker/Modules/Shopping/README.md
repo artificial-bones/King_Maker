@@ -66,4 +66,11 @@ ShoppingKing.Remove(itemID, listName)
 ShoppingKing.Lists()          -> { "Favorites", "Shopping", ... }
 ShoppingKing.Items(listName)  -> { { itemID =, qty =, max =, note = }, ... }
 ShoppingKing.IsWanted(itemID) -> the list's name, or nil
+
+-- A live list another addon supplies (Oracle uses it). Never saved; it shows and buys like any list but can't be
+-- edited, renamed or deleted here; each purchase calls bought(itemID, n). Nothing changes when no addon registers.
+ShoppingKing.RegisterListProvider(name, { items = function() return { { itemID =, qty =, max =, note = } } end,
+                                          bought = function(itemID, n) end }) -> true/false
+ShoppingKing.UnregisterListProvider(name)
+ShoppingKing.RefreshLists()   -- the provider's items changed: redraw
 ```

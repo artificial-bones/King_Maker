@@ -20,6 +20,25 @@ InventoryKing = { API_VERSION = 1 }
 local API = InventoryKing
 ns.API = API
 
+-- Change callbacks for other addons: InventoryKing.RegisterCallback("STOCK" | "MONEY", fn, owner) runs fn(event)
+-- right after this character's counts ("STOCK": bags, bank, mail, auctions) or gold ("MONEY") were re-read and
+-- saved, so a reader never races the recount. Nothing runs when no addon registers.
+local callbacks = { STOCK = {}, MONEY = {} }
+
+function API.RegisterCallback(event, fn, owner)
+    if not callbacks[event] or type(fn) ~= "function" then return false end
+    callbacks[event][owner or fn] = fn
+    return true
+end
+
+function API.UnregisterCallback(event, owner)
+    if callbacks[event] then callbacks[event][owner] = nil end
+end
+
+function ns.Fire(event)
+    for _, fn in pairs(callbacks[event] or {}) do pcall(fn, event) end
+end
+
 
 function ns.Now()
     return ScannerKing and ScannerKing.Now and ScannerKing.Now() or (GetServerTime and GetServerTime()) or time()

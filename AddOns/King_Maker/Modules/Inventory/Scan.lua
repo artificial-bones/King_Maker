@@ -149,6 +149,7 @@ local function soon(key, fn)
         fn()
         if ns.Snapshot then ns.Snapshot() end
         if ns.Refresh then ns.Refresh() end
+        if ns.Fire then ns.Fire(key == "char" and "MONEY" or "STOCK") end
     end)
 end
 local function isBanker(kind)
@@ -172,6 +173,7 @@ f:SetScript("OnEvent", function(_, event, arg)
         bankOpen = true
         ns.ReadBank()
         if ns.Snapshot then ns.Snapshot() end
+        if ns.Fire then ns.Fire("STOCK") end
     elseif event == "BANKFRAME_CLOSED" then
         bankOpen = false
     elseif event == "OWNED_AUCTIONS_UPDATED" then

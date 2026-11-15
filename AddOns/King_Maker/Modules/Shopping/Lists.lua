@@ -40,6 +40,30 @@ local function favEntries()
 end
 
 ---------------------------------------------------------------------------
+-- Virtual lists (ShoppingKing.RegisterListProvider): another addon supplies a list's items live. They show and
+-- buy like any list but are never saved, can't be edited, renamed or deleted here, and a purchase is reported back
+-- to the provider. With no provider registered (every player without such an addon) nothing here runs.
+---------------------------------------------------------------------------
+
+ns.providers, ns.providerOrder = {}, {}
+
+local function provider(name) return name and ns.providers[name] end
+ns.Provider = provider
+
+local function virtualEntries(name)
+    local p = provider(name)
+    local ok, items = pcall(p.items)
+    local out = {}
+    if ok and type(items) == "table" then
+        for _, x in ipairs(items) do
+            local id = tonumber(x.itemID or x.id)
+            if id then out[#out + 1] = { id = id, qty = tonumber(x.qty), max = tonumber(x.max), note = x.note, virtual = true } end
+        end
+    end
+    return out
+end
+
+---------------------------------------------------------------------------
 -- Lists
 ---------------------------------------------------------------------------
 
@@ -53,11 +77,12 @@ ns.CleanName = clean
 
 function ns.ListNames()
     local out = { ns.FAV }
-    for _, name in ipairs(ns.db.order) do out[#out + 1] = name end
+    for _, name in ipairs(ns.db.order) do if not provider(name) then out[#out + 1] = name end end
+    for _, name in ipairs(ns.providerOrder) do out[#out + 1] = name end
     return out
 end
 
-function ns.HasList(name) return name == ns.FAV or (ns.db.lists[name] ~= nil) end
+function ns.HasList(name) return name == ns.FAV or provider(name) ~= nil or (ns.db.lists[name] ~= nil) end
 
 -- Case-insensitive lookup of a list name the player typed.
 function ns.FindList(text)
@@ -80,13 +105,14 @@ local function ensure(name)
     name = clean(name)
     if name == "" then return nil end
     local found = ns.FindList(name)
+    if found and provider(found) then return nil end   -- a virtual list takes no entries
     if found then return found end
     return ns.CreateList(name)
 end
 
 function ns.RenameList(old, new)
     new = clean(new)
-    if old == ns.FAV or not ns.db.lists[old] or new == "" then return false end
+    if old == ns.FAV or provider(old) or not ns.db.lists[old] or new == "" then return false end
     if new ~= old and ns.FindList(new) and ns.FindList(new) ~= old then return false end
     ns.db.lists[new] = ns.db.lists[old]
     if new ~= old then ns.db.lists[old] = nil end
@@ -97,7 +123,7 @@ function ns.RenameList(old, new)
 end
 
 function ns.DeleteList(name)
-    if name == ns.FAV or not ns.db.lists[name] then return false end
+    if name == ns.FAV or provider(name) or not ns.db.lists[name] then return false end
     ns.db.lists[name] = nil
     for i, n in ipairs(ns.db.order) do if n == name then table.remove(ns.db.order, i) break end end
     if ns.db.active == name then ns.db.active = ns.FAV end
@@ -108,6 +134,7 @@ end
 -- The live entries of a list (tables you may edit through ns.Update), or nil.
 function ns.Entries(name)
     if name == ns.FAV then return favEntries() end
+    if provider(name) then return virtualEntries(name) end
     local l = ns.db.lists[name]
     return l and l.items or nil
 end
@@ -134,6 +161,8 @@ function ns.Update(name, id, fields)
         local m = ns.db.favMeta[id] or {}
         apply(m)
         ns.db.favMeta[id] = next(m) and m or nil
+    elseif provider(name) then
+        return false
     else
         local e
         for _, x in ipairs(ns.Entries(name) or {}) do if x.id == id then e = x end end
@@ -175,7 +204,7 @@ end
 
 function ns.RemoveFrom(name, id)
     id = validID(id)
-    if not id then return false end
+    if not id or provider(name) then return false end
     if name == ns.FAV then
         if not ns.IsFavorite(id) then return false end
         ns.SetFavorite(id, false)
@@ -192,6 +221,12 @@ end
 
 -- One purchase of n went through: the wanted quantity goes down (never below 0).
 function ns.Bought(name, id, n)
+    local p = provider(name)
+    if p then
+        if p.bought then pcall(p.bought, id, n or 1) end
+        ns.Changed()
+        return
+    end
     local e = ns.Find(name, id)
     if not e or not e.qty then return end
     ns.Update(name, id, { qty = math.max(0, e.qty - (n or 1)) })
@@ -324,6 +359,29 @@ function API.Remove(itemID, listName)
     return ns.RemoveFrom(name, itemID)
 end
 
+-- A list another addon supplies live (never saved): provider = { items = fn() -> { { itemID, qty, max, note } },
+-- bought = fn(itemID, n) (optional) }. A saved list of the same name stays saved but hidden while the provider is
+-- registered. Returns true when registered. Call ShoppingKing.RefreshLists() when the items change.
+function API.RegisterListProvider(name, p)
+    if not ns.db or type(p) ~= "table" or type(p.items) ~= "function" then return false end
+    name = clean(name)
+    if name == "" or name == ns.FAV or name == ns.DEFAULT or name == ns.ORACLE then return false end
+    if not ns.providers[name] then table.insert(ns.providerOrder, name) end
+    ns.providers[name] = p
+    ns.Changed()
+    return true
+end
+
+function API.UnregisterListProvider(name)
+    if not ns.providers[name] then return false end
+    ns.providers[name] = nil
+    for i, n in ipairs(ns.providerOrder) do if n == name then table.remove(ns.providerOrder, i) break end end
+    ns.Changed()
+    return true
+end
+
+function API.RefreshLists() if ns.db then ns.Changed() end end
+
 function API.Lists()
     if not ns.db then return {} end
     return ns.ListNames()
@@ -345,6 +403,10 @@ function API.IsWanted(itemID)
     itemID = tonumber(itemID)
     if not itemID then return nil end
     for _, name in ipairs(ns.db.order) do
+        local e = not provider(name) and ns.Find(name, itemID)
+        if e and not (e.qty and e.qty <= 0) then return name end
+    end
+    for _, name in ipairs(ns.providerOrder) do
         local e = ns.Find(name, itemID)
         if e and not (e.qty and e.qty <= 0) then return name end
     end
