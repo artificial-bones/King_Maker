@@ -280,7 +280,9 @@ def pin(x):
 mining = ns.TYPES.mine.color
 assert pin(0.62).ring.color[1] == 1.0 and abs(pin(0.62).ring.color[2] - 0.42) < 1e-9, "Rich Thorium: orange ring"
 assert abs(pin(0.65).ring.color[2] - mining[2]) < 1e-9, "Small Thorium: mining ring"
-assert abs(pin(0.63).ring.color[3] - 1.0) < 1e-9 and pin(0.63).icon.texture == 100000 + 248815, "Heavy Thorium: blue ring, its own ore icon"
+assert abs(pin(0.63).ring.color[3] - 1.0) < 1e-9 and pin(0.63).icon.texture == 100000 + 248819, "Heavy Thorium: blue ring, Fel Crystal icon"
+assert pin(0.62).icon.texture == 100000 + 12363 and pin(0.65).icon.texture == 100000 + 10620, "Rich: Arcane Crystal, Small: Thorium Ore"
+assert node_at(0.63).item == 248815, "prices still come from the ore"
 def tip(x):
     L.execute("GameTooltip.lines = {}"); f = pin(x); f.scripts.OnEnter(f); return [str(v) for v in L.eval("GameTooltip.lines").values()]
 assert any("Rich Thorium Vein: Mining 255" in s for s in tip(0.61))

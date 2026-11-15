@@ -64,10 +64,10 @@ Small and Rich Thorium Veins both give Thorium Ore, so Gathering reads the vein'
 
 | Marker | Ring | Hover says |
 |---|---|---|
-| Small Thorium | gold (like other mining nodes) | Small Thorium Vein: Mining 230 |
-| Rich Thorium | orange | Rich Thorium Vein: Mining 255, more ore per harvest |
-| Heavy Thorium | blue, with the Heavy Thorium Ore icon | Heavy Thorium Vein: new in WoW Forever |
-| Thorium | gold | Small or Rich: mine it once to find out which |
+| Small Thorium | gold ring, Thorium Ore icon | Small Thorium Vein: Mining 230 |
+| Rich Thorium | orange ring, Arcane Crystal icon | Rich Thorium Vein: Mining 255, more ore per harvest |
+| Heavy Thorium | blue ring, Fel Crystal icon | Heavy Thorium Vein: new in WoW Forever, drops Fel Crystal |
+| Thorium | gold ring, Thorium Ore icon | Small or Rich: mine it once to find out which |
 
 Markers from before 2.5.1 just say Thorium; the next time you mine one it learns which vein it is (even with auto-tagging off) and tells your guild. A plain "Thorium" from an older guildmate never replaces a Small or Rich name. A spot that has spawned both shows "Also spawns here" when you hover it. `/gt only thorium` still shows all three; `/gt only rich thorium` shows just the Rich ones.
 

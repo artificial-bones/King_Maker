@@ -39,7 +39,7 @@ end
 
 -- Known nodes: the name you type (or the item you loot) -> display name and
 -- the item whose icon is used for the pin.
--- [key] = { type, display name, itemID [, ring colour, tooltip note] }
+-- [key] = { type, display name, itemID [, ring colour, tooltip note, icon itemID] }
 -- The ring colour tells apart nodes that share an ore (Small and Rich Thorium both give Thorium Ore).
 local KNOWN = {
     -- Mining
@@ -53,13 +53,13 @@ local KNOWN = {
     ["dark iron"]= { "mine", "Dark Iron", 11370 },
     thorium      = { "mine", "Thorium", 10620, nil, "Small or Rich Thorium Vein: mine it once to find out which" },
     ["small thorium"] = { "mine", "Small Thorium", 10620, nil, "Small Thorium Vein: Mining 230" },
-    ["rich thorium"]  = { "mine", "Rich Thorium", 10620, { 1.00, 0.42, 0.10 }, "Rich Thorium Vein: Mining 255, more ore per harvest" },
+    ["rich thorium"]  = { "mine", "Rich Thorium", 10620, { 1.00, 0.42, 0.10 }, "Rich Thorium Vein: Mining 255, more ore per harvest", 12363 }, -- Arcane Crystal icon
     incendicite  = { "mine", "Incendicite", 3340 },
     bloodstone   = { "mine", "Lesser Bloodstone", 4278 },
     indurium     = { "mine", "Indurium", 5833 },
     obsidian     = { "mine", "Obsidian", 22202 },   -- Small/Large Obsidian Chunk (AQ, Silithus)
     -- New in WoW Forever
-    ["heavy thorium"] = { "mine", "Heavy Thorium", 248815, { 0.55, 0.75, 1.00 }, "Heavy Thorium Vein: new in WoW Forever" },
+    ["heavy thorium"] = { "mine", "Heavy Thorium", 248815, { 0.55, 0.75, 1.00 }, "Heavy Thorium Vein: new in WoW Forever, drops Fel Crystal", 248819 }, -- Fel Crystal icon
     -- Herbs
     peacebloom   = { "herb", "Peacebloom", 2447 },
     silverleaf   = { "herb", "Silverleaf", 765 },

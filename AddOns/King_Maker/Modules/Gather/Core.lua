@@ -78,6 +78,13 @@ end
 
 -- Icon for a node: the item icon if we know the name, otherwise the type icon.
 function ns.NodeIcon(node)
+    -- some nodes show the rare thing they drop instead of their ore (Rich Thorium: Arcane Crystal)
+    local _, known = ns.LookupKnown(node.n)
+    local show = known and known[6]
+    if show then
+        local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(show)
+        if icon then return icon end
+    end
     if node.item then
         local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(node.item)
         if icon then return icon end
