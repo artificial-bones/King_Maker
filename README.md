@@ -60,7 +60,7 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 | Crafting | Crafting Profits | `/mk` | The most profitable crafts for your professions |
 | Crafting | Skill-ups | `/suk` | The cheapest way to level a profession |
 | Gold | Inventory | `/ik` | Everything on every character, and your net worth |
-| Gold | Quest Gold | `/qk gold` | What the level 48+ quests left are worth, zone by zone |
+| Gold | Quest Gold | `/qk` | What the level 48+ quests left are worth, zone by zone |
 | Farming | Mob Farming, White Items | `/fk` | Which mobs and white items are worth farming |
 | Farming | Gathering | `/gt` | Mining, herb, fishing and treasure spots on your maps |
 | Characters | Rested XP | `/rk` | Rested XP on all your characters |
@@ -141,7 +141,6 @@ net worth.
   ranked.
 - **Items**: auction house categories, filter by character and place, search, sort any column, **Export**.
 - **Item tooltips** show how many you own and where.
-- A **red X on the cheapest stack** in your bags, for when you need the space.
 
 Log in on each character and open each bank once. [Full guide](AddOns/King_Maker/Modules/Inventory#readme)
 
@@ -179,8 +178,6 @@ worth and where the most is left for the character you're on.
 - **Done, in your log, ready, your level too low, or after another quest**, for the character you're logged in on.
 - **Forever's real quest gold** is learned as you quest (quest givers, your log, turn-ins), and **Ask the game**
   fetches a whole zone's at once. Amounts not seen yet are estimates, marked ~.
-- **Bag cleanup** marks quest items you no longer need (Bagnon too). It knows which quests use each item, Forever's
-  own quests included, so it won't mark the item for the next quest in a chain or a repeatable turn-in.
 
 Dungeon Quests is gone in 2.4.0: other addons do dungeon quests better.
 

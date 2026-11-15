@@ -315,17 +315,11 @@ KM.RegisterHomeTile({ id = "quest", order = 50, get = function()
 end })
 
 KM.RegisterSettings({ id = "quest", label = "Quest", order = 50, rows = {
-    { type = "header", label = "Bags" },
-    { type = "check", label = "Red X on quest items no quest needs", tip = "A small red X in the corner of a bag slot whose quest item no quest in your log needs.",
-      get = function() return ns.db.marks end, set = function(v) ns.db.marks = v; ns.Refresh() end },
-    { type = "check", label = "Say why in the item's tooltip", tip = "\"Quest King: safe to delete\" and the reason, on those items.",
-      get = function() return ns.db.tooltip end, set = function(v) ns.db.tooltip = v end },
     { type = "header", label = "Quest Gold" },
     { type = "check", label = "Hide quests you've done", get = function() return ns.db.qgHideDone end,
       set = function(v) ns.db.qgHideDone = v; ns.RefreshQuestGold() end },
     { type = "header", label = "Data" },
     { type = "text", label = "Quests, levels and rewards: CMaNGOS classic-db (GPL-3.0). Zones and Forever's own quests: data from ForeverDB.net (GPL-3.0). Forever's real quest gold: learned in game." },
     { type = "header", label = "Commands" },
-    { type = "text", label = "/qk   list quest items you can delete\n/qk gold   the Quest Gold page\n"
-        .. "/qk marks on|off   the red X on bag slots\n/qk tooltip on|off   the tooltip line" },
+    { type = "text", label = "/qk   the Quest Gold page (or /km questgold)" },
 } })

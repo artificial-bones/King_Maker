@@ -1,17 +1,13 @@
 local _, KM = ...
 local ns = KM.Module("Quest", { title = "Quest King", short = "Quest", legacy = "Quest_King", db = "QuestKingDB" })
 
--- Quest King: the quest items in your bags that no quest needs (red X on the slot, a tooltip line, /qk), and the
--- Quest Gold page of the King Maker window (Gold > Quest Gold: Money.lua and MoneyUI.lua, data in Data/Quests.lua).
--- King Maker 2.4.0 replaced the Dungeon Quests page with Quest Gold.
+-- Quest King: the Quest Gold page of the King Maker window (Gold > Quest Gold: Money.lua and MoneyUI.lua, data in
+-- Data/Quests.lua). King Maker 2.4.0 replaced the Dungeon Quests page with Quest Gold; 2.5.3 took out the bag
+-- cleanup (red X on quest items, the tooltip line, /qk list).
 -- Its public face is the whole module: QuestKing = ns, as in 1.x. It has no minimap button of its own any more:
 -- the King Maker crown's quick actions open the page.
 
-local QUEST_CLASS = 12 -- Enum.ItemClass.Questitem
-
 local DEFAULTS = {
-    marks = true,   -- show the mark on bag slots
-    tooltip = true, -- add a line to the item tooltip
     qgHideDone = false, -- Quest Gold: leave out quests you've done
 }
 
@@ -21,247 +17,15 @@ QuestKing = ns
 function ns.Print(msg) KM.Print(ns, msg) end
 
 ---------------------------------------------------------------------------
--- Quest log
----------------------------------------------------------------------------
-
--- Everything the quest log says, lowercased into one string, so an item can be
--- matched by name against objectives ("Wolf Fang: 3/10"), descriptions
--- ("Bring the Sealed Letter to...") and usable quest items.
-local questText = ""
-local logComplete = true    -- false when collapsed headers hide quests from us
-local logHasCollapsed = false
-
-local function add(parts, s)
-    if type(s) == "string" and s ~= "" then parts[#parts + 1] = s:lower() end
-end
-
-local function linkName(link)
-    return type(link) == "string" and link:match("|h%[(.-)%]|h") or nil
-end
-ns.LinkName = linkName
-
-function ns.ScanQuestLog()
-    local parts = {}
-    local shown, numQuests = C_QuestLog.GetNumQuestLogEntries()
-    local seen, collapsed = 0, false
-    for i = 1, shown or 0 do
-        local info = C_QuestLog.GetInfo(i)
-        if info and info.isHeader then
-            if info.isCollapsed then collapsed = true end
-        elseif info then
-            seen = seen + 1
-            add(parts, info.title)
-            local objectives = info.questID and C_QuestLog.GetQuestObjectives(info.questID)
-            for _, o in ipairs(objectives or {}) do add(parts, o.text) end
-            if GetQuestLogSpecialItemInfo then
-                add(parts, linkName((GetQuestLogSpecialItemInfo(i))))
-            end
-            if GetQuestLogQuestText then
-                local desc, objText = GetQuestLogQuestText(i)
-                add(parts, desc); add(parts, objText)
-            end
-        end
-    end
-    questText = table.concat(parts, "\n")
-    logHasCollapsed = collapsed
-    -- Only distrust the log when quests are missing AND a header is collapsed;
-    -- some clients count hidden quests that never show as entries.
-    logComplete = not (collapsed and numQuests and seen < numQuests)
-end
-
-local function onQuest(questID)
-    if C_QuestLog.IsOnQuest then return C_QuestLog.IsOnQuest(questID) end
-    return C_QuestLog.GetLogIndexForQuestID and C_QuestLog.GetLogIndexForQuestID(questID) ~= nil
-end
-
-local function questDone(questID)
-    return C_QuestLog.IsQuestFlaggedCompleted and C_QuestLog.IsQuestFlaggedCompleted(questID)
-end
-
----------------------------------------------------------------------------
--- Bags
----------------------------------------------------------------------------
-
--- Per slot: nil (not a quest item, or we can't tell), "needed", "starter"
--- (starts a quest you haven't done), "later" (a quest you haven't done uses it: keep, no X),
--- "unneeded" (no quest needs it and no vendor buys it: safe to delete, red X)
--- or "sell" (no quest needs it, but a vendor buys it: sell it, no X).
-local status = {}
-local unneededIDs = {}
-local sellIDs = {}
-local laterIDs = {}
-
--- Does a vendor buy it? The item's sell price once the game has it, else the bag's own "no value" flag.
-local function sellable(info)
-    local get = (C_Item and C_Item.GetItemInfo) or GetItemInfo
-    local sell = get and select(11, get(info.itemID))
-    if sell ~= nil then return sell > 0 end
-    return not info.hasNoValue
-end
-ns.Sellable = sellable
-
-function ns.IsQuestItem(itemID, questInfo)
-    if questInfo and (questInfo.isQuestItem or questInfo.questID) then return true end
-    local classID = select(6, C_Item.GetItemInfoInstant(itemID))
-    return classID == QUEST_CLASS
-end
-
-local function mySide()
-    local f = UnitFactionGroup and UnitFactionGroup("player")
-    return f == "Alliance" and "a" or f == "Horde" and "h" or nil
-end
-
-local function myClassBit()
-    local _, _, id = UnitClass("player")
-    return id and 2 ^ (id - 1) or 0
-end
-
--- Done, or another quest of its exclusive group is (so it can't be done any more).
-local exclusiveOf
-local function closed(q)
-    if questDone(q) then return true end
-    if not exclusiveOf then
-        exclusiveOf = {}
-        for _, group in ipairs(ns.QUEST_EXCLUSIVE or {}) do
-            local members = {}
-            for id in group:gmatch("%d+") do members[#members + 1] = tonumber(id) end
-            for _, id in ipairs(members) do exclusiveOf[id] = members end
-        end
-    end
-    for _, other in ipairs(exclusiveOf[q] or {}) do
-        if other ~= q and questDone(other) then return true end
-    end
-    return false
-end
-
-local function questTitle(q)
-    local t = C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(q)
-    if (not t or t == "") and ns.QUESTS and ns.QUESTS[q] then t = ns.QUESTS[q][12] end
-    return t ~= "" and t or nil
-end
-
--- What the quest data (Data/QuestItems.lua) says about an item: "needed" (a quest in your log or a repeatable one takes
--- it), "later" (a quest you haven't done uses it), "done" (you've done every quest that uses it, or none is for you),
--- or nil when the data doesn't know the item. Second return: the reason.
-function ns.ItemUses(itemID)
-    local uses = ns.QUEST_ITEMS and ns.QUEST_ITEMS[itemID]
-    if not uses then return nil end
-    local side, bit = mySide(), myClassBit()
-    local later, repeatable
-    for id, tags, classes in uses:gmatch("(%d+)(%a*):?(%d*)") do
-        local q = tonumber(id)
-        local mine = true
-        if (tags:find("a") and side == "h") or (tags:find("h") and side == "a") then mine = false end
-        classes = tonumber(classes)
-        if mine and classes and classes > 0 and bit > 0 and math.floor(classes / bit) % 2 == 0 then mine = false end
-        if mine then
-            if onQuest(q) then return "needed", "its quest is in your log" end
-            if tags:find("r") then repeatable = repeatable or q
-            elseif not later and not closed(q) then later = q end
-        end
-    end
-    if repeatable then
-        local t = questTitle(repeatable)
-        return "needed", t and ("a repeatable quest takes it: " .. t) or "a repeatable quest takes it"
-    end
-    if later then
-        local t = questTitle(later)
-        return "later", t and (t .. " uses it and you haven't done it") or "a quest you haven't done uses it"
-    end
-    return "done", "you've done every quest that uses it"
-end
-
--- Why a quest item is or isn't needed. Returns status, reason.
--- Status "later": no quest in your log needs it, but one you haven't done does (next in a chain, or one you dropped):
--- no red X.
-function ns.Judge(itemID, link, questInfo)
-    if not ns.IsQuestItem(itemID, questInfo) then return nil end
-    local questID = questInfo and questInfo.questID
-    if questID then
-        if questInfo.isActive or onQuest(questID) then return "needed", "its quest is in your log" end
-        if questDone(questID) then return "unneeded", "you already did the quest it starts" end
-        return "starter", "it starts a quest"
-    end
-    local data, why = ns.ItemUses(itemID)
-    if data == "needed" or data == "later" then return data, why end
-    -- The data says it's done with, or doesn't know it: the quest log has the last word (Forever changed quests).
-    if not logComplete then return nil end
-    local name = linkName(link) or (C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID))
-    if not name then return nil end
-    if questText:find(name:lower(), 1, true) then return "needed", "a quest in your log mentions it" end
-    return "unneeded", data and why or "no quest in your log needs it"
-end
-
--- Reason text when no quest in your log needs it but one you haven't done does, else nil.
-function ns.LaterReason(itemID)
-    return itemID and laterIDs[itemID]
-end
-
-local function lastBag()
-    return NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
-end
-
-function ns.ScanBags()
-    wipe(status); wipe(unneededIDs); wipe(sellIDs); wipe(laterIDs)
-    for bag = 0, lastBag() do
-        for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
-            local info = C_Container.GetContainerItemInfo(bag, slot)
-            if info and info.itemID then
-                local q = C_Container.GetContainerItemQuestInfo and C_Container.GetContainerItemQuestInfo(bag, slot)
-                local s, why = ns.Judge(info.itemID, info.hyperlink, q)
-                if s == "unneeded" and sellable(info) then s = "sell"; sellIDs[info.itemID] = why end
-                if s then
-                    status[bag * 1000 + slot] = s
-                    if s == "unneeded" then unneededIDs[info.itemID] = why end
-                    if s == "later" then laterIDs[info.itemID] = why end
-                end
-            end
-        end
-    end
-end
-
-function ns.Status(bag, slot)
-    if not bag or not slot then return nil end
-    return status[bag * 1000 + slot]
-end
-
--- Reason text when no quest needs this item, else nil.
-function ns.UnneededReason(itemID)
-    return itemID and unneededIDs[itemID]
-end
-
--- Reason text when no quest needs this item but a vendor buys it, else nil.
-function ns.SellReason(itemID)
-    return itemID and sellIDs[itemID]
-end
-
-function ns.Unneeded()
-    local list = {}
-    for bag = 0, lastBag() do
-        for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
-            if status[bag * 1000 + slot] == "unneeded" then
-                local info = C_Container.GetContainerItemInfo(bag, slot)
-                list[#list + 1] = { bag = bag, slot = slot, link = info.hyperlink, count = info.stackCount or 1,
-                                    why = unneededIDs[info.itemID] }
-            end
-        end
-    end
-    return list
-end
-
----------------------------------------------------------------------------
 -- Refresh
 ---------------------------------------------------------------------------
 
 local pending = false
 function ns.Refresh()
-    ns.ScanQuestLog()
-    ns.ScanBags()
-    if ns.UpdateBagButtons then ns.UpdateBagButtons() end
     if ns.RefreshQuestGold then ns.RefreshQuestGold() end -- redraws the Quest Gold page when it's open
 end
 
--- Bag and quest events come in bursts; refresh once after they settle.
+-- Quest events come in bursts; refresh once after they settle.
 function ns.RequestRefresh()
     if pending then return end
     pending = true
@@ -272,54 +36,21 @@ end
 -- Slash command
 ---------------------------------------------------------------------------
 
-local function list()
-    ns.Refresh()
-    if not logComplete then
-        KM.Print(ns, "Expand all the headers in your quest log so I can see every quest, then try again.")
-        return
-    end
-    local items = ns.Unneeded()
-    if #items == 0 then
-        KM.Print(ns, "Every quest item in your bags is needed by a quest in your log.")
-        return
-    end
-    KM.Print(ns, #items == 1 and "1 quest item you can delete:" or (#items .. " quest items you can delete:"))
-    for _, it in ipairs(items) do
-        local count = it.count > 1 and (" x" .. it.count) or ""
-        KM.Print(ns, "  " .. (it.link or "?") .. count .. " (" .. it.why .. ")")
-    end
-end
-
-local function onOff(word, key, label)
-    if word == "on" then QuestKingDB[key] = true
-    elseif word == "off" then QuestKingDB[key] = false
-    else QuestKingDB[key] = not QuestKingDB[key] end
-    KM.Print(ns, label .. (QuestKingDB[key] and " on." or " off."))
-    ns.Refresh()
-end
-
 SLASH_QUESTKING1 = "/qk"
 SLASH_QUESTKING2 = "/questking"
 SlashCmdList.QUESTKING = function(msg)
     if not QuestKingDB then return end
-    local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(%S*)")
-    if cmd == "" or cmd == "list" then
-        list()
-    elseif cmd == "gold" or cmd == "g" then
+    local cmd = (msg or ""):lower():match("^%s*(%S*)")
+    if cmd == "" or cmd == "gold" or cmd == "g" then
         ns.ToggleQuestGold()
     elseif cmd == "dungeons" or cmd == "route" then
         KM.Print(ns, "Dungeon Quests is gone (other addons do it better); Quest Gold took its place: /qk gold")
+    elseif cmd == "list" or cmd == "tooltip" or cmd == "marks" then
+        KM.Print(ns, "Bag cleanup is gone from King Maker (2.5.3). /qk opens Quest Gold.")
     elseif cmd == "button" then
         KM.Print(ns, "The King Maker crown on the minimap replaces this button: /km button")
-    elseif cmd == "marks" then
-        onOff(arg, "marks", "Bag marks")
-    elseif cmd == "tooltip" then
-        onOff(arg, "tooltip", "Tooltip line")
     else
-        KM.Print(ns, "/qk   list quest items no quest in your log needs")
-        KM.Print(ns, "/qk gold   Quest Gold: the 48+ quests left for this character and what each zone is worth")
-        KM.Print(ns, "/qk marks on|off   show or hide the red X on bag slots")
-        KM.Print(ns, "/qk tooltip on|off   show or hide the tooltip line")
+        KM.Print(ns, "/qk   Quest Gold: the 48+ quests left for this character and what each zone is worth (or /km questgold)")
     end
 end
 
@@ -338,16 +69,13 @@ function ns.InitDB()
     db.noData = db.noData or {} -- quest ID -> true: the server had nothing on it (not in Forever yet); out of the totals
     db.dqDone, db.dqHide60, db.dqHideDone, db.dqView = nil, nil, nil, nil -- Dungeon Quests (gone in 2.4.0)
     db.button, db.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
+    db.marks, db.tooltip = nil, nil -- bag cleanup (gone in 2.5.3)
     ns.db = db
 end
 
 local f = CreateFrame("Frame")
-f:RegisterEvent("PLAYER_LOGIN")
-KM.Register(f, "BAG_UPDATE_DELAYED", "QUEST_LOG_UPDATE", "QUEST_ACCEPTED", "QUEST_REMOVED", "QUEST_TURNED_IN", "PLAYER_LEVEL_UP")
-f:SetScript("OnEvent", function(_, event)
+KM.Register(f, "QUEST_LOG_UPDATE", "QUEST_ACCEPTED", "QUEST_REMOVED", "QUEST_TURNED_IN", "PLAYER_LEVEL_UP")
+f:SetScript("OnEvent", function()
     if not QuestKingDB then return end
-    if event == "PLAYER_LOGIN" then
-        if ns.HookBags then ns.HookBags() end
-    end
     ns.RequestRefresh()
 end)
