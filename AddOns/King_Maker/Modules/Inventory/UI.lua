@@ -8,7 +8,9 @@ local C = UI.C
 --             over the last 30 days (gold and items stacked); every character, richest first. Click one to see
 --             their items, right-click to forget one.
 --   Items:    every item you own. Categories down the left (the auction house's, and the Sales Ledger's
---             strategies); pick whose and where at the top, search by name, click a column to sort.
+--             strategies); pick whose and where at the top, search by name, click a column to sort. With Profit &
+--             Loss (2.8): what the units cost you on average (Avg cost) and what selling them now would make
+--             (If sold), in place of the Chars column.
 -- Valued at (top right) picks market price or lowest buyout; Export gives everything as CSV.
 -- Also here: the crown's quick action and tooltip line, the Home tile and the Settings section.
 
@@ -118,12 +120,27 @@ end
 -- Overview
 ---------------------------------------------------------------------------
 
+local function line(tt, l, r) tt:AddDoubleLine(l, r, 0.8, 0.8, 0.8, 1, 1, 1) end
+local function valuedAt()
+    return (ns.db.ui.price == "lowest" and "the lowest buyout" or "the market price (Deep Scan)")
+        .. (ns.db.ui.vendor and ", or what a vendor pays when the auction house has no price" or "")
+end
 local TILES = {
-    { "total", "Net worth", "Gold on every character, gold in their mailboxes, and what all your items are worth." },
-    { "gold", "Gold on characters", "As of when you last played each one." },
-    { "mail", "Gold in mailboxes", "Not collected yet: sales and other mail." },
-    { "assets", "Items worth", "Everything you own that can be sold, at today's prices." },
-    { "items", "Items", "Every item that can be sold, on every character and the warband bank." },
+    { "total", function(tt)
+        local w = ns.NetWorth()
+        tt:AddLine("Gold on every character, gold waiting in their mailboxes, and what all your items are worth.", 1, 1, 1, true)
+        line(tt, "Gold on characters", ns.Money(w.gold))
+        line(tt, "Gold in mailboxes", ns.Money(w.mail))
+        line(tt, "Items worth", ns.Money(w.assets))
+    end },
+    { "gold", "As of when you last played each one." },
+    { "mail", "Not collected yet: auction sales and other mail, as of each character's last visit to the mailbox." },
+    { "assets", function(tt)
+        tt:AddLine("Everything you own that can be sold (bags, bank, mailbox, your auctions, the warband bank), each at "
+            .. valuedAt() .. ". Full price: the auction house's 5% cut isn't taken off.", 1, 1, 1, true)
+        tt:AddLine("Change it with Valued at, top right.", 0.6, 0.6, 0.6, true)
+    end },
+    { "items", "How many items you own that can be sold, on every character and the warband bank. Soulbound items aren't counted." },
 }
 
 local function refreshOverview()
@@ -189,8 +206,7 @@ local function buildOverview(parent)
     for i, t in ipairs(TILES) do
         local tile = UI.Tile(overview, TILE_W, TILE_H)
         tile:SetPoint("TOPLEFT", (i - 1) * (TILE_W + 8), 0)
-        tile:EnableMouse(true)
-        UI.Tip(tile, function(tt) tt:AddLine(t[2]); tt:AddLine(t[3], 1, 1, 1, true) end)
+        tile:SetTip(t[2])
         tiles[t[1]] = tile
     end
 
@@ -261,7 +277,7 @@ local function buildOverview(parent)
         { key = "gold", label = "Gold", w = 96, justify = "RIGHT", sort = money("gold"), tip = "Gold on the character, as of when you last played them." },
         { key = "mail", label = "Mailbox", w = 88, justify = "RIGHT", sort = money("mail"), tip = "Gold waiting in their mailbox (auction sales and other mail), as of their last visit to it." },
         { key = "assets", label = "Items worth", w = 96, justify = "RIGHT", sort = money("assets"), tip = "Everything they hold that can be sold, at today's prices." },
-        { key = "worth", label = "Net worth", w = 100, justify = "RIGHT", sort = money("worth") },
+        { key = "worth", label = "Net worth", w = 100, justify = "RIGHT", sort = money("worth"), tip = "Gold + Mailbox + Items worth." },
         { key = "share", label = "Share", w = 48, justify = "RIGHT", sort = money("worth"), tip = "Of your total net worth." },
         { key = "seen", label = "Last seen", w = 78, justify = "RIGHT", sort = money("seen") },
         { key = "bank", label = "Bank", w = 0, justify = "RIGHT", sort = money("bankSeen"), tip = "When their bank was last opened. Until then it isn't counted." },
@@ -293,9 +309,25 @@ end
 -- Items
 ---------------------------------------------------------------------------
 
+-- Profit & Loss's numbers for a row, once per refresh: avg = the pool's average cost of the units with a lot, ifSold =
+-- what this row's units with a lot would make now after the cut (ProfitKing.Basis). nil without a lot.
+local function pnl(r)
+    if r.pnl == nil then
+        r.pnl = false
+        local b = ProfitKing and ProfitKing.Basis and KM.Safe(ProfitKing.Basis, r.item)
+        if b and (b.held or 0) > 0 and b.avg then
+            local n = math.min(r.total, b.held)
+            r.pnl = { avg = b.avg, ifSold = b.each and n * (b.each - b.avg) or nil, n = n, held = b.held }
+        end
+    end
+    return r.pnl or nil
+end
+
 local function sortValue(r, key)
     if key == "name" then return r.name or "" end
     if key == "chars" then return count(r.chars) end
+    if key == "avgCost" then local p = pnl(r); return p and p.avg end
+    if key == "ifSold" then local p = pnl(r); return p and p.ifSold end
     return r[key]
 end
 
@@ -325,13 +357,26 @@ local function fillItem(r, e, cells)
         cells[p]:SetText(v and v > 0 and tostring(v) or grey("-"))
     end
     cells.total:SetText(tostring(e.total))
-    cells.chars:SetText(tostring(count(e.chars)))
+    if cells.chars then cells.chars:SetText(tostring(count(e.chars))) end
+    local short = cells.avgCost ~= nil -- the Profit & Loss columns make the money ones narrower
+    local money = short and function(c) return KM.MoneyShort(c) end or ns.Money
     if not e.each then
         cells.each:SetText(grey("no price"))
         cells.value:SetText(grey("no price"))
     else
-        cells.each:SetText((e.src == "vendor" and (GREY .. "(v)|r ") or "") .. ns.Money(e.each))
-        cells.value:SetText(ns.Money(e.value))
+        cells.each:SetText((e.src == "vendor" and (GREY .. "(v)|r ") or "") .. money(e.each))
+        cells.value:SetText(money(e.value))
+    end
+    if short then
+        local p = pnl(e)
+        cells.avgCost:SetText(p and KM.MoneyShort(p.avg) or grey("-"))
+        if p and p.ifSold then
+            local v = math.floor(p.ifSold + 0.5)
+            cells.ifSold:SetText((v > 0 and (UI.Hex(C.good) .. "+") or (v < 0 and (UI.Hex(C.bad) .. "-") or UI.Hex(C.muted)))
+                .. KM.MoneyShort(math.abs(v), true) .. "|r")
+        else
+            cells.ifSold:SetText(grey("-"))
+        end
     end
 end
 
@@ -455,6 +500,11 @@ local function itemTip(r)
         GameTooltip:AddDoubleLine(ns.CharText(c[1]) .. "  " .. c[2], table.concat(bits, ", "), 1, 1, 1, 0.8, 0.8, 0.8)
     end
     if e.src == "vendor" then GameTooltip:AddLine("Valued at the vendor price: the auction house has none.", 0.6, 0.6, 0.6, true) end
+    local p = itemTable.pnlCols and pnl(e)
+    if p then
+        GameTooltip:AddDoubleLine("Your cost (Profit & Loss)", KM.Money(math.floor(p.avg + 0.5)) .. " each, " .. p.held .. " with a lot", 0.8, 0.8, 0.8, 1, 1, 1)
+        if p.n < e.total then GameTooltip:AddLine((e.total - p.n) .. " here have no lot (untraced): If sold leaves them out.", 0.6, 0.6, 0.6, true) end
+    end
     if e.strategy then GameTooltip:AddLine("Ledger strategy: " .. e.strategy, 0.6, 0.6, 0.6) end
     GameTooltip:AddLine("Shift-click: link it in chat.", 0.6, 0.6, 0.6)
     GameTooltip:Show()
@@ -533,9 +583,25 @@ local function buildItems(parent)
         col("ah", "On AH", 46, "Your auctions still up, as of when you last looked."),
         col("total", "Total", 44),
         col("chars", "Chars", 40, "How many characters hold it. Hover an item for who."),
-        col("each", "Each", 88, "The Scanner module's price. (v): a vendor price, as the auction house has none."),
-        col("value", "Worth", 0),
+        col("each", "Each", 88, "The Scanner module's price: market or lowest buyout, as picked under Valued at. (v): a vendor price, as the auction house has none."),
+        col("value", "Worth", 0, "Total x Each, at full price (no auction house cut taken off)."),
     }
+    local withPnL = ProfitKing and ProfitKing.Basis and true or false
+    if withPnL then
+        -- 2.8: what they cost you and what selling them would make, from Profit & Loss (Chars moves to the tooltip)
+        cols = {
+            col("name", "Item", 126),
+            col("bags", "Bags", 36),
+            col("bank", "Bank", 36, "As of when each bank was last opened (and the warband bank)."),
+            col("mail", "Mail", 34, "Attached to mail in the mailbox."),
+            col("ah", "On AH", 42, "Your auctions still up, as of when you last looked."),
+            col("total", "Total", 40),
+            col("each", "Each", 66, "The Scanner module's price: market or lowest buyout, as picked under Valued at. (v): a vendor price, as the auction house has none."),
+            col("avgCost", "Avg cost", 66, "Profit & Loss: what the units you hold cost you, on average (by the method you chose there)."),
+            col("ifSold", "If sold", 70, "Profit & Loss: what these units would make if you sold them now, after the 5% cut, minus what they cost. Units with no lot (untraced) are left out."),
+            col("value", "Worth", 0, "Total x Each, at full price (no auction house cut taken off)."),
+        }
+    end
     itemTable = UI.Table(right, cols, 20, {
         icon = true, noSort = true, fontSize = 11,
         onSort = function() itemTable.offset = 0; refreshItems() end,
@@ -550,6 +616,7 @@ local function buildItems(parent)
     itemTable:SetPoint("TOPLEFT", 0, -32)
     itemTable:SetPoint("BOTTOMRIGHT", 0, 20)
     itemTable:SetSort("value", true)
+    itemTable.pnlCols = withPnL
     itemTable.fill = fillItem
     itemTable.onRedraw = itemFooterText
     ns.itemTable = itemTable
@@ -719,10 +786,78 @@ KM.RegisterTooltip(function(tt)
     tt:AddDoubleLine("Net worth", ns.Money(w.total), 1, 1, 1, 1, 1, 1)
 end)
 
-KM.RegisterHomeTile({ id = "inventory-worth", order = 30, get = function()
+-- Home: net worth now against 7 days ago (the history's point for that day; nil before there is one).
+local function weekAgo()
+    local s = ns.Series(8)
+    return s[1] and s[1].known and s[1].total or nil
+end
+
+KM.RegisterHomeTile({ id = "inventory-worth", order = 10, page = "inventory", get = function()
     if not ns.db then return nil end
     local w = ns.NetWorth()
-    return "Net worth", ns.Money(w.total), "gold " .. ns.Gold(w.gold + w.mail) .. ", items " .. ns.Gold(w.assets), C.accent
+    local before = weekAgo()
+    local sub = "gold " .. ns.Gold(w.gold + w.mail) .. ", items " .. ns.Gold(w.assets)
+    if before then
+        local d = w.total - before
+        sub = (d > 0 and "|cff4dcc7a+" or (d < 0 and "|cffeb5c5c-" or "|cff999999")) .. KM.MoneyShort(math.abs(d), true) .. "|r vs 7 days ago"
+    end
+    return "Net worth", KM.MoneyShort(w.total), sub, C.accent
+end, spark = function()
+    local v = {}
+    for _, p in ipairs(ns.Series(30)) do v[#v + 1] = p.known and p.total or 0 end
+    return v, C.accent
+end, tip = function(tt)
+    local w = ns.NetWorth()
+    tt:AddLine("Everything your characters own: their gold, gold waiting in their mailboxes, and every item in bags, bank, mail and on the auction house at its "
+        .. (ns.db.ui.price == "lowest" and "lowest buyout" or "market price") .. " (before the 5% cut)"
+        .. (ns.db.ui.vendor and ", or what a vendor pays when the auction house has no price." or ".")
+        .. " Soulbound items aren't counted.", 1, 1, 1, true)
+    tt:AddDoubleLine("Gold on characters", ns.Money(w.gold), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Gold in mailboxes", ns.Money(w.mail), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Items (" .. KM.Commas(w.items) .. ")", ns.Money(w.assets), 0.8, 0.8, 0.8, 1, 1, 1)
+    local before = weekAgo()
+    if before then tt:AddDoubleLine("7 days ago", ns.Money(before), 0.8, 0.8, 0.8, 1, 1, 1) end
+    tt:AddLine("The bars: your net worth on each of the last 30 days. Click for Inventory.", 0.7, 0.7, 0.7, true)
+end })
+
+-- Home's chart: net worth, one point a day, the last 30 days (days before the first one recorded are left out).
+KM.RegisterHomeCard({ kind = "chart", id = "networth", order = 10, label = "Net worth", title = "Net worth, last 30 days",
+    emptyText = "Your net worth over time shows here after a day of play: log in on each character once.",
+    get = function()
+        if not ns.db then return nil end
+        local pts = {}
+        for _, p in ipairs(ns.Series(30)) do
+            if p.known then pts[#pts + 1] = { p.day * 86400 + 43200, p.total, nil, p } end
+        end
+        local w = ns.NetWorth()
+        local now = KM.Now()
+        local last = pts[#pts]
+        if last and math.floor(last[1] / 86400) == math.floor(now / 86400) then last[2] = w.total
+        else pts[#pts + 1] = { now, w.total, nil, { gold = w.gold + w.mail, assets = w.assets } } end
+        if #pts < 2 then return nil end
+        return { series = { { pts = pts, style = "area", color = C.accent, agg = "last" } }, endLabel = true,
+            format = function(v) return KM.MoneyShort(v, true) end,
+            xformat = function(x) return date and date("%d %b", x) or tostring(x) end,
+            hover = function(x, p)
+                local d = p and p[4] or {}
+                GameTooltip:AddLine(date and date("%d %b", x) or "", C.accent[1], C.accent[2], C.accent[3])
+                GameTooltip:AddDoubleLine("Net worth", KM.Money(p and p[2]), 1, 1, 1, 1, 1, 1)
+                if d.gold then GameTooltip:AddDoubleLine("Gold", KM.Money(d.gold), 0.8, 0.8, 0.8, 1, 1, 1) end
+                if d.assets then GameTooltip:AddDoubleLine("Items", KM.Money(d.assets), 0.8, 0.8, 0.8, 1, 1, 1) end
+            end }
+    end })
+
+-- Home's character strip: each character's gold (on them and in the mailbox) and what their items are worth.
+KM.RegisterHomeCard({ kind = "chars", id = "inventory", order = 10, get = function()
+    if not ns.db then return nil end
+    local out = {}
+    for _, c in ipairs(ns.Characters()) do
+        if c.who ~= ns.WARBAND then
+            out[c.who] = { primary = true, text = KM.MoneyShort(c.gold + c.mail), worth = c.worth, class = c.class, level = c.level,
+                tip = "Gold " .. KM.Money(c.gold + c.mail) .. ", items " .. KM.Money(c.assets) .. ", net worth " .. KM.Money(c.worth) .. "." }
+        end
+    end
+    return out
 end })
 
 KM.RegisterSettings({ id = "inventory", label = "Inventory", order = 30, rows = function()
@@ -732,6 +867,7 @@ KM.RegisterSettings({ id = "inventory", label = "Inventory", order = 30, rows = 
           get = function() return ns.db.ui.tooltip end, set = function(v) ns.db.ui.tooltip = v end },
         { type = "header", label = "What it's worth" },
         { type = "choice", label = "Value items at", options = { { "market", "Market price" }, { "lowest", "Lowest buyout" } },
+          tip = "Market price: the Scanner module's market price from a Deep Scan (the lowest buyout where there's none). Lowest buyout: the cheapest listing in your last scan.",
           get = function() return ns.db.ui.price end, set = function(v) ns.SetPricing(v) end },
         { type = "check", label = "No auction price: count the vendor price", tip = "Otherwise an item the auction house has no price for counts as nothing.",
           get = function() return ns.db.ui.vendor end, set = function(v) ns.SetPricing(nil, v) end },
@@ -744,7 +880,9 @@ KM.RegisterSettings({ id = "inventory", label = "Inventory", order = 30, rows = 
         rows[#rows + 1] = { type = "text", label = "Forget a character you've deleted, renamed or moved: their items, gold and history go." }
         for _, who in ipairs(known) do
             local label = who == ns.WARBAND and "Forget the warband bank" or ("Forget " .. ns.Short(who))
-            rows[#rows + 1] = { type = "button", label = label, func = function() ns.AskForget(who) end }
+            rows[#rows + 1] = { type = "button", label = label, func = function() ns.AskForget(who) end,
+                tip = "Asks first. Deletes what's recorded for " .. (who == ns.WARBAND and "the warband bank" or ns.Short(who))
+                    .. ": items, gold and net worth history. Logging in on them again counts them afresh." }
         end
     end
     rows[#rows + 1] = { type = "header", label = "Commands" }

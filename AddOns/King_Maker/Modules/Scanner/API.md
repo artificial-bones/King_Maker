@@ -97,12 +97,14 @@ ScannerKing.Now()                 -- server time, the same clock for every guild
   what they need: through `Watch` (Gather, Econ favorites, Shopping lists), or `RegisterScanProvider`
   (Market King's ticked professions). Every quick scan covers all of them.
 - **Econ King** listens for `SCAN_RESULTS` and keeps every scan as history.
+- **The Farm Tracker** (King Maker 2.6) `Watch`es items in your live session that have no price yet, and values them on
+  `PRICES_UPDATED`.
 
 ## Saved data
 
 | Addon | Saved variable | Holds |
 |---|---|---|
-| gather_king | `GatherKingDB` | markers, profiles, loot stats, ledger |
+| gather_king | `GatherKingDB` | markers, profiles, loot stats (the ledger moved to `TrackerKingDB` in King Maker 2.6) |
 | Scanner_King | `ScannerKingDB` | prices, `lastScan`, `lastDeep`, `lastReplicate`, `lastQuick` (2.1: last quick scan), sync setting |
 | Market_King | `MarketKingDB` | its own settings and history |
 | Econ_King | `EconKingDB` | price and supply history, favorites |

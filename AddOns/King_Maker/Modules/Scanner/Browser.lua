@@ -105,6 +105,20 @@ end
 
 local function scanAge(t) return t and API.PriceAge(t) or "never" end
 
+-- The Prices known tooltip (this page and Home): where the prices came from.
+function ns.PricesKnownTip(tt)
+    local market, guild = 0, 0
+    for _, pr in pairs(ns.db.prices) do
+        if pr.m then market = market + 1 end
+        if pr.from then guild = guild + 1 end
+    end
+    local n = count()
+    tt:AddLine("Every item you have an auction price for, from your own scans and your guildmates'. Yellow on Home when the last full scan is over a day old.", 1, 1, 1, true)
+    tt:AddDoubleLine("With a market price", KM.Commas(market), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Lowest buyout only", KM.Commas(n - market), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Last sent by a guildmate", KM.Commas(guild), 0.8, 0.8, 0.8, 1, 1, 1)
+end
+
 local function refreshTiles(c)
     local n = count()
     local quick = ns.db.lastQuick
@@ -179,6 +193,10 @@ local function buildPage(c)
         t:SetPoint("TOPLEFT", (i - 1) * (TILE_W + 10), 0)
         c.tiles[i] = t
     end
+    c.tiles[1]:SetTip(function(tt) ns.PricesKnownTip(tt) end)
+    c.tiles[2]:SetTip("When you last ran a full scan: it downloads every auction and is the only scan that gives market prices. The game allows one every 15 minutes. Yellow once it's over a day old.")
+    c.tiles[3]:SetTip("Items with a market price: the average of the cheapest 15-30% listed, so one cheap or silly listing doesn't move it. Only a full scan (yours or a guildmate's) works one out; a quick scan finds the lowest buyout only.")
+    c.tiles[4]:SetTip("When on, the Trade Goods and watched-item prices you scan go to guildmates running King Maker after each scan, and theirs come to you; for each item the newest price wins. Change it in Settings > Scanner.")
 
     -- Toolbar: search left, scans right.
     c.search = UI.EditBox(c, 240, 24, "Search prices", function()
@@ -220,9 +238,12 @@ local function buildPage(c)
         { key = "name", label = "Item", w = 210, sort = SORT.name, desc = false },
         { key = "market", label = "Market", w = 104, justify = "RIGHT", sort = SORT.market,
           tip = "Market price from the last full Deep Scan: the average of the cheapest 15-30% listed." },
-        { key = "price", label = "Lowest", w = 104, justify = "RIGHT", sort = SORT.price },
-        { key = "qty", label = "Listed", w = 64, justify = "RIGHT", sort = SORT.qty },
-        { key = "age", label = "Scanned", w = 0, sort = SORT.age },
+        { key = "price", label = "Lowest", w = 104, justify = "RIGHT", sort = SORT.price,
+          tip = "The cheapest buyout, each, when it was last scanned." },
+        { key = "qty", label = "Listed", w = 64, justify = "RIGHT", sort = SORT.qty,
+          tip = "How many were for sale in all, across every listing." },
+        { key = "age", label = "Scanned", w = 0, sort = SORT.age,
+          tip = "How old the price is. A name in brackets: the guildmate who sent it." },
     }
     c.table = UI.Table(c, cols, 22, { icon = true, noSort = true, onSort = function() refresh(c) end })
     c.table:SetPoint("TOPLEFT", side, "TOPRIGHT", 12, 0)
@@ -307,7 +328,8 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
     { type = "header", label = "Guild" },
     { type = "check", label = "Share prices with my guild", tip = "Your Trade Goods prices go to guildmates running King Maker (or Scanner King) after each scan; theirs come to you. The newest price wins.",
       get = function() return ns.db.sync.guild end, set = function(v) ns.db.sync.guild = v end },
-    { type = "button", label = "Send my prices to the guild now", func = function() ns.SharePrices(true) end },
+    { type = "button", label = "Send my prices to the guild now", tip = "Sends the Trade Goods and watched-item prices you scanned yourself recently to guildmates now, instead of after your next scan.",
+      func = function() ns.SharePrices(true) end },
     { type = "header", label = "Commands" },
     { type = "text", label = "/sk   open the Prices page\n/sk scan   Scan (at the auction house): full when the game allows it, else quick\n"
         .. "/sk deep   force a full scan (progress window)\n/sk material   force a quick scan of Trade Goods and watched items\n"
@@ -315,25 +337,23 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
         .. "/sk sync [on|off]   share now, or turn sharing on/off\n/sk status   how many prices and how old" },
 } })
 
--- Home.lua loads after the modules, so the tile is added once the world is up. The auction house opening
--- or closing changes which scan buttons work.
-local f = CreateFrame("Frame")
-f:RegisterEvent("PLAYER_LOGIN")
-KM.Register(f, "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED")
-f:SetScript("OnEvent", function(self, event)
-    if event ~= "PLAYER_LOGIN" then
-        C_Timer.After(0.5, function() KM.Refresh() end)
-        return
+-- Home: a row when prices are missing or more than a day old. The auction house opening or closing changes which
+-- scan buttons work, so the open page redraws then.
+KM.RegisterHomeCard({ kind = "attention", id = "scanner", order = 50, get = function()
+    if not ns.db then return nil end
+    local deep, quick = ns.db.lastDeep, ns.db.lastQuick
+    local newest = math.max(deep or 0, quick or 0)
+    local tip = function(tt) ns.PricesKnownTip(tt); tt:AddLine("Click for Prices.", 0.6, 0.6, 0.6) end
+    if newest == 0 then
+        return { { text = "No prices yet: scan at the auction house", color = C.info, page = "prices", tip = tip } }
     end
-    self:UnregisterEvent("PLAYER_LOGIN")
-    if not KM.RegisterHomeTile then return end
-    KM.RegisterHomeTile({ id = "scanner", order = 10, get = function()
-        if not ns.db then return nil end
-        local deep = ns.db.lastDeep
-        local stale = not deep or ns.Now() - deep > 86400
-        local quick = ns.db.lastQuick
-        local sub = deep and ("full scan " .. API.PriceAge(deep)) or "no full scan yet"
-        if quick and (not deep or quick > deep) then sub = sub .. ", quick " .. API.PriceAge(quick) end
-        return "Prices known", KM.Commas(count()), sub, stale and C.warn or C.text
-    end })
-end)
+    if ns.Now() - newest > 86400 then
+        return { { text = "Last price scan " .. API.PriceAge(newest) .. ": scan again", color = C.warn, page = "prices",
+            value = KM.Commas(count()), tip = tip } }
+    end
+end })
+
+local f = CreateFrame("Frame")
+KM.Register(f, "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED")
+f:SetScript("OnEvent", function() C_Timer.After(0.5, function() KM.Refresh() end) end)
+

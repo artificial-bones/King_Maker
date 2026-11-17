@@ -98,6 +98,16 @@ assert w.gold == 2000000 and w.mail == 5000 and w.assets == jay_assets + 400 and
 assert w.total == 2005000 + jay_assets + 400 and w["items"] == 35 + 5 + 40 + 1 + 10 + 10
 total, by = IK.GetCount(2770)
 assert total == 50 and by[ME] == 40 and by["Warband"] == 10
+# where each character holds an item, with when each place was read; a copy
+pl = IK.GetPlaces(2589)
+assert list(pl.keys()) == [ME], list(pl.keys())
+p = pl[ME]
+assert (p.bags, p.bank, p.mail, p.ah) == (35, 0, 0, 10) and p.bagsT == L.eval("NOW") and p.ahT and p.bankT and p.mailT
+pl = IK.GetPlaces(2770)
+assert sorted(pl.keys()) == sorted([ME, "Warband"]) and pl[ME].bank == 40 and pl["Warband"].bank == 10 and pl["Warband"].bags == 0
+assert pl["Warband"].bagsT is None, "the warband bank has no bags"
+pl[ME].bank = 1; assert stock()[ME].bank[2770] == 40, "a copy"
+assert len(IK.GetPlaces(424242)) == 0, "nobody holds it"
 chars = list(IK.GetCharacters().values())
 assert [x.who for x in chars] == [ME, "Warband"] and chars[0].worth == 2005000 + jay_assets and chars[0].bankSeen
 res = ns.Items(L.table_from({"who": ME, "place": "bags"}))

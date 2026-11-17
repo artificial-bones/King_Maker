@@ -4,8 +4,12 @@ local _, KM = ...
 -- Modules register pages; a page is built the first time it is opened and refreshed every time it is shown.
 --
 --   KM.RegisterGroup{ id, label, order }
---   KM.RegisterPage{ id, group, label, icon, order, title, subtitle = string | fn, badge = fn,
+--   KM.RegisterPage{ id, group, label, icon, order, title, subtitle = string | fn, badge = fn, crownBadge = bool,
 --                    build = fn(container), refresh = fn(container), hide = fn(container) }
+--     badge() returns a string or number (gold text on the sidebar button, as always), or a count badge
+--     { count = n, color = "red" | "gold", tip = "..." }: a round disc with the number (9+ above nine), summed on the
+--     group header while the group is collapsed, and on the minimap crown when the page sets crownBadge = true.
+--   KM.RefreshBadges()     works every badge out again and draws it (window open or not: the crown shows anyway)
 --   KM.Show(id)            opens the window on that page
 --   KM.Toggle(show)        nil toggles
 --   KM.Refresh(id)         redraws the current page (only when it is page id, if given)
@@ -13,6 +17,8 @@ local _, KM = ...
 --   KM.RegisterQuickAction{ id, label, order, func, shown = fn }   right-click menu of the minimap button
 --   KM.RegisterTooltip(fn(tooltip))                                 lines in the minimap button's tooltip
 --   KM.RegisterStatus(fn() -> text)                                 lines in the sidebar status box
+--   KM.SetScale(s) -> s    window zoom, clamped to KM.MinScale() .. KM.MaxScale() (what fits on the screen)
+--   KM.ResetWindow()       zoom 100%, back in the middle of the screen
 -- The same functions are on the public KingMaker table, so another addon (Oracle) can add its own pages.
 
 local UI = KM.UI
@@ -20,7 +26,8 @@ local C = UI.C
 local W, H, SIDE = 1000, 640, 200
 local NAV_H, GROUP_H = 28, 22
 
-local frame, content, titleFS, subFS, statusFS, navArea
+local frame, content, titleFS, subFS, statusFS, statusBox, navArea
+local mini              -- the minimap crown (made at login, further down)
 local pages, groups = {}, {}
 local current
 local actions, tips, statuses = {}, {}, {}
@@ -46,10 +53,27 @@ function KM.RegisterQuickAction(a) table.insert(actions, a); table.sort(actions,
 function KM.RegisterTooltip(fn) table.insert(tips, fn) end
 function KM.RegisterStatus(fn) table.insert(statuses, fn) end
 
--- Home page tiles and notes (drawn by Home.lua): KM.RegisterHomeTile{ id, order, get = fn() -> label, value, sub, color }
-KM.homeTiles, KM.homeNotes = {}, {}
-function KM.RegisterHomeTile(t) table.insert(KM.homeTiles, t); table.sort(KM.homeTiles, function(a, b) return (a.order or 50) < (b.order or 50) end) end
+-- Home page tiles, notes and cards (drawn by Home.lua, which says what each kind returns):
+--   KM.RegisterHomeTile{ id, order, get = fn() -> label, value, sub, color, tip, page, spark }
+--   KM.RegisterHomeNote(fn() -> text)
+--   KM.RegisterHomeCard{ kind = "attention" | "chart" | "income" | "best" | "chars", id, order, get, ... }
+-- A tile or card registered again with the same id replaces the old one.
+KM.homeTiles, KM.homeNotes, KM.homeCards = {}, {}, {}
+local function byOrder(a, b) return (a.order or 50) < (b.order or 50) end
+local function put(list, t)
+    for i, old in ipairs(list) do
+        if t.id ~= nil and old.id == t.id then list[i] = t; table.sort(list, byOrder) return end
+    end
+    table.insert(list, t)
+    table.sort(list, byOrder)
+end
+function KM.RegisterHomeTile(t) put(KM.homeTiles, t) end
 function KM.RegisterHomeNote(fn) table.insert(KM.homeNotes, fn) end
+function KM.RegisterHomeCard(card)
+    if type(card) ~= "table" or not card.kind then return end
+    KM.homeCards[card.kind] = KM.homeCards[card.kind] or {}
+    put(KM.homeCards[card.kind], card)
+end
 
 KM.groups, KM.pages, KM.QuickActions = groups, pages, actions
 
@@ -73,6 +97,42 @@ local function savePos()
     local point, _, _, x, y = frame:GetPoint(1)
     db().pos = { point = point, x = x, y = y }
 end
+
+-- Count badge: a disc with a number. Flat: the white texture under the round portrait mask (the same mask the
+-- minimap crown uses), so there is no art file. color: "red" (something to do here), "gold", "muted".
+local BADGE = { red = { 0.86, 0.19, 0.17, 1 }, gold = C.accent, muted = C.dim }
+local BADGE_TEXT = { red = { 1, 1, 1, 1 }, gold = { 0.10, 0.07, 0.01, 1 }, muted = { 1, 1, 1, 1 } }
+local function countBadge(parent, size)
+    local f = CreateFrame("Frame", nil, parent)
+    size = size or 16
+    f:SetSize(size, size)
+    f:SetFrameLevel((parent:GetFrameLevel() or 1) + 3)
+    f.disc = UI.Fill(f, BADGE.red, "ARTWORK")
+    if f.CreateMaskTexture and f.disc.AddMaskTexture then
+        local m = f:CreateMaskTexture()
+        m:SetAllPoints(f.disc)
+        m:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        f.disc:AddMaskTexture(m)
+    end
+    local fsize = size >= 16 and 10 or 8
+    f.text = UI.Text(f, fsize, BADGE_TEXT.red, "CENTER", "OVERLAY")
+    f.text:SetPoint("CENTER", 0, 0)
+    function f:SetCount(n, color)
+        n = tonumber(n)
+        if not n or n <= 0 then self.n = nil; self:Hide() return end
+        color = BADGE[color] and color or "red"
+        n = math.floor(n)
+        self.n, self.color = n, color
+        self.disc:SetColor(BADGE[color])
+        local tc = BADGE_TEXT[color]
+        self.text:SetTextColor(tc[1], tc[2], tc[3], 1)
+        self.text:SetText(n > 9 and "9+" or tostring(n))
+        self:Show()
+    end
+    f:Hide()
+    return f
+end
+UI.CountBadge = countBadge   -- other windows may use it: UI.CountBadge(parent, size) -> f, f:SetCount(n, color)
 
 local function navButton(p)
     local b = CreateFrame("Button", nil, navArea)
@@ -98,8 +158,19 @@ local function navButton(p)
     b.label:SetText(p.label)
     b.badge = UI.Text(b, 10, C.accent, "RIGHT")
     b.badge:SetPoint("RIGHT", -8, 0)
-    b:SetScript("OnEnter", function(self) if current ~= p.id then self.hl:Show() end end)
-    b:SetScript("OnLeave", function(self) self.hl:Hide() end)
+    b.count = countBadge(b, 16)
+    b.count:SetPoint("RIGHT", -8, 0)
+    b:SetScript("OnEnter", function(self)
+        if current ~= p.id then self.hl:Show() end
+        local v = p.badgeValue            -- the count badge's tip, when the page gave one
+        if type(v) == "table" and type(v.tip) == "string" and v.tip ~= "" then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(p.label or "", C.accent[1], C.accent[2], C.accent[3])
+            GameTooltip:AddLine(v.tip, 1, 1, 1, true)
+            GameTooltip:Show()
+        end
+    end)
+    b:SetScript("OnLeave", function(self) self.hl:Hide(); GameTooltip:Hide() end)
     b:SetScript("OnClick", function() UI.Click(); KM.Show(p.id) end)
     p.nav = b
     return b
@@ -108,17 +179,20 @@ end
 local function groupHeader(g)
     local h = CreateFrame("Button", nil, navArea)
     h:SetHeight(GROUP_H)
-    h.fs = UI.Text(h, 9, C.dim)
+    h.fs = UI.Text(h, 10, C.muted)
     h.fs:SetPoint("LEFT", 12, -2)
-    h.arrow = UI.Text(h, 9, C.dim, "RIGHT")
+    h.arrow = UI.Text(h, 10, C.muted, "RIGHT")
     h.arrow:SetPoint("RIGHT", -10, -2)
-    h:SetScript("OnEnter", function(self) self.fs:SetTextColor(C.muted[1], C.muted[2], C.muted[3]) end)
-    h:SetScript("OnLeave", function(self) self.fs:SetTextColor(C.dim[1], C.dim[2], C.dim[3]) end)
+    h.count = countBadge(h, 14)
+    h.count:SetPoint("RIGHT", h.arrow, "LEFT", -6, 0)
+    h:SetScript("OnEnter", function(self) self.fs:SetTextColor(C.text[1], C.text[2], C.text[3]) end)
+    h:SetScript("OnLeave", function(self) self.fs:SetTextColor(C.muted[1], C.muted[2], C.muted[3]) end)
     h:SetScript("OnClick", function()
         local col = db().collapsed
         col[g.id] = not col[g.id] or nil
         UI.Click()
         KM.LayoutNav()
+        KM.RefreshBadges()           -- the header shows its pages' sum while collapsed
     end)
     g.header = h
     return h
@@ -162,7 +236,7 @@ local function create()
     frame = CreateFrame("Frame", "KingMakerFrame", UIParent)
     frame:SetSize(W, H)
     if u.pos and u.pos.point then frame:SetPoint(u.pos.point, UIParent, u.pos.point, u.pos.x, u.pos.y) else frame:SetPoint("CENTER") end
-    frame:SetScale(u.scale or 1)
+    frame:SetScale(KM.ClampScale(u.scale or 1))
     frame:SetFrameStrata("HIGH")
     frame:SetToplevel(true)
     frame:SetMovable(true)
@@ -205,8 +279,20 @@ local function create()
     tag:SetText("v" .. KM.version .. "  |cff6b6b70WoW Forever|r")
 
     navArea = CreateFrame("Frame", nil, side)
+    -- the status box sits at the bottom and is as tall as its text (statusText); the nav list takes the rest
+    local status = CreateFrame("Frame", nil, side)
+    status:SetPoint("BOTTOMLEFT", 10, 10)
+    status:SetPoint("BOTTOMRIGHT", -10, 10)
+    status:SetHeight(1)
+    UI.Fill(status, { 0, 0, 0, 0.25 })
+    UI.Border(status)
+    statusFS = UI.Para(status, 10, C.muted, SIDE - 36)
+    statusFS:SetPoint("TOPLEFT", 8, -8)
+    status:Hide()
+    statusBox = status
+
     navArea:SetPoint("TOPLEFT", 0, -62)
-    navArea:SetPoint("BOTTOMRIGHT", 0, 74)
+    navArea:SetPoint("BOTTOMRIGHT", status, "TOPRIGHT", 10, 6)
     if navArea.SetClipsChildren then navArea:SetClipsChildren(true) end
     navArea:EnableMouseWheel(true)
     navArea.scroll = 0
@@ -216,15 +302,6 @@ local function create()
         KM.LayoutNav()
     end)
 
-    local status = CreateFrame("Frame", nil, side)
-    status:SetPoint("BOTTOMLEFT", 10, 10)
-    status:SetPoint("BOTTOMRIGHT", -10, 10)
-    status:SetHeight(58)
-    UI.Fill(status, { 0, 0, 0, 0.25 })
-    UI.Border(status)
-    statusFS = UI.Para(status, 10, C.muted, SIDE - 36)
-    statusFS:SetPoint("TOPLEFT", 8, -8)
-
     titleFS = UI.Text(frame, 18, C.text)
     titleFS:SetPoint("TOPLEFT", side, "TOPRIGHT", 22, -18)
     subFS = UI.Text(frame, 11, C.muted)
@@ -233,6 +310,13 @@ local function create()
     local close = UI.CloseButton(frame, function() KM.Toggle(false) end)
     close:SetSize(26, 26)
     close:SetPoint("TOPRIGHT", -12, -14)
+    local rule = frame:CreateTexture(nil, "BORDER")   -- a top edge for the page, under the title and subtitle
+    rule:SetTexture(UI.WHITE)
+    rule:SetPoint("TOPLEFT", side, "TOPRIGHT", 18, -56)
+    rule:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -18, -56)
+    rule:SetHeight(1)
+    UI.SetColor(rule, C.border)
+    KM.headerRule = rule
 
     content = CreateFrame("Frame", nil, frame)
     content:SetPoint("TOPLEFT", side, "TOPRIGHT", 18, -64)
@@ -248,6 +332,7 @@ local function create()
         local p = pages[current]
         if p and p.hide and p.container then KM.Safe(p.hide, p.container) end
     end)
+    KM.AttachGrip()
     frame:Hide()
     KM.frame = frame
     KM.LayoutNav()
@@ -261,6 +346,13 @@ local function statusText()
         if #lines >= 4 then break end
     end
     statusFS:SetText(#lines > 0 and table.concat(lines, "\n") or "")
+    if #lines > 0 then
+        statusBox:SetHeight(math.floor((statusFS:GetStringHeight() or 12) + 16.5))
+        statusBox:Show()
+    else
+        statusBox:SetHeight(1)
+        statusBox:Hide()
+    end
 end
 
 local function firstPage()
@@ -301,9 +393,7 @@ function KM.Refresh(id)
     if not frame or not frame:IsShown() or not db() then return end
     if id and id ~= current then return end
     statusText()
-    for _, p in pairs(pages) do
-        if p.nav then p.nav.badge:SetText(p.badge and KM.Safe(p.badge) or "") end
-    end
+    KM.RefreshBadges()
     local p = pages[current]
     if p then
         subFS:SetText(type(p.subtitle) == "function" and (KM.Safe(p.subtitle) or "") or (p.subtitle or ""))
@@ -325,16 +415,216 @@ end
 
 function KM.CurrentPage() return current end
 
-function KM.SetScale(s)
-    db().scale = s
-    if frame then frame:SetScale(s) end
+---------------------------------------------------------------------------
+-- Badges: the gold text or count disc on each sidebar button, the sum on a collapsed group's header, the crown's dot
+---------------------------------------------------------------------------
+
+local function applyBadge(b, v)
+    if type(v) == "table" then
+        b.badge:SetText("")
+        b.count:SetCount(v.count, v.color)
+    else
+        b.count:SetCount(nil)
+        b.badge:SetText(v ~= nil and tostring(v) or "")   -- strings and numbers: the gold text, as before (Oracle)
+    end
 end
+
+local RANK = { red = 3, gold = 2, muted = 1 }
+local function stronger(a, v)            -- the colour a sum shows: red if any part is red, then gold
+    local b = RANK[v.color] and v.color or "red"
+    if not a or RANK[b] > RANK[a] then return b end
+    return a
+end
+
+local function countOf(v)
+    if type(v) ~= "table" then return 0 end
+    local n = tonumber(v.count) or 0
+    return n > 0 and math.floor(n) or 0
+end
+
+-- Works out every page's badge once and draws it: on its sidebar button, summed on a collapsed group's header (the
+-- pages it hides), and on the minimap crown (pages with crownBadge = true). Cheap; modules call it when their counts
+-- change, window open or not.
+KM.BadgeTables = true   -- page badges may be { count, color, tip } tables (modules check this before returning one)
+function KM.RefreshBadges()
+    if not db() then return end
+    local crown, crownColor = 0, nil
+    for _, p in pairs(pages) do
+        p.badgeValue = p.badge and KM.Safe(p.badge) or nil
+        local v = p.badgeValue
+        if p.nav then applyBadge(p.nav, v) end
+        local n = countOf(v)
+        if p.crownBadge and n > 0 then
+            crown = crown + n
+            crownColor = stronger(crownColor, v)
+        end
+    end
+    local col = db().collapsed or {}
+    for _, g in pairs(groups) do
+        if g.header then
+            local n, color = 0, nil
+            if col[g.id] then
+                for _, p in ipairs(g.pages) do
+                    local c = p.id ~= current and countOf(p.badgeValue) or 0   -- the open page keeps its own button
+                    if c > 0 then
+                        n = n + c
+                        color = stronger(color, p.badgeValue)
+                    end
+                end
+            end
+            g.header.count:SetCount(n, color)
+        end
+    end
+    if mini and mini.count then mini.count:SetCount(db().crownBadge ~= false and crown or 0, crownColor) end
+end
+
+---------------------------------------------------------------------------
+-- Window zoom: the layout is drawn for W x H and never reflows; the corner grip, Settings > General > Window zoom
+-- and /km size scale it whole. 70% keeps the 9 pt labels readable; the top is whatever still fits on the screen.
+---------------------------------------------------------------------------
+
+local ZOOM_MIN, ZOOM_CAP = 0.7, 2.0
+local DRAG_START = 3          -- the mouse must move this far before a press on the grip counts as a drag
+
+local function floor2(s) return math.floor(s * 100 + 1e-6) / 100 end
+
+function KM.MinScale() return ZOOM_MIN end
+
+-- The largest zoom at which the whole window fits inside UIParent.
+function KM.MaxScale()
+    local uw, uh = UIParent:GetWidth(), UIParent:GetHeight()
+    local w, h = W, H
+    if frame then w, h = frame:GetWidth(), frame:GetHeight() end
+    if not (uw and uh and uw > 0 and uh > 0 and w and h and w > 0 and h > 0) then return 1 end
+    return floor2(math.max(ZOOM_MIN, math.min(ZOOM_CAP, uw / w, uh / h)))
+end
+
+function KM.ClampScale(s)
+    return floor2(math.max(KM.MinScale(), math.min(KM.MaxScale(), tonumber(s) or 1)))
+end
+
+-- The window's top-left corner in UIParent units, measured from UIParent's bottom-left.
+local function topLeft()
+    local s, l, t = frame:GetScale(), frame:GetLeft(), frame:GetTop()
+    if not (l and t and s) then return nil end
+    return l * s, t * s
+end
+
+-- Zoom to s with the top-left corner at (L, T), slid back inside the screen if the bigger window would cross an edge.
+-- Anchored TOPLEFT to UIParent's TOPLEFT (point == relative point, like a dragged frame), so savePos and create()
+-- read it back unchanged. Offsets are in the frame's own scaled units, hence the / s.
+local function placeAt(s, L, T)
+    local uw, uh = UIParent:GetWidth(), UIParent:GetHeight()
+    local w, h = frame:GetWidth() * s, frame:GetHeight() * s
+    L = math.max(0, math.min(L, uw - w))
+    T = math.min(uh, math.max(T, h))
+    frame:SetScale(s)
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", L / s, (T - uh) / s)
+end
+
+function KM.SetScale(s)
+    s = KM.ClampScale(s)
+    db().scale = s
+    if frame then
+        local L, T = topLeft()
+        if L then placeAt(s, L, T); savePos() else frame:SetScale(s) end
+    end
+    return s
+end
+
+function KM.ResetWindow()
+    local u = db()
+    u.scale, u.pos = nil, nil
+    if frame then
+        frame:SetScale(KM.ClampScale(1))
+        frame:ClearAllPoints()
+        frame:SetPoint("CENTER")
+    end
+    KM.Refresh("settings")
+end
+
+local function zoomStart(g)
+    local L, T = topLeft()
+    if not L then return end
+    local s0, es = frame:GetScale(), UIParent:GetEffectiveScale()
+    local w, h = frame:GetWidth(), frame:GetHeight()
+    local x0, y0 = GetCursorPosition()
+    x0, y0 = x0 / es, y0 / es
+    local offX, offY = w * s0 - (x0 - L), h * s0 - (T - y0)   -- where in the grip the press was: no jump
+    local lo, hi, cur, moved = KM.MinScale(), KM.MaxScale(), s0, false
+    g.drag = true
+    g:SetScript("OnUpdate", function()
+        local x, y = GetCursorPosition()
+        x, y = x / es, y / es
+        if not moved and math.abs(x - x0) + math.abs(y - y0) < DRAG_START then return end
+        moved = true
+        local dx, dy = x - L + offX, T - y + offY
+        -- the zoom whose corner lands closest to the mouse, aspect ratio kept (least squares along the diagonal)
+        local s = floor2(math.max(lo, math.min(hi, (dx * w + dy * h) / (w * w + h * h))))
+        if s ~= cur then cur = s; placeAt(s, L, T) end
+        g.readout:SetText(math.floor(s * 100 + 0.5) .. "%")
+        g.readout:Show()
+    end)
+end
+
+local function zoomStop(g)
+    if not g.drag then return end
+    g.drag = nil
+    g:SetScript("OnUpdate", nil)
+    g.readout:Hide()
+    db().scale = KM.ClampScale(frame:GetScale())
+    savePos()
+    KM.Refresh("settings")
+end
+
+-- The grip: six dots in the bottom-right corner, dim until hovered (drawn flat like the rest of the theme).
+function KM.AttachGrip()
+    local g = CreateFrame("Button", nil, frame)
+    g:SetSize(16, 16)
+    g:SetPoint("BOTTOMRIGHT", -3, 3)
+    g:SetFrameLevel(frame:GetFrameLevel() + 20)
+    g.dots = {}
+    for _, d in ipairs({ { 0, 0 }, { 1, 0 }, { 2, 0 }, { 0, 1 }, { 1, 1 }, { 0, 2 } }) do
+        local t = g:CreateTexture(nil, "OVERLAY")
+        t:SetTexture(UI.WHITE)
+        t:SetSize(2, 2)
+        t:SetPoint("BOTTOMRIGHT", -1 - d[1] * 5, 1 + d[2] * 5)
+        UI.SetColor(t, C.dim)
+        g.dots[#g.dots + 1] = t
+    end
+    g.readout = UI.Text(g, 10, C.accent, "RIGHT")      -- on the grip, so it draws above the page
+    g.readout:SetPoint("BOTTOMRIGHT", g, "TOPRIGHT", 0, 2)
+    g.readout:Hide()
+    local function tint(c) for _, t in ipairs(g.dots) do UI.SetColor(t, c) end end
+    g:SetScript("OnEnter", function(self)
+        tint(C.accent)
+        if self.drag then return end
+        GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+        GameTooltip:AddLine("Window zoom " .. math.floor(frame:GetScale() * 100 + 0.5) .. "%")
+        GameTooltip:AddLine("Drag to make the whole window bigger or smaller.", 1, 1, 1, true)
+        GameTooltip:AddLine("Double-click: back to 100%.", 0.6, 0.6, 0.6)
+        GameTooltip:Show()
+    end)
+    g:SetScript("OnLeave", function(self) if not self.drag then tint(C.dim) end GameTooltip:Hide() end)
+    g:SetScript("OnMouseDown", function(self, button) if button == "LeftButton" then GameTooltip:Hide(); zoomStart(self) end end)
+    g:SetScript("OnMouseUp", function(self) zoomStop(self); if not (self.IsMouseOver and self:IsMouseOver()) then tint(C.dim) end end)
+    g:SetScript("OnHide", zoomStop)               -- Escape mid-drag ends it and saves
+    g:SetScript("OnDoubleClick", function() KM.SetScale(1); KM.Refresh("settings") end)
+    KM.grip = g
+end
+
+-- A new UI scale or resolution changes what fits: re-clamp (a moment later, once UIParent has its new size).
+local zoomEv = CreateFrame("Frame")
+KM.Register(zoomEv, "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED")
+zoomEv:SetScript("OnEvent", function()
+    C_Timer.After(0.2, function() if frame and db() then KM.SetScale(db().scale or 1) end end)
+end)
 
 ---------------------------------------------------------------------------
 -- The minimap button: left-click opens the window, right-click the quick actions
 ---------------------------------------------------------------------------
 
-local mini
 local function place()
     local angle = math.rad(db().buttonAngle or 200)
     local radius = (Minimap:GetWidth() / 2) + 5
@@ -409,7 +699,11 @@ function KM.UpdateMinimapButton()
         end)
         mini:SetScript("OnLeave", function() GameTooltip:Hide() end)
         if Minimap.HookScript then Minimap:HookScript("OnSizeChanged", function() if mini then place() end end) end
+        mini.count = countBadge(mini, 13)          -- a page's count (crownBadge = true), Settings > General
+        mini.count:SetPoint("TOPRIGHT", -1, -1)
+        mini.count:SetFrameLevel(mini:GetFrameLevel() + 5)
         KM.minimapButton = mini
+        KM.RefreshBadges()
     end
     place()
     mini:SetShown(db().button)
@@ -427,6 +721,6 @@ ev:SetScript("OnEvent", function()
 end)
 
 for _, name in ipairs({ "RegisterGroup", "RegisterPage", "Show", "Toggle", "Refresh", "IsShown", "RegisterQuickAction",
-    "RegisterTooltip", "RegisterStatus", "RegisterHomeTile", "RegisterHomeNote" }) do
+    "RegisterTooltip", "RegisterStatus", "RegisterHomeTile", "RegisterHomeNote", "RegisterHomeCard", "RefreshBadges" }) do
     KingMaker[name] = KM[name]
 end

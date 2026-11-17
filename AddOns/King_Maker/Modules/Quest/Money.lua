@@ -4,7 +4,8 @@ local ns = KM.Module("Quest")
 -- Quest Gold: what the quests of level 48 and up are worth, zone by zone, for the character you're on.
 --
 -- Data/Quests.lua lists them (CMaNGOS classic-db + ForeverDB.net). A quest is worth:
---   gold      Forever's real reward when King Maker has seen it (db.gold, learned below), else an estimate (~):
+--   gold      Forever's real reward when King Maker knows it (db.gold, learned below, or Data/QuestGold.lua: the amounts
+--             learned before this release, shipped with it), else an estimate (~):
 --             the typical amount seen for quests of that level, else at least 1g (Forever's Nov 2026 hotfix put gold
 --             on most 48+ quests) or Classic's when that's more.
 --   + reward  the best choice item (what one sells for: the auction house after its 5% cut, or a vendor, whichever
@@ -12,8 +13,10 @@ local ns = KM.Module("Quest")
 --   - cost    what the items you hand in would sell for (only those with a price: dropped quest items have none)
 --
 -- Learning the real gold: the quest giver's offer and turn-in windows (GetRewardMoney), quests in your log
--- (GetQuestLogRewardMoney), what a turn-in actually paid (QUEST_TURNED_IN), and on request the server's quest data
--- for a whole zone (C_QuestLog.RequestLoadQuestByID -> QUEST_DATA_LOAD_RESULT), where the client allows it.
+-- (GetQuestLogRewardMoney), what a turn-in actually paid (QUEST_TURNED_IN), and the server's quest data for the zone
+-- you're in (C_QuestLog.RequestLoadQuestByID -> QUEST_DATA_LOAD_RESULT): the first time each character enters a zone
+-- (and again after a King Maker update) it quietly asks for that zone's quests whose gold isn't known yet. Forever
+-- pays the same gold at every level, so an amount learned on one character is right for all of them.
 
 local CUT = 0.95
 local FLOOR = 10000          -- 1g: the least an unseen 48+ quest is guessed to pay
@@ -78,6 +81,7 @@ end
 -- Gold for a quest: copper, and whether it's an estimate.
 function ns.QuestGold(q)
     local seen = ns.db.gold[q]
+    if seen == nil and ns.QUEST_GOLD then seen = ns.QUEST_GOLD[q] end
     if seen then return seen, false end
     local i = info(q)
     if not i then return 0, true end
@@ -179,9 +183,15 @@ end
 
 -- "done", "log" (in your quest log), "ready", "low" (your level's too low), "locked" (the quest before it isn't done),
 -- "nodata" (the server knows nothing about it: not in Forever yet).
+-- Has the server said it knows nothing about this quest (here, or in the shipped data)?
+function ns.NoData(q)
+    if ns.db.noData[q] then return true end
+    return (ns.QUEST_NODATA and ns.QUEST_NODATA[q] and ns.db.gold[q] == nil) and true or false
+end
+
 function ns.QuestState(q)
     if done(q) then return "done" end
-    if ns.db.noData[q] and not inLog(q) then return "nodata" end
+    if ns.NoData(q) and not inLog(q) then return "nodata" end
     if inLog(q) then return "log" end
     local i = info(q)
     if i.prev ~= 0 and not done(i.prev) then return "locked" end
@@ -213,7 +223,7 @@ function ns.Zones()
                 out[#out + 1] = z
             end
             table.insert(z.quests, q)
-            local missing = ns.db.noData[q] and not done(q) and not inLog(q)
+            local missing = ns.NoData(q) and not done(q) and not inLog(q)
             if missing then
                 z.missing = z.missing + 1 -- listed (greyed), but not counted: the server says it isn't in Forever
             else
@@ -270,7 +280,7 @@ function ns.AskZone(map)
     if not (C_QuestLog and C_QuestLog.RequestLoadQuestByID and GetQuestLogRewardMoney) then return nil end
     local n = 0
     for q, r in pairs(ns.QUESTS) do
-        if r[1] == map and ns.db.gold[q] == nil and not asking[q] and ns.ForMe(q) then
+        if r[1] == map and select(2, ns.QuestGold(q)) and not asking[q] and ns.ForMe(q) then
             asking[q] = true
             askQueue[#askQueue + 1] = q
             n = n + 1
@@ -288,6 +298,39 @@ function ns.AskZone(map)
     return n
 end
 function ns.CanAsk() return C_QuestLog and C_QuestLog.RequestLoadQuestByID and GetQuestLogRewardMoney and true or false end
+
+-- The zone you're standing in, as Data/Quests.lua names zones (a city or sub-map climbs to its zone), or nil.
+local zoneMaps
+local function currentZone()
+    if not (C_Map and C_Map.GetBestMapForUnit) then return nil end
+    if not zoneMaps then
+        zoneMaps = {}
+        for _, r in pairs(ns.QUESTS) do zoneMaps[r[1]] = true end
+    end
+    local map = C_Map.GetBestMapForUnit("player")
+    for _ = 1, 5 do
+        if not map or map == 0 then return nil end
+        if zoneMaps[map] then return map end
+        local i = C_Map.GetMapInfo and C_Map.GetMapInfo(map)
+        map = i and i.parentMapID
+    end
+end
+
+-- Entering a zone: the first time this character is here (since this version of King Maker), ask the server for the
+-- zone's unknown quest gold. Never in combat; nothing is printed. Returns how many quests were asked about.
+local autoPending
+function ns.AutoAsk()
+    if not (ns.db and ns.db.autoAsk and ns.CanAsk()) then return 0 end
+    if InCombatLockdown and InCombatLockdown() then autoPending = true return 0 end
+    local map = currentZone()
+    if not map then return 0 end
+    local key = (UnitName("player") or "?") .. "-" .. (GetRealmName and GetRealmName() or "")
+    local asked = ns.db.asked[key] or {}
+    ns.db.asked[key] = asked
+    if asked[map] == KM.version then return 0 end
+    asked[map] = KM.version
+    return ns.AskZone(map) or 0
+end
 
 -- The server's answer. No data at all: the quest isn't in Forever (yet), set aside (db.noData) and left out of the
 -- totals. Data that says 0: it really pays nothing (once the client says its reward data is in).
@@ -318,7 +361,8 @@ local function questID()
 end
 
 local f = CreateFrame("Frame")
-KM.Register(f, "QUEST_DETAIL", "QUEST_COMPLETE", "QUEST_TURNED_IN", "QUEST_LOG_UPDATE", "QUEST_DATA_LOAD_RESULT")
+KM.Register(f, "QUEST_DETAIL", "QUEST_COMPLETE", "QUEST_TURNED_IN", "QUEST_LOG_UPDATE", "QUEST_DATA_LOAD_RESULT",
+    "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA", "PLAYER_REGEN_ENABLED")
 local logPending
 f:SetScript("OnEvent", function(_, event, a, b, c)
     if not ns.db then return end
@@ -334,6 +378,10 @@ f:SetScript("OnEvent", function(_, event, a, b, c)
         if ns.RefreshQuestGold then ns.RefreshQuestGold() end
     elseif event == "QUEST_DATA_LOAD_RESULT" then
         answer(a, b)
+    elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
+        C_Timer.After(3, function() pcall(ns.AutoAsk) end) -- the map has settled by then
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        if autoPending then autoPending = nil; pcall(ns.AutoAsk) end
     elseif event == "QUEST_LOG_UPDATE" and not logPending then
         logPending = true
         C_Timer.After(1, function() logPending = nil; pcall(fromLog) end)

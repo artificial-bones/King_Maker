@@ -51,24 +51,24 @@ end
 
 local COLS = {
     plan = {
-        { key = "skill", label = "Skill", w = 66 },
+        { key = "skill", label = "Skill", w = 66, tip = "The skill points this line covers. A gold line in Make: a trainer visit for the next rank." },
         { key = "make", label = "Make", w = 214 },
         { key = "crafts", label = "Crafts", w = 52, justify = "RIGHT", tip = "How many, on average: yellow and green recipes don't always give a point." },
         { key = "each", label = "Each", w = 88, justify = "RIGHT", tip = "One craft: the materials, minus what you get back. Green: it makes money." },
         { key = "how", label = "Get back by", w = 82, tip = "The best of selling it, disenchanting it, or a vendor." },
-        { key = "per", label = "Per point", w = 84, justify = "RIGHT" },
-        { key = "total", label = "Total", w = 88, justify = "RIGHT" },
-        { key = "learn", label = "Recipe", w = 0 },
+        { key = "per", label = "Per point", w = 84, justify = "RIGHT", tip = "This line's total over the points it covers. Green: you make money on them." },
+        { key = "total", label = "Total", w = 88, justify = "RIGHT", tip = "This line's crafts times what each costs, plus the pattern if you'd buy one. Green: money made." },
+        { key = "learn", label = "Recipe", w = 0, tip = "Trainer, Known (you have the pattern), or Pattern and what it costs: the auction house, or a vendor." },
     },
     now = {
         { key = "make", label = "Make", w = 214 },
-        { key = "color", label = "Color", w = 56 },
-        { key = "chance", label = "Chance", w = 56, justify = "RIGHT", tip = "The chance one craft gives a skill point." },
+        { key = "color", label = "Color", w = 56, tip = "The recipe's color at this skill: orange always gives a point, yellow and green sometimes, grey never." },
+        { key = "chance", label = "Chance", w = 56, justify = "RIGHT", tip = "The chance one craft gives a skill point: always on orange, then falling through yellow and green until grey." },
         { key = "mats", label = "Materials", w = 88, justify = "RIGHT", tip = "What the materials for one craft cost (auction house or vendor, the cheaper)." },
-        { key = "back", label = "Get back", w = 88, justify = "RIGHT" },
+        { key = "back", label = "Get back", w = 88, justify = "RIGHT", tip = "What one craft brings back, the best of what's ticked above: selling it on the auction house or disenchanting it (both after the 5% cut), or a vendor." },
         { key = "how", label = "By", w = 74 },
-        { key = "per", label = "Per point", w = 84, justify = "RIGHT" },
-        { key = "learn", label = "Recipe", w = 0 },
+        { key = "per", label = "Per point", w = 84, justify = "RIGHT", tip = "Materials minus what you get back, divided by the chance of a point: what a skill point costs on average. Green: you make money. Cheapest first." },
+        { key = "learn", label = "Recipe", w = 0, tip = "Trainer, Known (you have the pattern), or Pattern and what it costs: the auction house, or a vendor." },
     },
 }
 
@@ -285,6 +285,8 @@ local function buildPage(c)
         ns.Refresh()
     end)
     viewTabs:SetPoint("TOPLEFT", 0, 0)
+    UI.Tip(viewTabs.buttons.plan, "From your skill (or From) to the target (to): what to make at each stretch, how many, and what it costs.")
+    UI.Tip(viewTabs.buttons.now, "Every recipe you can make at your skill (or From) right now, cheapest skill point first.")
     scanBtn = UI.Button(c, "Scan prices", 110, 24, function() ns.ScanPrices() end, "primary")
     scanBtn:SetPoint("TOPRIGHT", 0, 0)
     UI.Tip(scanBtn, function(tt)
@@ -411,7 +413,8 @@ KM.RegisterSettings({ id = "skillup", label = "Skillup", order = 21, rows = {
     { type = "header", label = "Recipes" },
     { type = "check", label = "Use patterns I don't have yet", tip = "Their pattern's price shows in the Recipe column.",
       get = function() return ns.db.ui.lack end, set = function(v) ns.db.ui.lack = v; ns.Refresh() end },
-    { type = "choice", label = "Open on", options = { { "plan", "Plan" }, { "now", "At my skill" } },
+    { type = "choice", label = "Open on", options = { { "plan", "Plan", "From your skill to the target: what to make at each stretch and what it costs." },
+      { "now", "At my skill", "Every recipe you can make right now, cheapest skill point first." } },
       get = function() return ns.db.ui.view end, set = function(v) ns.db.ui.view = v; ns.Refresh() end },
     { type = "header", label = "Recipe data" },
     { type = "text", label = "Every WoW: Forever recipe, its reagents and skill ranges: data from ForeverDB.net (foreverdb.net, GPL-3.0)." },

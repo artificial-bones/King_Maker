@@ -203,3 +203,24 @@ KM.RegisterPage({
     subtitle = "White drops worth hunting: auction price against how many mobs drop them. A full scan prices them all.",
     build = buildPage, refresh = function() ns.RefreshWhite() end,
 })
+
+-- Home's Best right now: the white item most worth hunting. Working the list out walks every price, so Home reuses
+-- it for ten minutes, or until the next price scan.
+local whiteBest, whiteAt, whiteScan = nil, -1, nil
+local function lastScan() local sc = KM.mods.Scanner; return sc and sc.db and math.max(sc.db.lastDeep or 0, sc.db.lastQuick or 0) or 0 end
+KM.RegisterHomeCard({ kind = "best", id = "farm-white", order = 30, get = function()
+    if not (ns.db and ScannerKing and ScannerKing.GetAllPrices) then return nil end
+    local now = GetTime and GetTime() or 0
+    if now - whiteAt > 600 or now < whiteAt or whiteScan ~= lastScan() then
+        whiteAt, whiteScan = now, lastScan()
+        whiteBest = false
+        for _, e in ipairs((ns.WhiteItems())) do
+            if not whiteBest or e.raw > whiteBest.raw then whiteBest = e end
+        end
+    end
+    local e = whiteBest
+    if not e then return nil end
+    return { label = "White", sub = e.name, value = KM.MoneyShort(e.price), icon = ns.Item(e.id).icon, page = "whites",
+        tip = "The white item most worth hunting: " .. e.name .. ", " .. KM.Money(e.price) .. " each after the cut, dropped by " .. e.mobs
+            .. " mob" .. (e.mobs == 1 and "" or "s") .. (e.spawns > 0 and (" with " .. e.spawns .. " spawn points") or "") .. ". Click for White Items." }
+end })

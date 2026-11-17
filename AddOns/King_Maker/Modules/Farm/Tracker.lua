@@ -143,7 +143,9 @@ local function countKill(guid, id)
     engaged[guid] = nil
     mob(id).k = mob(id).k + 1
     noteRecent(id)
-    if ns.SessionKill then ns.SessionKill(id) end
+    -- the Farm Tracker's session counts the kill too (calls across modules go through KM.Safe)
+    local tracker = KM.mods.Tracker
+    if tracker and tracker.Kill then KM.Safe(tracker.Kill, id, guid) end
     return true
 end
 
@@ -190,7 +192,6 @@ function ns.OnLootOpened()
                 if coin then
                     local copper = (qty and qty > 0) and qty or coinFromText(select(2, GetLootSlotInfo(slot)))
                     m.c = m.c + copper
-                    if ns.SessionLoot then ns.SessionLoot(id, copper) end
                     touched = true
                 elseif item then
                     local q = (qty and qty > 0) and qty or slotQty or 1
@@ -199,7 +200,6 @@ function ns.OnLootOpened()
                     dropped[guid] = dropped[guid] or {}
                     if not dropped[guid][item] then e[1] = e[1] + 1; dropped[guid][item] = true end
                     e[2] = e[2] + q
-                    if ns.SessionLoot then ns.SessionLoot(id, 0, item, q) end
                     touched = true
                 end
             end
@@ -280,14 +280,16 @@ end
 
 local f = CreateFrame("Frame")
 -- Never COMBAT_LOG_EVENT_UNFILTERED: on Forever that gets the addon blocked.
-for _, e in ipairs({ "LOOT_OPENED", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED",
+for _, e in ipairs({ "LOOT_READY", "LOOT_OPENED", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED",
     "NAME_PLATE_UNIT_REMOVED", "UNIT_THREAT_LIST_UPDATE", "UNIT_HEALTH", "UNIT_FLAGS", "PLAYER_REGEN_ENABLED",
     "UNIT_SPELLCAST_SUCCEEDED" }) do
     if not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid(e) then pcall(f.RegisterEvent, f, e) end
 end
 f:SetScript("OnEvent", function(_, event, arg1, _, arg3)
     if not ns.db then return end
-    if event == "LOOT_OPENED" then
+    if event == "LOOT_READY" or event == "LOOT_OPENED" then
+        -- LOOT_READY first: fast auto-loot (Leatrix Plus, FasterLoot) empties the window before LOOT_OPENED.
+        -- Reading it twice is harmless: a corpse counted on the first read isn't fresh on the second.
         pcall(ns.OnLootOpened)
     elseif event == "UNIT_THREAT_LIST_UPDATE" then
         pcall(onThreatList, arg1)

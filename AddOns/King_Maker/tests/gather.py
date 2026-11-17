@@ -1,6 +1,6 @@
 # Gather (was Gather King), with Scanner and without it: /gt marking, undo, delete, auto-tagging from harvests,
 # pin counts and menus, profiles, guild sync, fade and hide-near, new Forever gatherables, loot stats, prices via
-# Scanner, the farming ledger HUD, the Gathering page, the crown's quick actions and settings, export/import and
+# Scanner, /gt ledger (the Farm Tracker now), the Gathering page, the crown's quick actions and settings, export/import and
 # the 1.x migrations.
 import os, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from km import fresh, last, outputs
@@ -16,7 +16,7 @@ function PIN(name) for _, f in ipairs(FRAMES) do if f.node and f.node.n == name 
 """
 
 
-def load(only=("Scanner", "Gather"), **kw):
+def load(only=("Scanner", "Gather", "Tracker"), **kw):
     L, KM = fresh(only=list(only), extra=EXTRA, **kw)
     return L, KM, KM.mods.Gather
 
@@ -337,63 +337,52 @@ assert not any(L.eval("SENT")[i].prefix == "GatherKing1" and L.eval("SENT")[i].t
 L.execute("ScannerKingDB.prices[248823] = { p = 12345, t = 2000000000 }")
 print("PRICES OK")
 
-# ---- farming ledger (a UI.HUD) ----
-led = L.eval("GatherKingLedger")
-assert led and led.shown and led.collapse and led.close and led.body
-assert L.eval("GatherKingDB.ui.ledger") == True and L.eval("GatherKingDB.ledger.items[248823]") > 0  # harvests above were logged
-gt("ledger reset"); assert L.eval("next(GatherKingDB.ledger.items)") is None
-L.execute("T = 100; function GetTime() return T end")
-L.execute('FIRE("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 2366); LOOT = {"|Hitem:248823|h"}; LOOTINFO = {{"Marefoil", 1, 4}}; FIRE("LOOT_OPENED")')
-assert L.eval("GatherKingDB.ledger.items[248823]") == 4 and L.eval("next(GatherKingDB.ledger.timed)") is None
-assert "4g" in fonts(L, "Total:")  # no timer yet, totals only
-assert fonts(L, "/hr") is None
-gt("ledger timer")
-L.execute('FIRE("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 2366); LOOT = {"|Hitem:248823|h"}; LOOTINFO = {{"Marefoil", 1, 2}}; FIRE("LOOT_OPENED")')
-L.execute("T = 100 + 1800"); ns.UpdateLedger()
-assert "0:30:00" in fonts(L, "/hr") and "4g" in fonts(L, "/hr")  # 2 x 1.2345g in half an hour = ~4.9g/hr
-assert L.eval('BTN("Pause timer", GatherKingLedger)') is not None
-# folded to its title bar, the title still shows gold per hour
-L.execute("GatherKingLedger.collapse:Click()")
-assert L.eval("GatherKingDB.ui.ledgerCollapsed") and led.collapsed and led.title.text.startswith("Farming ledger  ") and led.title.text.endswith("/hr|r"), led.title.text
-L.execute("GatherKingLedger.collapse:Click()")
-assert not L.eval("GatherKingDB.ui.ledgerCollapsed") and led.title.text == "Farming ledger"
-# its position is kept in ui.ledgerPos (the 1.x shape)
-L.execute('GatherKingLedger:ClearAllPoints(); GatherKingLedger:SetPoint("LEFT", UIParent, "LEFT", 30, 40); GatherKingLedger.scripts.OnDragStop(GatherKingLedger)')
-assert list(L.eval("GatherKingDB.ui.ledgerPos").values()) == ["LEFT", "LEFT", 30, 40]
-# fishing catches go in the ledger without making a node
+# ---- /gt ledger: the farming ledger box is the Farm Tracker now (tracker.py tests it in full) ----
+led = L.eval("KingMakerFarmTracker")
+assert led and led.shown and led.collapse and led.close and led.body, "harvesting started a session, which showed it"
+assert L.eval("TrackerKing.State()") == "running" and L.eval("TrackerKing.Live().auto") is True
+assert L.eval("GatherKingDB.ledger") is None and L.eval("GatherKingDB.ui.ledger") is None
+gt("ledger reset"); assert L.eval("TrackerKing.State()") == "idle" and "Saved the session to the Farming Ledger" in last(L)
+assert L.eval("#TrackerKingDB.sessions") == 1, "nothing is lost on reset any more"
+L.execute('ITEM(248823, "Marefoil", { quality = 1, sell = 0, class = 7 }); ITEM(6358, "Oily Blackmouth", { quality = 1, sell = 1, class = 7 })')
+gt("ledger timer"); assert L.eval("TrackerKing.State()") == "running", "timer while idle starts a session"
+L.execute('FIRE("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 2366); OPEN_LOOT({"|Hitem:248823|h"}, {{"Marefoil", 1, 4}}); LOOT_ALL(); RUN_TIMERS()')
+live = L.eval("TrackerKingDB.live['Jay-Forever']")
+assert live.src.herb.i[248823] == 4 and abs(live["items"][248823].v - 12345 * 0.95 * 4) <= 1, live["items"][248823].v  # one value rule: after the cut
+assert any("Marefoil|r x4" in x for x in texts(L))
+# fishing catches go in the session without making a node
 before = L.eval("#GatherKingDB.nodes[1423]")
-L.execute('FISHING = true; LOOT = {"|Hitem:6358|h"}; LOOTINFO = {{"Oily Blackmouth", 1, 3}}; FIRE("LOOT_OPENED"); FISHING = false')
-assert L.eval("GatherKingDB.ledger.items[6358]") == 3 and L.eval("GatherKingDB.ledger.timed[6358]") == 3
+L.execute('FISHING = true; OPEN_LOOT({"|Hitem:6358|h"}, {{"Oily Blackmouth", 1, 3}}); LOOT_ALL(); FISHING = false; RUN_TIMERS()')
+assert L.eval("TrackerKingDB.live['Jay-Forever'].src.fish.i[6358]") == 3 and L.eval("TrackerKingDB.live['Jay-Forever'].src.fish.n") == 1
 assert L.eval("#GatherKingDB.nodes[1423]") == before
-gt("ledger timer"); assert "paused" in fonts(L, "/hr")
-gt("ledger reset"); assert L.eval("GatherKingDB.ledger.timer.running") == False and L.eval("GatherKingDB.ledger.timer.elapsed") == 0
-gt("ledger off"); assert L.eval("GatherKingDB.ui.ledger") == False and not led.shown
+gt("ledger timer"); assert L.eval("TrackerKing.State()") == "paused"
+gt("ledger timer"); assert L.eval("TrackerKing.State()") == "running"
+gt("ledger off"); assert L.eval("TrackerKingDB.ui.hud") is False and not led.shown
 gt("ledger on"); assert led.shown
-# x closes it, /gt ledger brings it back
-L.execute("GatherKingLedger.close:Click()"); assert L.eval("GatherKingDB.ui.ledger") == False and "/gt ledger" in last(L)
+# x closes it (the session keeps recording), /gt ledger brings it back
+L.execute("KingMakerFarmTracker.close:Click()"); assert L.eval("TrackerKingDB.ui.hud") is False and "/farm shows it again" in last(L)
+assert L.eval("TrackerKing.State()") == "running"
 gt("ledger on")
-L.execute('BTN("Reset", GatherKingLedger):Click()'); assert L.eval("POPUPS[#POPUPS].name") == "GATHERKING_CONFIRM"
-L.execute("function GetTime() return 10 end")
-# Mat Prices tab
-def click(label): L.execute('BTN("%s", GatherKingLedger):Click()' % label)
-click("Mat Prices"); assert L.eval("GatherKingDB.ui.ledgerTab") == "prices"
+# Mat Prices: the Farm Tracker's Prices tab
+def click(label): L.execute('BTN("%s", KingMakerFarmTracker):Click()' % label)
+click("Prices"); assert L.eval("TrackerKingDB.ui.hudTab") == "prices"
 click("Herbs")
 herbs = [ns.ItemName(i) for i in ns.LedgerMaterials("herb").values()]
 mines = [ns.ItemName(i) for i in ns.LedgerMaterials("mine").values()]
 assert "Marefoil" in herbs and "Rosecap" in herbs and "Thorium" not in " ".join(herbs) and "Pyrite" in mines and "Rough Stone" in mines
 t = texts(L)
 assert "Rosecap" in t and any("Prices from" in x for x in t), t[-20:]
-L.execute("GatherKingLedger.scripts.OnMouseWheel(GatherKingLedger, -1)")
+L.execute("KingMakerFarmTracker.scripts.OnMouseWheel(KingMakerFarmTracker, -1)")
 assert fonts(L, "Scroll for more (4-") is not None
 for label, key in [("Skins", "skin"), ("Cloth", "cloth"), ("Ench", "ench")]:
-    click(label); assert L.eval("GatherKingDB.ui.priceTab") == key
+    click(label); assert L.eval("TrackerKingDB.ui.priceTab") == key
 click("Skins")
 t = texts(L)
 assert "Light Leather" in t and "Devilsaur Leather" in t
 assert [ns.ItemName(i) for i in ns.MaterialList("cloth").values()][:2] == ["Linen Cloth", "Wool Cloth"]
 assert "Nexus Crystal" in [ns.ItemName(i) for i in ns.MaterialList("ench").values()]
-click("Mining"); assert L.eval("GatherKingDB.ui.priceTab") == "mine"
-click("Farming"); assert L.eval("GatherKingDB.ui.ledgerTab") == "farm"
+click("Mining"); assert L.eval("TrackerKingDB.ui.priceTab") == "mine"
+click("All"); assert L.eval("TrackerKingDB.ui.hudTab") == "all"
 print("LEDGER OK")
 
 # ---- the Gathering page ----
@@ -420,9 +409,9 @@ assert L.eval("GatherKingDB.profiles.Default.size") == size + 2
 L.execute('for _, f in ipairs(FRAMES) do if type(rawget(f, "hint")) == "table" and f.hint.text and f.hint.text:find("thorium, mithril") then f:SetText("copper"); f.scripts.OnEnterPressed(f) end end')
 assert L.eval("GatherKingDB.profiles.Default.only") == "copper" and L.eval("PINS.world") < w
 gt("only all"); assert L.eval("PINS.world") == w
-# ledger tick on the page
-L.execute('CHECK("Show the farming ledger box (all profiles)"):Click()'); assert L.eval("GatherKingDB.ui.ledger") is False
-L.execute('CHECK("Show the farming ledger box (all profiles)"):Click()'); assert L.eval("GatherKingDB.ui.ledger") is True
+# the Farm Tracker tick on the page
+L.execute('CHECK("Show the Farm Tracker"):Click()'); assert L.eval("TrackerKingDB.ui.hud") is False
+L.execute('CHECK("Show the Farm Tracker"):Click()'); assert L.eval("TrackerKingDB.ui.hud") is True
 # export / import from the page
 L.execute('BTN("Export all"):Click()')
 box = L.eval('(function() for _, f in ipairs(FRAMES) do if type(rawget(f, "hint")) == "table" and f.hint.text == "Export a code, or paste one here" then return f end end end)()')
@@ -434,12 +423,13 @@ print("PAGE OK")
 
 # ---- the crown and the Settings section ----
 L.execute('KingMakerMinimapButton:Click("RightButton")')
-for label in ("Gathering", "Farming ledger", "Switch gathering profile"):
+for label in ("Gathering", "Farm Tracker", "Switch gathering profile"):
     assert L.eval('MENU_ITEM("%s") ~= nil' % label), label
+assert L.eval('MENU_ITEM("Farming ledger")') is None
 KM.Show("home")
 L.execute('MENU_ITEM("Gathering").fn()'); assert KM.CurrentPage() == "gathering"
-L.execute('KingMakerMinimapButton:Click("RightButton"); MENU_ITEM("Farming ledger").fn()'); assert L.eval("GatherKingDB.ui.ledger") is False and not led.shown
-L.execute('KingMakerMinimapButton:Click("RightButton"); MENU_ITEM("Farming ledger").fn()'); assert L.eval("GatherKingDB.ui.ledger") is True and led.shown
+L.execute('KingMakerMinimapButton:Click("RightButton"); MENU_ITEM("Farm Tracker").fn()'); assert L.eval("TrackerKingDB.ui.hud") is False and not led.shown
+L.execute('KingMakerMinimapButton:Click("RightButton"); MENU_ITEM("Farm Tracker").fn()'); assert L.eval("TrackerKingDB.ui.hud") is True and led.shown
 L.execute('KingMakerMinimapButton:Click("RightButton"); MENU_ITEM("Switch gathering profile").fn(); RUN_TIMERS()')
 assert L.eval("MENU_TITLE") == "Gathering profile"
 menu = L.eval("MENU"); names = [menu[i].text for i in range(1, len(menu) + 1)]
@@ -458,7 +448,7 @@ assert not KM.errorShown, last(L)
 print("SHELL OK")
 
 # ---- migration from the single-settings format, without the Scanner module ----
-L2, KM2, ns2 = load(only=["Gather"], seed='GatherKingDB = { version = 1, nodes = {}, settings = { show = { mine = true, herb = false, fish = true, treasure = true }, minimap = false, auto = true, size = 20, minimapAlpha = 0.5 }, ui = { button = true, buttonAngle = 30 } }')
+L2, KM2, ns2 = load(only=["Gather", "Tracker"], seed='GatherKingDB = { version = 1, nodes = {}, settings = { show = { mine = true, herb = false, fish = true, treasure = true }, minimap = false, auto = true, size = 20, minimapAlpha = 0.5 }, ui = { button = true, buttonAngle = 30 } }')
 assert L2.eval("GatherKingDB.profiles.Default.size") == 20 and L2.eval("GatherKingDB.profiles.Default.show.herb") == False
 assert L2.eval("GatherKingDB.profiles.Default.record.mine") == True and L2.eval("GatherKingDB.settings") is None
 assert L2.eval("GatherKingDB.ui.button") is None and L2.eval("GatherKingDB.ui.buttonAngle") is None
@@ -466,7 +456,10 @@ assert L2.eval("GatherKingDB.ui.button") is None and L2.eval("GatherKingDB.ui.bu
 L2.eval("SlashCmdList.GATHERKING")("scan"); assert "Scanner King" in last(L2)
 assert ns2.Price(2770) is None and ns2.FormatMoney(10000) == "|cffffd7001g|r"
 KM2.Show("gathering"); assert not KM2.errorShown, last(L2)
-L2.execute('BTN("Mat Prices", GatherKingLedger):Click()'); assert any("The Scanner module scans prices" in x for x in texts(L2))
+L2.eval("SlashCmdList.GATHERKING")("ledger on")
+L2.execute('BTN("Prices", KingMakerFarmTracker):Click()'); assert any("The Scanner module scans prices" in x for x in texts(L2))
+L5, KM5, ns5 = load(only=["Gather"])
+L5.eval("SlashCmdList.GATHERKING")("ledger"); assert "isn't loaded" in last(L5), "without the Farm Tracker /gt ledger says so"
 print("MIGRATION OK")
 
 # prices scanned by gather_king 1.x move into the Scanner on first login
@@ -484,16 +477,19 @@ assert ns2.ImportCode(c) == 0  # already imported with the full export above
 m = L2.eval("(function() for _, n in ipairs(GatherKingDB.nodes[1451]) do if n.n == 'Mystery' then return n end end end)()"); assert m.item == 999999
 print("EXPORT/IMPORT OK")
 
-# moving 1.x data in from a gather_king stub folder: markers and the ledger come along and show
+# moving 1.x data in from a gather_king stub folder: markers come along; the ledger becomes a "Carried over" session
+# in the Farming Ledger and the Farm Tracker shows where the ledger box was
 OLD = ("GatherKingDB = { version = 3, active = 'Herbs', nodes = { [1423] = { { t = 'herb', n = 'Peacebloom', x = 0.5, y = 0.5, item = 2447 } } }, "
        "profiles = { Default = {}, Herbs = { show = { herb = true, mine = false } } }, ui = { button = false, buttonAngle = 99, ledger = true, ledgerPos = { 'TOP', 'TOP', 5, -5 } }, "
        "ledger = { items = { [2447] = 7 }, timed = {}, timer = { running = true, elapsed = 60, startedAt = 5 } } }")
 L4, KM4, ns4 = load(stubs={"gather_king": OLD})
 assert L4.eval("KingMakerDB.moved.GatherKingDB") is not None
 assert L4.eval("GatherKingDB.active") == "Herbs" and L4.eval("GatherKingDB.profiles.Herbs.size") == 16
-assert L4.eval("GatherKingDB.ui.button") is None and L4.eval("GatherKingDB.ledger.items[2447]") == 7
-assert L4.eval("PINS.world") == 1 and L4.eval("GatherKingDB.ledger.timer.running") is False
-led4 = L4.eval("GatherKingLedger"); assert led4.shown and led4.points[1][1] == "TOP"
+assert L4.eval("GatherKingDB.ui.button") is None and L4.eval("GatherKingDB.ledger") is None and L4.eval("GatherKingDB.ui.ledger") is None
+assert L4.eval("PINS.world") == 1
+old = L4.eval("TrackerKingDB.sessions[1]")
+assert old.legacy is True and old.src.herb.i[2447] == 7 and old.act == 60 and old.name.startswith("Carried over"), old.act
+led4 = L4.eval("KingMakerFarmTracker"); assert led4.shown and led4.points[1][1] == "TOP"
 print("STUB MOVE OK")
 
 print("gather: ok")

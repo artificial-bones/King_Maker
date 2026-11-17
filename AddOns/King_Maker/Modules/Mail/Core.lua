@@ -21,6 +21,42 @@ MailKing = { API_VERSION = 1 }
 local API = MailKing
 ns.API = API
 
+-- Change callbacks for other addons: MailKing.RegisterCallback("ENTRY" | "RESET", fn, owner).
+--   "ENTRY"  fn("ENTRY", entry) right after a mail is recorded (a copy, in GetEntries' shape)
+--   "RESET"  fn("RESET") after the ledger is cleared (/mlk reset yes)
+-- Each runs in a pcall; nothing runs when no addon registers.
+local callbacks = { ENTRY = {}, RESET = {} }
+
+function API.RegisterCallback(event, fn, owner)
+    if not callbacks[event] or type(fn) ~= "function" then return false end
+    callbacks[event][owner or fn] = fn
+    return true
+end
+
+function API.UnregisterCallback(event, owner)
+    if callbacks[event] then callbacks[event][owner] = nil end
+end
+
+function ns.Fire(event, ...)
+    for _, fn in pairs(callbacks[event] or {}) do pcall(fn, event, ...) end
+end
+
+-- Your auction postings still remembered (Mail.lua keeps them 3 days; auctions last at most 48 hours), newest first,
+-- as copies: { id, name, n, dep, each, t, c }. itemID: that item's only. Profit & Loss reads the asking price here.
+function API.GetPosts(itemID)
+    local out = {}
+    if not (ns.db and ns.db.posts) then return out end
+    for i = #ns.db.posts, 1, -1 do
+        local p = ns.db.posts[i]
+        if not itemID or p.id == itemID then
+            local c = {}
+            for k, v in pairs(p) do c[k] = v end
+            out[#out + 1] = c
+        end
+    end
+    table.sort(out, function(a, b) return (a.t or 0) > (b.t or 0) end)
+    return out
+end
 
 function ns.Now()
     return ScannerKing and ScannerKing.Now and ScannerKing.Now() or (GetServerTime and GetServerTime()) or time()
@@ -130,11 +166,56 @@ end
 -- Saved data, slash command
 ---------------------------------------------------------------------------
 
+-- Before 2.6.0 one mail could be recorded two or three times (Mail.lua). Run once: the same character, kind, item,
+-- count, price, cut and deposit within 5 seconds is one mail; the copy with the buyer's name is kept, dated the
+-- earliest. Returns how many copies were removed.
+function ns.Dedupe()
+    local list = ns.db.entries
+    local order = {}
+    for i in ipairs(list) do order[i] = i end
+    table.sort(order, function(a, b)
+        local ta, tb = list[a].t or 0, list[b].t or 0
+        if ta ~= tb then return ta < tb end
+        return a < b
+    end)
+    local groups, drop, removed = {}, {}, 0
+    for _, i in ipairs(order) do
+        local e = list[i]
+        local sig = table.concat({ tostring(e.c), tostring(e.k), tostring(e.name), tostring(e.n), tostring(e.g),
+            tostring(e.cut), tostring(e.dep) }, "|")
+        local g = groups[sig]
+        if not g then g = {}; groups[sig] = g end
+        local last = g[#g]
+        if last and (e.t or 0) - last.t <= 5 then
+            local keep, gone = list[last.i], e
+            if (keep.who or "") == "" and (e.who or "") ~= "" then
+                drop[last.i], last.i = true, i
+                keep, gone = e, keep
+            else
+                drop[i] = true
+            end
+            keep.t = last.t
+            for k, v in pairs(gone) do if keep[k] == nil then keep[k] = v end end
+            removed = removed + 1
+        else
+            table.insert(g, { t = e.t or 0, i = i })
+        end
+    end
+    if removed > 0 then
+        local out = {}
+        for i, e in ipairs(list) do if not drop[i] then table.insert(out, e) end end
+        wipe(list)
+        for i, e in ipairs(out) do list[i] = e end
+    end
+    return removed
+end
+
 -- Runs when King Maker's saved variables load, and again after old Mail_King data is moved in: safe twice.
 function ns.InitDB()
     MailKingDB = MailKingDB or {}
     local db = MailKingDB
     db.entries = db.entries or {}   -- the ledger (Mail.lua): { t, k, item, name, n, g, cut, dep, each, who, c }
+    -- db.dedupe = 1 once 2.6.0's cleanup of mails recorded twice has run (ns.Dedupe)
     db.seen = db.seen or {}         -- mail key -> when it was recorded, so a mail counts once
     db.posts = db.posts or {}       -- your auctions still up: what they cost to post
     db.names = db.names or {}       -- item name -> itemID
@@ -148,6 +229,16 @@ function ns.InitDB()
     db.altNames = db.altNames or {} -- "First-Realm" (an alt saved before 2.3.0) -> "First Last", learned from mail
     ns.db = db
     if ns.Prune then ns.Prune() end
+    if db.dedupe ~= 1 then -- 2.6.0: the copies older versions recorded go, once
+        local ok, removed = pcall(ns.Dedupe)
+        if ok then
+            db.dedupe = 1
+            if removed > 0 then
+                KM.Print(ns, ("Sales Ledger: removed %d %s that had been counted twice."):format(removed,
+                    removed == 1 and "mail" or "mails"))
+            end
+        end
+    end
     -- Old 1.1 stock and gold may have just arrived (moved in from a Mail_King folder): the Inventory module takes them.
     local inv = KM.mods.Inventory
     if inv and inv.ImportMailKing then KM.Safe(inv.ImportMailKing) end
@@ -159,6 +250,7 @@ end
 function ns.Reset()
     wipe(ns.db.entries); wipe(ns.db.seen); wipe(ns.db.posts)
     KM.Print(ns, "Ledger cleared.")
+    ns.Fire("RESET")
     if ns.Refresh then ns.Refresh() end
 end
 

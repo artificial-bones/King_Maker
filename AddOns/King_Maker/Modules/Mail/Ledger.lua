@@ -139,6 +139,60 @@ local function market(id)
 end
 ns.Market = market
 
+-- The auction house purchases in a period, and how many of them you still hold: { paid, held (what the units you
+-- still hold cost), worth (what they'd fetch today: market price after the 5% cut), gone (what the rest cost: used,
+-- crafted with, sold or mailed away), unpriced (units held with no market price, valued at what you paid) }.
+-- "Still hold" = up to as many as Inventory counts on your characters (onlyChar: that character), newest purchases
+-- first, so stock you had before doesn't count as bought. Without the Inventory module everything counts as held.
+-- An estimate, used when the Profit & Loss module isn't tracking (2.7): then its lots answer instead (fromPnL = true).
+function ns.BoughtWorth(since, onlyChar)
+    local out = { paid = 0, held = 0, worth = 0, gone = 0, unpriced = 0 }
+    local by, order = {}, {}
+    for _, e in ipairs(ns.db.entries) do
+        if e.k == "buy" and (e.t or 0) >= (since or 0) and (not onlyChar or e.c == onlyChar) then
+            local g = e.g or 0
+            out.paid = out.paid + g
+            local id = e.item or ("?" .. tostring(e.name))
+            if not by[id] then by[id] = {}; order[#order + 1] = id end
+            table.insert(by[id], e)
+        end
+    end
+    -- With Profit & Loss (2.7): what you still hold of these purchases is what its lots say (sales and stock used up
+    -- took the rest, by its method), at today's value. The estimate below is the fallback.
+    local pnl = ProfitKing and ProfitKing.BoughtHeld and ProfitKing.IsTracking and ProfitKing.IsTracking()
+        and KM.Safe(ProfitKing.BoughtHeld, since or 0, onlyChar)
+    if pnl then
+        out.held, out.worth, out.unpriced = math.floor(pnl.held + 0.5), pnl.worth, pnl.unpriced
+        out.gone = math.max(0, out.paid - out.held)
+        out.fromPnL = true
+        return out
+    end
+    local inv = InventoryKing and InventoryKing.GetCount
+    for _, id in ipairs(order) do
+        local list = by[id]
+        table.sort(list, function(a, b) return (a.t or 0) > (b.t or 0) end) -- newest first
+        local own = math.huge
+        if inv and type(id) == "number" then
+            local ok, total, perChar = pcall(inv, id)
+            if ok then own = onlyChar and ((perChar or {})[onlyChar] or 0) or (total or 0) end
+        end
+        local m = type(id) == "number" and market(id) or nil
+        for _, e in ipairs(list) do
+            local n, g = e.n or 1, e.g or 0
+            local keep = math.max(0, math.min(n, own))
+            own = own - keep
+            local cost = n > 0 and math.floor(g * keep / n) or 0
+            out.held = out.held + cost
+            out.gone = out.gone + (g - cost)
+            if keep > 0 then
+                if m and m > 0 then out.worth = out.worth + math.floor(m * keep * 0.95)
+                else out.worth = out.worth + cost; out.unpriced = out.unpriced + keep end
+            end
+        end
+    end
+    return out
+end
+
 ---------------------------------------------------------------------------
 -- Buyers: who buys from you (and who you buy from)
 ---------------------------------------------------------------------------

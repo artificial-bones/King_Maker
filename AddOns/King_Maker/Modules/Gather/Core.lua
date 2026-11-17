@@ -2,10 +2,11 @@ local _, KM = ...
 local ns = KM.Module("Gather", { title = "Gather King", short = "Gather", legacy = "gather_king", db = "GatherKingDB" })
 
 -- Gather King: gathering spots on the world map and minimap (mining, herbs, fishing, treasure), marked by
--- /gt or automatically when you harvest, shared with the guild, with loot stats per node and a farming ledger.
+-- /gt or automatically when you harvest, shared with the guild, with loot stats per node.
 -- In King Maker it has no minimap button or Blizzard settings panel of its own: its options are the "gathering"
--- page (Options.lua), the ledger is a floating HUD (Ledger.lua), and its clicks are quick actions on the King
--- Maker crown (Button.lua). Saved data (GatherKingDB) keeps its 1.x shape.
+-- page (Options.lua), and its clicks are quick actions on the King Maker crown (Button.lua). What you gather is
+-- tallied by King Maker's Farm Tracker (Modules\Tracker), which replaced the farming ledger box in 2.6.
+-- Saved data (GatherKingDB) keeps its 1.x shape (minus the ledger, which moved into TrackerKingDB).
 
 local MERGE_DISTANCE = 0.006 -- 0.6 on the 0-100 map scale
 
@@ -124,14 +125,10 @@ function ns.InitDB()
     db.version = 3
     db.deleted = db.deleted or {}
     db.itemNames = db.itemNames or {}
-    db.ledger = db.ledger or {}
-    db.ledger.items = db.ledger.items or {}
-    db.ledger.timed = db.ledger.timed or {}
-    db.ledger.timer = db.ledger.timer or { running = false, elapsed = 0 }
+    -- db.ledger and ui.ledger* (the farming ledger box) moved into the Farm Tracker in King Maker 2.6 (TrackerKingDB)
     db.sync = db.sync or {}
     db.ui = db.ui or {}
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
-    if db.ui.ledger == nil then db.ui.ledger = true end
     if db.sync.guild == nil then db.sync.guild = true end
     db.nodes = db.nodes or {}
     db.profiles = db.profiles or {}
@@ -144,10 +141,9 @@ function ns.InitDB()
     if not db.profiles[db.active or ""] then db.active = "Default" end
     ns.db = db
     ns.settingsRef = db.profiles[db.active]
-    -- Old data moved in after login: redraw the markers and the ledger from it.
+    -- Old data moved in after login: redraw the markers from it.
     if ns.loggedIn then
         ns.Refresh()
-        if ns.UpdateLedger then ns.UpdateLedger() end
     end
 end
 
@@ -572,7 +568,7 @@ local function help()
     print("  /gt show|hide <type|all>   e.g. /gt hide fish")
     print("  /gt auto on|off   auto-mark nodes when you harvest them")
     print("  /gt sync on|off   share markers with guildmates (King Maker or Gather King) (/gt sync now resends)")
-    print("  /gt ledger [on|off|reset|timer]   farming ledger box")
+    print("  /gt ledger [on|off|reset|timer]   the Farm Tracker (also /farm): show, hide, save the session, pause")
     print("  /gt scan          scan auction house prices with Scanner King (auction house must be open)")
     print("  /gt only thorium, mithril   only show these names (/gt only all to reset)")
     print("  /gt profile [name|new <name>|delete <name>]   list, switch, create or delete profiles")
@@ -687,15 +683,18 @@ SlashCmdList.GATHERKING = function(msg)
             if ns.RefreshSettings then ns.RefreshSettings() end
         end
     elseif cmd == "ledger" then
+        -- the farming ledger box is King Maker's Farm Tracker now (also /farm); nothing is lost on reset any more
         local arg = rest:lower()
-        if arg == "reset" then
-            ns.LedgerReset()
-            KM.Print(ns, "Ledger reset.")
+        local T = TrackerKing
+        if not (T and T.SetHUD) then
+            KM.Print(ns, "The Farm Tracker isn't loaded.")
+        elseif arg == "reset" then
+            if T.State() ~= "idle" then KM.Safe(T.Stop) end
+            KM.Print(ns, "Saved the session to the Farming Ledger. The tracker starts fresh.")
         elseif arg == "timer" then
-            ns.LedgerToggleTimer()
+            KM.Safe(T.PauseOrResume)
         else
-            ns.db.ui.ledger = onOff(arg, ns.db.ui.ledger)
-            ns.UpdateLedger()
+            KM.Safe(T.SetHUD, onOff(arg, T.HUDShown()))
             if ns.RefreshSettings then ns.RefreshSettings() end
         end
     elseif cmd == "scan" or cmd == "prices" then

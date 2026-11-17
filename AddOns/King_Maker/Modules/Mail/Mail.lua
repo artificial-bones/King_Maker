@@ -20,7 +20,8 @@ local ns = KM.Module("Mail")
 local KEEP_SEEN = 35 * 86400   -- mail keys kept (mail lasts 30 days)
 local KEEP_POSTS = 3 * 86400   -- postings kept (auctions last at most 48 hours)
 local MAIL_DAYS = 30           -- auction house mail lasts this long
-local BUCKET = 600             -- seconds: a mail's expiry, rounded, is part of its key
+local BUCKET = 60              -- seconds: a mail's expiry, to the minute, is part of its key
+local LEGACY_BUCKET = 600      -- 2.5.x keys held the expiry to 10 minutes
 
 local KINDS = {
     { "sale", AUCTION_SOLD_MAIL_SUBJECT, "Auction successful: %s" },
@@ -165,11 +166,51 @@ end
 -- The mailbox
 ---------------------------------------------------------------------------
 
-local visit = { sale = 0, buy = 0, expired = 0, income = 0, spent = 0 }
+local visit = { sale = 0, buy = 0, expired = 0, income = 0, spent = 0, sold = {} }
 
-local function isSeen(base, bucket)
+-- 2.6.0: one mail, one entry. The old key held two things that change while a mail sits in the inbox (the buyer's
+-- name, which the invoice fills in a moment later, and the money, which goes when you take it), so the same sale
+-- could be recorded two or three times. The key is now kind|name|n|amount| + the expiry to the minute (daysLeft is
+-- fractional, so a mail's expiry is exact to about a second), where amount is a sale's own figure (the invoice's
+-- bid - cut + deposit, which is the money it brought) and 0 for every other kind; n is the subject's count (the
+-- invoice's can change as it loads). Identical mails in the inbox together are told apart by their order: "#2", "#3".
+-- A mail recorded under the old key (2.5.x) is still recognised.
+
+local recorded = {} -- this session: seen key -> its entry, so a buyer's name that loads later goes on that entry
+
+-- The seen key matching base + bucket (or the minute either side) + suffix, if there is one.
+local function isSeen(base, bucket, suffix)
     local s = ns.db.seen
-    return s[base .. bucket] or s[base .. (bucket - 1)] or s[base .. (bucket + 1)]
+    for b = bucket - 1, bucket + 1 do
+        local key = base .. b .. suffix
+        if s[key] then return key end
+    end
+end
+
+-- The distinct values given, nils left out.
+local function variants(...)
+    local out, have = {}, {}
+    for i = 1, select("#", ...) do
+        local v = select(i, ...)
+        if v ~= nil and not have[v] then have[v] = true; table.insert(out, v) end
+    end
+    return out
+end
+
+-- A 2.5.x key: kind|name|n|money|who| + the expiry to 10 minutes. The name, count, money and buyer the mail had
+-- when it was recorded may each have changed since, so every combination it could have had is tried.
+local function legacySeen(kind, names, counts, moneys, whos, expiry)
+    local bucket = math.floor(expiry / LEGACY_BUCKET)
+    for _, name in ipairs(names) do
+        for _, n in ipairs(counts) do
+            for _, m in ipairs(moneys) do
+                for _, who in ipairs(whos) do
+                    if isSeen(table.concat({ kind, name, n, m, who, "" }, "|"), bucket, "") then return true end
+                end
+            end
+        end
+    end
+    return false
 end
 
 local function attachment(i)
@@ -183,7 +224,8 @@ local function attachment(i)
 end
 
 -- Records mail i if it's an auction house mail not recorded before. Returns the entry.
-function ns.ReadMail(i)
+-- met: this read of the inbox's tally of keys so far (ReadInbox passes one), which numbers identical mails.
+function ns.ReadMail(i, met)
     local _, _, _, subject, money, _, daysLeft = GetInboxHeaderInfo(i)
     local kind, name, n = ns.ParseSubject(subject)
     if not kind or kind == "outbid" then return nil end -- an outbid refund is your own money back
@@ -198,13 +240,17 @@ function ns.ReadMail(i)
     end
     if inv.type == "seller_temp_invoice" then return nil end -- sold, but the money isn't here yet
 
+    local amount = 0 -- a sale's own figure, for its key: what it brought
     if kind == "sale" then
         e.name, e.who = inv.name or name, inv.who
         if inv.n and inv.n > 0 then e.n = inv.n end -- commodity invoices can say 0
         if inv.type == "seller" and inv.bid then
             e.g, e.cut, e.dep = inv.bid, inv.cut or 0, inv.dep
+            amount = inv.bid - (inv.cut or 0) + (inv.dep or 0)
         else
+            if money <= 0 then return nil end -- no invoice and the gold already taken: nothing to learn from it
             e.g, e.cut = money, 0 -- no invoice: what arrived (the deposit back included)
+            amount = money
         end
         e.item = ns.ItemID(e.name)
     elseif kind == "buy" then
@@ -222,12 +268,34 @@ function ns.ReadMail(i)
         ns.LearnItem(e.name, e.item)
     end
 
-    -- A mail's expiry doesn't change, so (rounded) it tells this mail from another just like it.
+    -- A mail's expiry doesn't change, so (to the minute) it tells this mail from another just like it.
     local expiry = now + (daysLeft or 0) * 86400
-    local base = table.concat({ kind, e.name or "", e.n, money, e.who or "", "" }, "|")
+    local base = table.concat({ kind, name or "", n or 1, amount, "" }, "|")
     local bucket = math.floor(expiry / BUCKET)
-    if isSeen(base, bucket) then return nil end
-    ns.db.seen[base .. bucket] = now
+    -- Which of the mails just like it (same key, expiry within a minute) in this read of the inbox it is.
+    met = met or {}
+    local buckets = met[base] or {}
+    met[base] = buckets
+    local nth = 1
+    for _, b in ipairs(buckets) do if math.abs(b - bucket) <= 1 then nth = nth + 1 end end
+    table.insert(buckets, bucket)
+    local suffix = nth > 1 and ("#" .. nth) or ""
+    local key = base .. bucket .. suffix
+
+    local found = isSeen(base, bucket, suffix)
+    if found then
+        -- Recorded before the invoice named the buyer: the name goes on that entry.
+        local old = recorded[found]
+        if old and (old.who or "") == "" and e.who and e.who ~= "" then old.who = e.who end
+        return nil
+    end
+    if legacySeen(kind, variants(e.name or "", name or ""), variants(e.n, n or 1), variants(money, amount),
+        variants(e.who or "", ""), expiry) then
+        ns.db.seen[key] = now
+        return nil
+    end
+    ns.db.seen[key] = now
+    recorded[key] = e
 
     if kind == "expired" or kind == "cancelled" then
         local p = takePost(e.item, e.name, e.n)
@@ -239,10 +307,16 @@ function ns.ReadMail(i)
 
     if kind == "sale" then
         visit.sale, visit.income = visit.sale + 1, visit.income + (e.g - (e.cut or 0))
+        table.insert(visit.sold, e)
     elseif kind == "buy" then
         visit.buy, visit.spent = visit.buy + 1, visit.spent + e.g
     else
         visit.expired = visit.expired + 1
+    end
+    if ns.Fire then
+        local copy = {}
+        for k, v in pairs(e) do copy[k] = v end
+        ns.Fire("ENTRY", copy)
     end
     return e
 end
@@ -250,9 +324,9 @@ end
 function ns.ReadInbox()
     if not ns.db or not GetInboxNumItems then return end
     local n = GetInboxNumItems() or 0
-    local added = 0
+    local added, met = 0, {}
     for i = 1, n do
-        local ok, e = pcall(ns.ReadMail, i)
+        local ok, e = pcall(ns.ReadMail, i, met)
         if ok and e then added = added + 1 end
     end
     if ns.Refresh then ns.Refresh() end
@@ -263,12 +337,22 @@ end
 local function sayVisit()
     if visit.sale + visit.buy + visit.expired > 0 then
         local bits = {}
-        if visit.sale > 0 then table.insert(bits, visit.sale .. " sold for " .. ns.Money(visit.income)) end
+        if visit.sale > 0 then
+            -- with Profit & Loss, what those sales made (the ones it could match to a cost)
+            local pl, any = 0, false
+            if ProfitKing and ProfitKing.ForMail then
+                for _, e in ipairs(visit.sold) do
+                    local x = KM.Safe(ProfitKing.ForMail, e)
+                    if x and x.pl then pl, any = pl + x.pl, true end
+                end
+            end
+            table.insert(bits, visit.sale .. " sold for " .. ns.Money(visit.income) .. (any and (" (P&L " .. (pl >= 0 and "+" or "") .. ns.Money(pl) .. ")") or ""))
+        end
         if visit.buy > 0 then table.insert(bits, visit.buy .. " bought for " .. ns.Money(visit.spent)) end
         if visit.expired > 0 then table.insert(bits, visit.expired .. " expired") end
         KM.Print(ns, table.concat(bits, ", ") .. ". /mlk for the ledger.")
     end
-    visit = { sale = 0, buy = 0, expired = 0, income = 0, spent = 0 }
+    visit = { sale = 0, buy = 0, expired = 0, income = 0, spent = 0, sold = {} }
 end
 
 ---------------------------------------------------------------------------

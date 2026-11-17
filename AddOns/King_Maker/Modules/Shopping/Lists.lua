@@ -32,7 +32,7 @@ local function favEntries()
     for id, v in pairs(favSet()) do
         if v then
             local m = ns.db.favMeta[id] or {}
-            out[#out + 1] = { id = id, qty = m.qty, max = m.max, note = m.note, fav = true }
+            out[#out + 1] = { id = id, qty = m.qty, max = m.max, note = m.note, keep = m.keep, transit = m.transit, fav = true }
         end
     end
     table.sort(out, function(a, b) return a.id < b.id end)
@@ -49,6 +49,22 @@ ns.providers, ns.providerOrder = {}, {}
 
 local function provider(name) return name and ns.providers[name] end
 ns.Provider = provider
+
+-- Read-only guards the page and the panel ask (instead of "is it Favorites"):
+--   IsVirtual  another addon supplies it live;  IsEditable  max / want / note can change (not virtual);
+--   IsMine     it can also be renamed and deleted (editable and not Favorites).
+function ns.IsVirtual(name) return provider(name) ~= nil end
+function ns.IsEditable(name) return name ~= nil and not provider(name) and ns.HasList(name) end
+function ns.IsMine(name) return ns.IsEditable(name) and name ~= ns.FAV end
+
+-- Who supplies a live list, and its note: "Oracle", "Cooldowns", or "another addon" when it didn't say.
+function ns.ProviderInfo(name)
+    local p = provider(name)
+    if not p then return nil end
+    local owner = type(p.owner) == "string" and p.owner ~= "" and p.owner
+        or (name:find("^Oracle") and "Oracle") or "another addon"
+    return owner, type(p.note) == "string" and p.note or nil
+end
 
 local function virtualEntries(name)
     local p = provider(name)
@@ -143,15 +159,15 @@ function ns.Find(name, id)
     if name == ns.FAV then
         if not ns.IsFavorite(id) then return nil end
         local m = ns.db.favMeta[id] or {}
-        return { id = id, qty = m.qty, max = m.max, note = m.note, fav = true }
+        return { id = id, qty = m.qty, max = m.max, note = m.note, keep = m.keep, transit = m.transit, fav = true }
     end
     for _, e in ipairs(ns.Entries(name) or {}) do if e.id == id then return e end end
 end
 
--- Sets fields on an entry: fields = { qty =, max =, note = }; false clears a field.
+-- Sets fields on an entry: fields = { qty =, max =, note =, keep =, transit = }; false clears a field.
 function ns.Update(name, id, fields)
     local function apply(t)
-        for _, k in ipairs({ "qty", "max", "note" }) do
+        for _, k in ipairs({ "qty", "max", "note", "keep", "transit" }) do
             local v = fields[k]
             if v == false or v == "" then t[k] = nil elseif v ~= nil then t[k] = v end
         end
@@ -219,7 +235,8 @@ function ns.RemoveFrom(name, id)
     return false
 end
 
--- One purchase of n went through: the wanted quantity goes down (never below 0).
+-- One purchase of n went through: the wanted quantity goes down (never below 0). A Keep entry doesn't count down
+-- (owning them is what lowers its need): the purchase is noted as on its way until the count shows it.
 function ns.Bought(name, id, n)
     local p = provider(name)
     if p then
@@ -228,8 +245,34 @@ function ns.Bought(name, id, n)
         return
     end
     local e = ns.Find(name, id)
-    if not e or not e.qty then return end
+    if not e then return end
+    if tonumber(e.keep) then
+        local owned = ns.OwnHere(id) or 0
+        local left = ns.TransitLeft(e, owned)
+        -- still waiting on an earlier purchase: add to it (what has arrived of it already shows in owned)
+        local tr = left > 0 and { n = left + (n or 1), own = owned, t = KM.Now() } or { n = n or 1, own = owned, t = KM.Now() }
+        ns.Update(name, id, { transit = tr })
+        return
+    end
+    if not e.qty then return end
     ns.Update(name, id, { qty = math.max(0, e.qty - (n or 1)) })
+end
+
+-- Buy n (keep = nil) or Keep n in stock (keep = n): switching clears what the other mode kept.
+function ns.SetKeep(name, id, n)
+    n = tonumber(n)
+    if n and n > 0 then return ns.Update(name, id, { keep = math.floor(n), qty = false, transit = false }) end
+    return ns.Update(name, id, { keep = false, transit = false })
+end
+
+-- Is any of your own lists' items in Keep mode? (Bag changes then move the badge.)
+function ns.HasKeep()
+    for _, name in ipairs(ns.ListNames()) do
+        if not provider(name) then
+            for _, e in ipairs(ns.Entries(name) or {}) do if e.keep then return true end end
+        end
+    end
+    return false
 end
 
 -- Every item on every list, once (the scanner prices these).
@@ -243,16 +286,54 @@ function ns.AllWanted()
     return out
 end
 
--- Items (counted once) whose lowest price is at or under their max, on any list.
-function ns.UnderMaxCount()
-    local seen, n = {}, 0
-    for _, name in ipairs(ns.ListNames()) do
-        for _, e in ipairs(ns.Entries(name) or {}) do
-            if not seen[e.id] and ns.Status(e) == "under" then seen[e.id] = true; n = n + 1 end
+-- A list's totals: { items, deals, dealsCost, dealsSave, fillMax (what everything not done costs at your max),
+--   over, noMax (not done, with neither a max of its own nor a market price), noPrice, done, ownMax (every item has
+--   its own max), virtual, owner, dealRows = { row, ... } }. seen (optional) skips items counted already.
+function ns.Summary(name, seen)
+    local s = { items = 0, deals = 0, dealsCost = 0, dealsSave = 0, fillMax = 0, over = 0, noMax = 0, noPrice = 0,
+        done = 0, ownMax = true, virtual = ns.IsVirtual(name), owner = ns.ProviderInfo(name), dealRows = {} }
+    for _, e in ipairs(ns.Entries(name) or {}) do
+        if not (seen and seen[e.id]) then
+            if seen then seen[e.id] = true end
+            local r = ns.Row(e, true)
+            r.list = name
+            s.items = s.items + 1
+            if not e.max then s.ownMax = false end
+            if r.status == "under" then
+                s.deals = s.deals + 1
+                s.dealsCost = s.dealsCost + (r.cost or 0)
+                s.dealsSave = s.dealsSave + (r.save or 0)
+                s.dealRows[#s.dealRows + 1] = r
+            elseif r.status == "over" then s.over = s.over + 1
+            elseif r.status == "noprice" then s.noPrice = s.noPrice + 1
+            elseif r.status == "done" then s.done = s.done + 1 end
+            if r.status ~= "done" then
+                if r.costMax then s.fillMax = s.fillMax + r.costMax else s.noMax = s.noMax + 1 end
+            end
         end
     end
-    return n
+    return s
 end
+
+-- The same over every list, each item once (the first list that has it counts it, like AllWanted). perList holds
+-- { name, deals, dealsCost } for each list with a deal (the hover tooltips).
+function ns.AllSummary()
+    local seen = {}
+    local all = { items = 0, deals = 0, dealsCost = 0, dealsSave = 0, fillMax = 0, over = 0, noMax = 0, noPrice = 0,
+        done = 0, dealRows = {}, perList = {} }
+    for _, name in ipairs(ns.ListNames()) do
+        local s = ns.Summary(name, seen)
+        for _, k in ipairs({ "items", "deals", "dealsCost", "dealsSave", "fillMax", "over", "noMax", "noPrice", "done" }) do
+            all[k] = all[k] + s[k]
+        end
+        for _, r in ipairs(s.dealRows) do all.dealRows[#all.dealRows + 1] = r end
+        if s.deals > 0 then all.perList[#all.perList + 1] = { name = name, deals = s.deals, dealsCost = s.dealsCost } end
+    end
+    return all
+end
+
+-- Items (counted once) whose lowest price is at or under their max, on any list.
+function ns.UnderMaxCount() return ns.AllSummary().deals end
 
 function ns.Active()
     local a = ns.db.active
@@ -268,10 +349,12 @@ end
 function ns.Changed()
     if ns.RefreshPanel then ns.RefreshPanel() end
     if KM.Refresh and KM.IsShown and KM.IsShown("shopping") then KM.Refresh("shopping") end
+    if KM.RefreshBadges then KM.RefreshBadges() end
 end
 
 ---------------------------------------------------------------------------
--- Export / import: "KMS1:<name>:<id>,<qty>,<max>,<note>;..." (empty fields stay empty)
+-- Export / import: "KMS1:<name>:<id>,<qty>,<max>,<note>,<keep>;..." (empty fields stay empty; trailing ones are
+-- left off, so a list with no Keep items reads exactly as before 2.6.2; a note never holds a comma)
 ---------------------------------------------------------------------------
 
 local function noteSafe(s) return ((s or ""):gsub("[,;:|]", " ")) end
@@ -279,7 +362,7 @@ local function noteSafe(s) return ((s or ""):gsub("[,;:|]", " ")) end
 function ns.Export(name)
     local parts = {}
     for _, e in ipairs(ns.Entries(name) or {}) do
-        local row = e.id .. "," .. (e.qty or "") .. "," .. (e.max or "") .. "," .. noteSafe(e.note)
+        local row = e.id .. "," .. (e.qty or "") .. "," .. (e.max or "") .. "," .. noteSafe(e.note) .. "," .. (e.keep or "")
         parts[#parts + 1] = (row:gsub(",+$", ""))
     end
     return "KMS1:" .. clean(name) .. ":" .. table.concat(parts, ";")
@@ -295,51 +378,26 @@ function ns.Import(code, intoName)
     local rows = {}
     for row in body:gmatch("[^;]+") do
         local f, rest = {}, row
-        for _ = 1, 3 do
+        for _ = 1, 4 do
             local a, b = rest:match("^([^,]*),(.*)$")
             if not a then break end
             f[#f + 1], rest = a, b
         end
         f[#f + 1] = rest
-        local id, qty, max, note = f[1], f[2] or "", f[3] or "", f[4]
+        local id, qty, max, note, keep = f[1], f[2] or "", f[3] or "", f[4], f[5] or ""
         id = id and id:match("^%d+$") and validID(id)
-        if not id or not qty:match("^%d*$") or not max:match("^%d*$") then
+        if not id or not qty:match("^%d*$") or not max:match("^%d*$") or not keep:match("^%d*$") then
             return nil, "The code is damaged near \"" .. row:sub(1, 20) .. "\"."
         end
-        rows[#rows + 1] = { id = id, qty = tonumber(qty), max = tonumber(max), note = (note ~= "" and note or nil) }
+        rows[#rows + 1] = { id = id, qty = tonumber(qty), max = tonumber(max), note = (note ~= "" and note or nil), keep = tonumber(keep) }
     end
     local target = ensure(name)
     if not target then return nil, "Could not make a list called " .. name .. "." end
-    for _, r in ipairs(rows) do ns.AddTo(target, r.id, r.qty, r.max, r.note) end
+    for _, r in ipairs(rows) do
+        ns.AddTo(target, r.id, r.qty, r.max, r.note)
+        if r.keep and r.keep > 0 then ns.SetKeep(target, r.id, r.keep) end
+    end
     return target, #rows
-end
-
----------------------------------------------------------------------------
--- Oracle (the player's own addon, optional): its "buy" actions become the list "Oracle"
----------------------------------------------------------------------------
-
-function ns.OracleData()
-    if not (Oracle and Oracle.GetData) then return nil end
-    local ok, data = pcall(Oracle.GetData)
-    if ok and type(data) == "table" then return data end
-end
-
-function ns.ImportOracle()
-    local data = ns.OracleData()
-    if not data then return nil, "Oracle isn't loaded or has no data yet." end
-    local buys = {}
-    for _, a in ipairs(type(data.actions) == "table" and data.actions or {}) do
-        if type(a) == "table" and a.verb == "buy" and tonumber(a.item_id) then buys[#buys + 1] = a end
-    end
-    if not ns.db.lists[ns.ORACLE] then ns.CreateList(ns.ORACLE) end
-    local items = ns.db.lists[ns.ORACLE].items
-    for i = #items, 1, -1 do items[i] = nil end
-    for _, a in ipairs(buys) do
-        local note = type(a.text) == "string" and a.text:sub(1, 60) or nil
-        ns.AddTo(ns.ORACLE, tonumber(a.item_id), tonumber(a.qty or a.units), tonumber(a.target), note)
-    end
-    ns.Changed()
-    return ns.ORACLE, #buys
 end
 
 ---------------------------------------------------------------------------
@@ -360,8 +418,9 @@ function API.Remove(itemID, listName)
 end
 
 -- A list another addon supplies live (never saved): provider = { items = fn() -> { { itemID, qty, max, note } },
--- bought = fn(itemID, n) (optional) }. A saved list of the same name stays saved but hidden while the provider is
--- registered. Returns true when registered. Call ShoppingKing.RefreshLists() when the items change.
+-- bought = fn(itemID, n) (optional), owner = "Oracle" (optional: the page says "Live list from Oracle"),
+-- note = "..." (optional: shown under it) }. A saved list of the same name stays saved but hidden while the provider
+-- is registered. Returns true when registered. Call ShoppingKing.RefreshLists() when the items change.
 function API.RegisterListProvider(name, p)
     if not ns.db or type(p) ~= "table" or type(p.items) ~= "function" then return false end
     name = clean(name)
@@ -392,7 +451,9 @@ function API.Items(listName)
     local name = listName == nil and ns.DEFAULT or (listName == ns.FAV and ns.FAV or ns.FindList(listName))
     local out = {}
     for _, e in ipairs(name and ns.Entries(name) or {}) do
-        out[#out + 1] = { itemID = e.id, qty = e.qty, max = e.max, note = e.note }
+        -- keep (2.6.2): "Keep this many in stock"; then qty is how many to buy right now (what's missing)
+        local need = ns.KeepNeed(e)
+        out[#out + 1] = { itemID = e.id, qty = need or e.qty, max = e.max, note = e.note, keep = need and tonumber(e.keep) or nil }
     end
     return out
 end
@@ -404,13 +465,13 @@ function API.IsWanted(itemID)
     if not itemID then return nil end
     for _, name in ipairs(ns.db.order) do
         local e = not provider(name) and ns.Find(name, itemID)
-        if e and not (e.qty and e.qty <= 0) then return name end
+        if e and ns.StillWanted(e) then return name end
     end
     for _, name in ipairs(ns.providerOrder) do
         local e = ns.Find(name, itemID)
-        if e and not (e.qty and e.qty <= 0) then return name end
+        if e and ns.StillWanted(e) then return name end
     end
     local f = ns.Find(ns.FAV, itemID)
-    if f and not (f.qty and f.qty <= 0) then return ns.FAV end
+    if f and ns.StillWanted(f) then return ns.FAV end
     return nil
 end

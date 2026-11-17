@@ -22,10 +22,13 @@ end
 
 local COLS = {
     { key = "item", label = "Drop", w = 200 },
-    { key = "chance", label = "Chance", w = 64, justify = "RIGHT" },
-    { key = "avg", label = "Per drop", w = 64, justify = "RIGHT" },
-    { key = "unit", label = "Price", w = 100, justify = "RIGHT" },
-    { key = "perKill", label = "Per kill", w = 100, justify = "RIGHT" },
+    { key = "chance", label = "Chance", w = 64, justify = "RIGHT",
+      tip = "How many kills dropped it, out of all the kills recorded (yours, plus your guild's with Guild data on). Not seen: QuestieDB lists it, but no one has looted it yet." },
+    { key = "avg", label = "Per drop", w = 64, justify = "RIGHT", tip = "How many come at once, on average." },
+    { key = "unit", label = "Price", w = 100, justify = "RIGHT",
+      tip = "What one is worth: market price after the 5% cut (AH) or the vendor price (vendor), whichever is higher. Quest items are worth nothing here." },
+    { key = "perKill", label = "Per kill", w = 100, justify = "RIGHT",
+      tip = "What it adds to a kill: units dropped over kills, times its price. Dimmed rows (filtered-out qualities, quest items, not seen) aren't in gold per kill." },
     { key = "from", label = "", w = 0 },
 }
 
@@ -128,6 +131,7 @@ function ns.CreateMobView(parent)
         if current then ns.db.fav[current] = (not ns.db.fav[current]) or nil; ns.RefreshMob() end
     end)
     star:SetPoint("RIGHT", trackCheck.frame, "LEFT", -14, 0)
+    UI.Tip(star, "Favorites are listed together under Favorites on the left. Right-clicking a mob in the list does the same.")
 
     name = UI.Text(view, 16, C.text)
     name:SetPoint("TOPLEFT", 0, -34)
@@ -141,6 +145,21 @@ function ns.CreateMobView(parent)
         t:SetPoint("TOPLEFT", (i - 1) * 200, -78)
         tiles[key] = t
     end
+    local function dl(tt, l, r) tt:AddDoubleLine(l, r, 0.8, 0.8, 0.8, 1, 1, 1) end
+    tiles.gold:SetTip(function(tt)
+        local v = value
+        tt:AddLine("Average value of a kill: its coin, plus for each drop how many a kill gives on average times its price. Only the qualities ticked at the top (and Coin, if ticked); quest items left out.", 1, 1, 1, true)
+        if not v or not v.gold then return end
+        local drops = v.gold - ((ns.db.filter.coin and v.coin) or 0)
+        if ns.db.filter.coin and v.coin then dl(tt, "Coin", ns.Money(v.coin)) end
+        dl(tt, "Drops", ns.Money(drops))
+        if v.incomplete then tt:AddLine("Some drops have no price yet and count as nothing.", 0.6, 0.6, 0.6, true) end
+    end)
+    tiles.coin:SetTip("All the coin looted from it, divided by the kills recorded. Counted whether or not Coin is ticked.")
+    tiles.kills:SetTip(function(tt)
+        tt:AddLine("The kills every number here is worked out from. Yours always; your guildmates' too when Guild data is ticked (each one's latest data, so nothing counts twice).", 1, 1, 1, true)
+        tt:AddLine("Under Min kills (" .. ns.db.filter.minKills .. "), the numbers are rough.", 0.6, 0.6, 0.6, true)
+    end)
     note = UI.Text(view, 10, C.warn)
     note:SetPoint("TOPLEFT", 0, -144)
     spawnText = UI.Text(view, 10, C.muted, "RIGHT")

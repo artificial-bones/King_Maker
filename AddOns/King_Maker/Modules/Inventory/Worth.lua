@@ -171,6 +171,22 @@ function API.GetCount(itemID)
     return total, by
 end
 
+-- Where you hold an item: { ["Name-Realm"] = { bags, bank, mail, ah, bagsT, bankT, mailT, ahT } }, how many in each
+-- place (0 for none) and when that place was last read (nil: never). Only characters (and "Warband") holding any; a copy.
+function API.GetPlaces(itemID)
+    local out = {}
+    for who, s in pairs(ns.db and ns.db.stock or {}) do
+        local row, any = {}, false
+        for _, place in ipairs(ns.PLACES) do
+            local n = (s[place] or {})[itemID] or 0
+            row[place], row[place .. "T"] = n, s[place .. "T"]
+            if n > 0 then any = true end
+        end
+        if any then out[who] = row end
+    end
+    return out
+end
+
 -- { total, gold, mail, assets, items, chars }, all in copper.
 function API.NetWorth()
     if not ns.db then return nil end

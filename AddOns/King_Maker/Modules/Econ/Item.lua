@@ -26,12 +26,25 @@ local function units(v)
     return (string.format("%.1f", v):gsub("%.0$", ""))
 end
 
+-- { label, stat, format, tip } (a tip only where the label doesn't say it all)
 local GRID = {
-    { { "Market price", "market", "money" }, { "Lowest buyout", "lowest", "money" }, { "Listed now", "listed", "units" }, { "Auctions", "auctions", "units" } },
-    { { "7-day average", "avg7", "money" }, { "30-day average", "avg30", "money" }, { "Now vs 30-day", "vs30", "pctDown" }, { "7-day trend", "trend7", "pct" } },
-    { { "30-day low", "low30", "money" }, { "30-day high", "high30", "money" }, { "Volatility", "vol30", "vol" }, { "Avg listed (30d)", "listed30", "units" } },
-    { { "Gone per day", "gonePerDay", "units" }, { "Supply vs 30-day", "supply", "pct" }, { "Tracking since", "first", "date" }, { "Scans behind it", "points", "units" } },
-    { { "Avg listed (7d)", "listed7", "units" }, { "Supply vs 7-day", "supply7", "pct" }, { "Price vs supply", "corr", "corr" }, { "Last scanned", "seen", "ago" } },
+    { { "Market price", "market", "money", "The latest market price: the average of the cheapest 15-30% listed in a full scan. With no full scan in 30 days, the lowest buyout." },
+      { "Lowest buyout", "lowest", "money" }, { "Listed now", "listed", "units" },
+      { "Auctions", "auctions", "units", "Separate auctions in the latest full scan (only full scans count them). Grey: how old that count is." } },
+    { { "7-day average", "avg7", "money" }, { "30-day average", "avg30", "money" },
+      { "Now vs 30-day", "vs30", "pctDown", "The market price now against its 30-day average. Green below zero: cheaper than usual." },
+      { "7-day trend", "trend7", "pct", "The average price this week against the week before. Until there are two weeks of scans: the later half of the days there are against the earlier half (grey: how many days)." } },
+    { { "30-day low", "low30", "money" }, { "30-day high", "high30", "money" },
+      { "Volatility", "vol30", "vol", "How far the market price usually strays from its 30-day average. Small: a steady price. Large: room to buy low and sell high." },
+      { "Avg listed (30d)", "listed30", "units" } },
+    { { "Gone per day", "gonePerDay", "units", "Units that left the auction house per day over the last 7 days: sold, cancelled or expired. Only full scans less than two days apart can measure it, so it's a rough guide to demand." },
+      { "Supply vs 30-day", "supply", "pct", "How many are listed now against the 30-day average. Below zero: drying up." },
+      { "Tracking since", "first", "date" },
+      { "Scans behind it", "points", "units", "How many scans, yours and your guildmates', this history is built from." } },
+    { { "Avg listed (7d)", "listed7", "units" },
+      { "Supply vs 7-day", "supply7", "pct", "How many are listed now against the 7-day average. Below zero: drying up." },
+      { "Price vs supply", "corr", "corr", "How price and supply move together over 30 days, from -1 to +1 (needs 6 scans). Near -1: the price drops when more are listed. Near 0: no link." },
+      { "Last scanned", "seen", "ago" } },
 }
 
 local function format(kindOf, v)
@@ -82,8 +95,7 @@ end
 function ns.RefreshItem()
     if not current or not view:IsShown() then return end
     local id = current
-    local info = ns.Info(id)
-    icon:SetTexture(info.icon)
+    icon:SetTexture(ns.Icon(id))
     name:SetText(ns.ColoredName(id))
     local cls, sc = ns.ClassOf(id)
     kind:SetText(ns.ClassName(cls) .. " - " .. ns.SubclassName(cls, sc))
@@ -234,6 +246,12 @@ function ns.CreateItemView(parent)
             value:SetPoint("TOPLEFT", x, y - 12)
             value:SetWidth(colW - 8)
             cells[r][c] = value
+            if cell[4] then
+                local hover = CreateFrame("Frame", nil, card)
+                hover:SetPoint("TOPLEFT", x, y + 2)
+                hover:SetSize(colW - 8, 28)
+                UI.Tip(hover, cell[4])
+            end
         end
     end
 

@@ -38,7 +38,7 @@ local COLUMNS = {
         { key = "name", label = "Mob", w = 158, desc = false },
         { key = "level", label = "Level", w = 46 },
         { key = "zone", label = "Zone", w = 100, desc = false },
-        { key = "gold", label = "Gold/kill", w = 84, justify = "RIGHT", tip = "Average value of a kill: coin plus each drop's chance times its price, with the filters above." },
+        { key = "gold", label = "Gold/kill", w = 84, justify = "RIGHT", tip = "Average value of a kill: its coin, plus for each drop how many a kill gives on average times its price (market after the 5% cut, or vendor). Only the qualities ticked above; quest items left out. Grey: fewer kills than Min kills." },
         { key = "coin", label = "Coin", w = 64, justify = "RIGHT", tip = "Average coin a kill drops." },
         { key = "kills", label = "Kills", w = 46, justify = "RIGHT", tip = "Kills the numbers are based on: yours plus your guild's (when Guild data is on)." },
         { key = "best", label = "Best drop", w = 0, desc = false, tip = "The drop worth the most per kill." },
@@ -47,7 +47,7 @@ local COLUMNS = {
         { key = "name", label = "Item", w = 270, desc = false },
         { key = "mobs", label = "Dropped by", w = 90, justify = "RIGHT", tip = "How many mobs are known to drop it." },
         { key = "chance", label = "Best chance", w = 90, justify = "RIGHT", tip = "The best drop chance from the mobs you or your guild have killed." },
-        { key = "price", label = "Price", w = 0, justify = "RIGHT" },
+        { key = "price", label = "Price", w = 0, justify = "RIGHT", tip = "What one is worth: market price after the 5% cut, or the vendor price if that's higher." },
     },
     hunt = {
         { key = "fav", label = "", w = 22 },
@@ -57,7 +57,7 @@ local COLUMNS = {
         { key = "spawns", label = "Spawns", w = 60, justify = "RIGHT", tip = "Spawn points (QuestieDB), or spots you've seen it." },
         { key = "chance", label = "Chance", w = 64, justify = "RIGHT", tip = "How often it dropped the item, from your kills and your guild's." },
         { key = "kills", label = "Kills", w = 50, justify = "RIGHT", tip = "Kills that chance is based on." },
-        { key = "gold", label = "Gold/kill", w = 0, justify = "RIGHT", tip = "Average value of a kill, everything it drops included." },
+        { key = "gold", label = "Gold/kill", w = 0, justify = "RIGHT", tip = "Average value of a kill: coin and every drop, with the filters above. Not just this item." },
     },
 }
 -- Every column sorts (the page sorts its own list: the table only shows the arrow and reports clicks).
@@ -368,7 +368,7 @@ local function refresh()
     ns.EnsureQuestie()
     for key, c in pairs(checks) do c:SetChecked(ns.db.filter[key] and true or false) end
     minKillsBtn:SetLabel("Min kills: " .. ns.db.filter.minKills)
-    miniBtn:SetActive(ns.db.ui.mini and true or false)
+    miniBtn:SetActive(TrackerKing and TrackerKing.HUDShown and KM.Safe(TrackerKing.HUDShown) and true or false)
     refreshSide()
     if view == "list" then refreshList() elseif ns.RefreshMob then ns.RefreshMob() end
 end
@@ -501,10 +501,13 @@ local function buildPage(c)
         "Only mobs from 5 levels under you to 3 over.")
     near.frame:SetPoint("LEFT", searchModeBtn, "RIGHT", 14, 0)
     checks.near = near
-    miniBtn = UI.Button(c, "Farm tracker", 110, 24, function() ns.SetMini(not ns.db.ui.mini) end)
+    miniBtn = UI.Button(c, "Farm tracker", 110, 24, function()
+        if TrackerKing and TrackerKing.ToggleHUD then KM.Safe(TrackerKing.ToggleHUD) end
+        refresh()
+    end)
     miniBtn:SetPoint("TOPRIGHT", 0, -32)
-    UI.Tip(miniBtn, "A small floating box that tallies what you're farming: each mob killed and what it brought in, "
-        .. "each drop and its value, and the total. Start its timer for gold per hour. Also /fk mini.")
+    UI.Tip(miniBtn, "The Farm Tracker: a small floating box for the session you're farming now (kills, drops, skins, "
+        .. "gathering, coin, gold per hour). Every session is saved to the Farming Ledger. Also /farm.")
 
     -- Left: tabs and zones.
     local side = CreateFrame("Frame", nil, c)
@@ -591,26 +594,11 @@ end
 KM.RegisterQuickAction({ id = "farm-mobs", label = "Mob Farming", order = 40, func = function() ns.Toggle(true) end })
 KM.RegisterQuickAction({ id = "farm-zone", label = "This zone's mobs", order = 41,
     func = function() ns.Toggle(true); ns.SelectTab("zone") end })
-KM.RegisterQuickAction({ id = "farm-tracker", label = "Farm tracker", order = 42,
-    func = function() ns.SetMini(not ns.db.ui.mini) end })
 
 KM.RegisterTooltip(function(tt)
     if not ns.db then return end
     tt:AddLine(KM.Commas(totalKills()) .. " kills recorded.", 1, 1, 1)
 end)
-
-KM.RegisterHomeTile({ id = "farm", order = 40, get = function()
-    if not (ns.db and ns.SessionTotals) then return nil end
-    local s = ns.db.session
-    local kills = 0
-    for _, m in pairs(s.mobs or {}) do kills = kills + (m.k or 0) end
-    local total, gph, secs = ns.SessionTotals()
-    if kills == 0 and (total or 0) == 0 and secs < 1 then return nil end
-    if gph then
-        return "Farm session", ns.Money(gph) .. "/hr", kills .. " kills, " .. ns.Money(total) .. " in all"
-    end
-    return "Farm session", kills .. " kills", ns.Money(total) .. " looted"
-end })
 
 KM.RegisterSettings({ id = "farm", label = "Farm", order = 40, rows = {
     { type = "header", label = "Guild" },
@@ -618,18 +606,17 @@ KM.RegisterSettings({ id = "farm", label = "Farm", order = 40, rows = {
       tip = "When a guildmate clicks Ask guild, send them your own kills of those mobs. Only your own kills are ever sent.",
       get = function() return ns.db.answer end, set = function(v) ns.db.answer = v end },
     { type = "check", label = "Add guildmates' kills to mine (Guild data)",
+      tip = "Their kills count with yours in gold per kill, coin and chances, once they've answered an Ask guild.",
       get = function() return ns.db.filter.guild end, set = function(v) ns.db.filter.guild = v; ns.Refresh() end },
-    { type = "button", label = "Forget every guildmate's drop data", func = function() ns.ForgetGuild() end },
+    { type = "button", label = "Forget every guildmate's drop data", tip = "Deletes the drop data guildmates have sent you. Your own kills stay.", func = function() ns.ForgetGuild() end },
     { type = "header", label = "Ranking" },
     { type = "choice", label = "Min kills for Best farms", options = { { 1, "1" }, { 5, "5" }, { 10, "10" }, { 25, "25" }, { 50, "50" } },
       get = function() return ns.db.filter.minKills end, set = function(v) ns.db.filter.minKills = v; ns.Refresh() end },
     { type = "check", label = "Only mobs near my level", tip = "From 5 levels under you to 3 over.",
       get = function() return ns.db.filter.near end, set = function(v) ns.db.filter.near = v; ns.Refresh() end },
     { type = "header", label = "Farm tracker" },
-    { type = "check", label = "Show the farm tracker", tip = "The small floating box with this session's kills, drops and gold per hour.",
-      get = function() return ns.db.ui.mini end, set = function(v) ns.SetMini(v) end },
-    { type = "button", label = "Reset the farm tracker", func = function() ns.SessionReset() end },
+    { type = "text", label = "The farm tracker is King Maker's Farm Tracker now, for mobs and gathering alike, with every session saved to the Farming Ledger: Settings > Farm Tracker, or /farm." },
     { type = "header", label = "Commands" },
-    { type = "text", label = "/fk   open Mob Farming\n/fk white   White Items\n/fk mini on|off   the farm tracker\n"
+    { type = "text", label = "/fk   open Mob Farming\n/fk white   White Items\n/fk mini on|off   the Farm Tracker (also /farm)\n"
         .. "/fk share on|off   answer guildmates' requests\n/fk forget guild   drop guildmates' data\n/fk status   what's been recorded" },
 } })

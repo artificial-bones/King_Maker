@@ -157,6 +157,32 @@ function KM.Money(c, plain)
     return out
 end
 
+-- Compact money for tables and tiles (tooltips use the exact KM.Money); Shopping's rules, shared since 2.7:
+--   nil -> grey dash; >= 1000g -> "1,234g"; >= 1g -> "3g 45s" (rounded to the silver, "0s" left out);
+--   >= 1s -> "45s 9c"; less -> "9c"; negative -> a leading minus. plain = no coin colours.
+local COIN = { g = "|cffffd700g|r", s = "|cffc7c7cfs|r", c = "|cffeda55fc|r" }
+function KM.MoneyShort(c, plain)
+    if c == nil then return plain and "-" or "|cff808080-|r" end
+    c = math.floor(c + 0.5)
+    local neg = c < 0
+    if neg then c = -c end
+    local function u(k) return plain and k or COIN[k] end
+    local out
+    if c >= 10000 then
+        local silver = math.floor(c / 100 + 0.5)
+        local g, sv = math.floor(silver / 100), silver % 100
+        if g >= 1000 then out = KM.Commas(math.floor(c / 10000)) .. u("g")
+        else out = g .. u("g") .. (sv > 0 and (" " .. sv .. u("s")) or "") end
+    elseif c >= 100 then
+        local sv, k = math.floor(c / 100), c % 100
+        out = sv .. u("s") .. (k > 0 and (" " .. k .. u("c")) or "")
+    else
+        out = c .. u("c")
+    end
+    if neg then out = (plain and "-" or "|cffff5050-|r") .. out end
+    return out
+end
+
 function KM.Commas(n)
     local s = tostring(math.floor(n or 0))
     local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()

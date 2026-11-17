@@ -229,7 +229,13 @@ SK.OpenMarketScan(); assert "Open the auction house and click Scan" in last(L), 
 sk("scan"); assert "Open the auction house first" in last(L), last(L)
 L.execute("AH_OPEN = true")
 KM.Show("home"); assert not KM.errorShown, last(L)
-assert "PRICES KNOWN" in fonts(L)
+assert not [a for a in KM.home.attItems.values() if a.page == "prices"], "a quick scan just now: prices are fresh"
+L.execute("SAVED_Q, SAVED_D = ScannerKingDB.lastQuick, ScannerKingDB.lastDeep; NOW = NOW + 3 * 86400 + 60"); KM.Refresh()
+old = [a for a in KM.home.attItems.values() if a.page == "prices"]
+assert old and "3 days ago" in old[0].text and list(old[0].color.values()) == list(L.eval("KingMaker.UI.C.warn").values()), "older than a day: scan again"
+L.execute("ScannerKingDB.lastQuick, ScannerKingDB.lastDeep = nil, nil"); KM.Refresh()
+assert [a for a in KM.home.attItems.values() if a.page == "prices"][0].text.startswith("No prices yet")
+L.execute("NOW = NOW - 3 * 86400 - 60; ScannerKingDB.lastQuick, ScannerKingDB.lastDeep = SAVED_Q, SAVED_D"); KM.Refresh()
 KM.OpenSettings("scanner"); assert KM.IsShown("settings") and not KM.errorShown, last(L)
 t = fonts(L)
 assert "Prices in item tooltips" in t and "Share prices with my guild" in t and any("/sk deep" in x for x in t)

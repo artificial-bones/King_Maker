@@ -6,7 +6,8 @@ local ns = KM.Module("Gather")
 -- tells us what it was, so Small and Rich Thorium Veins stay apart even though
 -- both give Thorium Ore; failing that, the loot window does. Every harvest stamps
 -- the marker so it shows faded while the node respawns; with auto-tagging on,
--- unmarked nodes also get a new marker.
+-- unmarked nodes also get a new marker. What a harvest is worth is the Farm
+-- Tracker's job (Core\Loot.lua reads the same window for it).
 
 local pending -- { t = "mine", at = GetTime(), mapID, x, y, target = "Rich Thorium Vein" }
 local sent    -- { target = node name, at = GetTime() } from UNIT_SPELLCAST_SENT
@@ -72,8 +73,6 @@ end
 local function onLoot()
     if not pending or GetTime() - pending.at > 5 then
         pending = nil
-        -- Fishing isn't a node, but its catch still goes in the farming ledger.
-        if IsFishingLoot and IsFishingLoot() and ns.LedgerAdd then ns.LedgerAdd(readLoot()) end
         return
     end
     local p = pending
@@ -83,8 +82,7 @@ local function onLoot()
     -- list; anything else (new Forever nodes) is named after the first plain
     -- item looted, skipping Scarce materials, seeds and stones.
     local nodeName, nodeItem
-    local loot = readLoot() -- everything this harvest gave, for loot stats and the ledger
-    if ns.LedgerAdd then ns.LedgerAdd(loot) end
+    local loot = readLoot() -- everything this harvest gave, for loot stats
     local tkey, tknown = ns.LookupKnown(p.target)
     if tknown and tknown[1] == p.t then nodeName = tkey end
     local best -- the most exact known name among the loot (Heavy Thorium over Thorium)
@@ -124,6 +122,9 @@ end
 local f = CreateFrame("Frame")
 f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 f:RegisterEvent("LOOT_OPENED")
+if not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid("LOOT_READY") then
+    pcall(f.RegisterEvent, f, "LOOT_READY") -- before fast auto-loot empties the window; the second read finds nothing pending
+end
 if not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid("UNIT_SPELLCAST_SENT") then
     pcall(f.RegisterUnitEvent, f, "UNIT_SPELLCAST_SENT", "player")
 end
@@ -135,7 +136,7 @@ f:SetScript("OnEvent", function(self, event, ...)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         local unit, _, spellID = ...
         pcall(onSpell, unit, spellID)
-    elseif event == "LOOT_OPENED" then
+    elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
         pcall(onLoot)
     end
 end)

@@ -19,7 +19,7 @@ themselves.
 |---|---|
 | The ledger | King Maker window, **Auction House > Sales Ledger** (`/mlk` or `/km ledger`) |
 | Open it from the minimap | Right-click the King Maker crown: **Sales Ledger** |
-| Profit at a glance | Hover the crown (last 7 days), or the **Profit, 7 days** tile on Home |
+| Profit at a glance | Hover the crown (last 7 days), or the profit tile on Home (with Profit & Loss: **P&L, 7 days**) |
 | Period, whose mail, export, clearing the ledger | King Maker **Settings > Sales Ledger** |
 | Mail your alts in one click | **My characters**, beside the mailbox |
 
@@ -35,6 +35,8 @@ Open your mailbox and every auction house mail in it is recorded, once:
 
 - **Opening the mailbox again changes nothing.** You don't have to take the gold out either: a mail
   is remembered and only ever counted once.
+- **One mail, one entry (2.6.0).** Older versions could count a sale two or three times (when the buyer's
+  name loaded late, or after you took the gold); the first login with 2.6.0 removes those copies and says how many.
 - **Sales are dated when they sold, not when you read the mail.** Auction mail lasts 30 days, so the
   time left on it gives the date.
 - **Deposits and prices.** When you post an auction, the Sales Ledger notes its deposit and your
@@ -53,8 +55,11 @@ characters** or **This character**) and the period (**Today**, **7 days**, **30 
 - **Summary.** Profit, income, the auction house cut, what you spent, deposits lost and sales; your
   best buyer, and your net worth from Inventory (hover the line for your top five buyers, click it for
   the Buyers tab). Below that, profit per day for the last two weeks (green up, red down), and every
-  strategy ranked by profit with its sell-through. Click a strategy to see its items.
-- **Sales, Purchases, Expired.** Every one, newest first.
+  strategy ranked by profit with its sell-through. Click a strategy to see its items. With the Profit &
+  Loss page (2.7), **Still holding** and **Net if sold now** come from its lots, and a **Realized P&L**
+  line on the right opens it.
+- **Sales, Purchases, Expired.** Every one, newest first. The Sales tab's **P&L** column says what each
+  sale made after what those units cost you ("no cost" when nothing you bought or looted covered it).
 - **Items.** Every item you've traded: units sold, average price, income, spent, sell-through, and the
   Scanner's market price today, so you can see whether you're selling under the market.
 - **Not selling.** Every item that came back expired or cancelled, worst first (most deposits
@@ -134,6 +139,10 @@ MailKing.Summary(since)    -- { income, spent, lost, profit, sales } since a ser
 MailKing.StrategyOf(itemID)
 MailKing.Buyers(since)     -- { { who, mails, units, gold, last } }, most sales first
 MailKing.Stock(itemID)     -- how many you hold (asks Inventory; 0 without it)
+MailKing.RegisterCallback("ENTRY" | "RESET", fn, owner) -- fn("ENTRY", entry) right after a mail is recorded (a copy,
+                           --   GetEntries' shape); fn("RESET") after the ledger is cleared. MailKing.UnregisterCallback(event, owner)
+MailKing.GetPosts([itemID]) -- copies of your remembered postings, newest first: { id, name, n, dep, each = asking
+                           --   price per unit, t, c } (kept 3 days; Profit & Loss's "listed at")
 ```
 
 ## Limits

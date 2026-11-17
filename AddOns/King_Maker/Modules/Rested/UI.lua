@@ -169,6 +169,23 @@ local function refreshTiles(now)
     end
 end
 
+-- Tile tooltips.
+local RATE = "Rest builds 5% of a level every 8 hours logged out in an inn or city (a quarter as fast outside), up to 150% of a level; the Well Rested perk adds 4% a rank to both."
+
+local function fullTip(tt)
+    tt:AddLine("Characters below max level whose rest has hit the most they can hold. Every hour they stay logged out is rest thrown away.", 1, 1, 1, true)
+    tt:AddLine(RATE, 0.8, 0.8, 0.8, true)
+    local now, any = ns.Now(), false
+    for _, item in ipairs(ns.Characters("rested", true, false)) do
+        local e = item.e
+        if e.full then
+            if not any then tt:AddLine(" "); any = true end
+            tt:AddDoubleLine(colour(classColour(item.c.class), item.c.name) .. " " .. (item.c.level or ""),
+                e.fullSince and ("full for " .. ns.Duration(now - e.fullSince)) or "full", 1, 1, 1, 1, 0.25, 0.25)
+        end
+    end
+end
+
 local function refresh()
     if not page or not ns.db then return end
     local now = ns.Now()
@@ -225,6 +242,13 @@ local function buildPage(c)
         t:SetPoint("TOPLEFT", (i - 1) * (TILE_W + 10), 0)
         tiles[i] = t
     end
+    tiles[1]:SetTip("Your characters below max level, on every realm. Log in on a character once and it's counted.")
+    tiles[2]:SetTip("The character other than this one with the most rest right now, as a share of its level. Orange: it's full.")
+    tiles[3]:SetTip(fullTip)
+    tiles[4]:SetTip(function(tt)
+        tt:AddLine("The levelling character whose rest caps soonest: play it, or log it out in an inn or city, before then.", 1, 1, 1, true)
+        tt:AddLine(RATE, 0.8, 0.8, 0.8, true)
+    end)
 
     maxBtn = UI.Button(c, "Show max level", 130, 24, function()
         ns.db.ui.showMax = not ns.db.ui.showMax
@@ -236,15 +260,15 @@ local function buildPage(c)
     hint:SetPoint("TOPLEFT", 0, -(TILE_H + 18))
     hint:SetText("Click a header to sort. Right-click a character: Well Rested perk, forget.")
 
-    local function col(key, label, w, desc)
-        return { key = key, label = label, w = w, desc = desc, sort = key ~= "where" and function() return 0 end or nil }
+    local function col(key, label, w, desc, tip)
+        return { key = key, label = label, w = w, desc = desc, sort = key ~= "where" and function() return 0 end or nil, tip = tip }
     end
     local cols = {
         col("name", "Character", 170, false),
-        col("level", "Level", 70, true),
-        col("rested", "Rested", 200, true),
-        col("full", "Full", 116, false),
-        col("where", "Where", 70),
+        col("level", "Level", 70, true, "The level, then how far into it."),
+        col("rested", "Rested", 200, true, "Rest now: XP, share of the level and bubbles (a bubble is 5% of a level; the XP bar has 20). est: worked out from when you logged out; logging in shows the exact number."),
+        col("full", "Full", 116, false, "When the rest stops growing (150% of a level). Red FULL: capped, and for how long; rest since then is wasted. Yellow: full within a day."),
+        col("where", "Where", 70, nil, "Where it logged out: in an inn or city rest builds at the full rate, outside at a quarter. Right-click to correct it."),
         col("seen", "Last seen", 0, false),
     }
     -- The table only draws: ns.Characters sorts (it knows how to rank a full or max-level character).
@@ -297,13 +321,30 @@ KM.RegisterTooltip(function(tt)
     end
 end)
 
-KM.RegisterHomeTile({ id = "rested", order = 51, get = function()
-    local alt = ns.MostRestedAlt()
-    if not alt then return nil end
-    local e = alt.e
-    return "Most rested alt", alt.c.name .. " " .. (alt.c.level or ""),
-        math.floor(e.pct * 100 + 0.5) .. "% rested, " .. (e.full and "full" or (e.fullIn and ("full in " .. ns.Duration(e.fullIn)) or "")),
-        e.full and C.warn or C.text
+-- Home: each character's rest in the character strip, and a row when alts sit full of rest (earning nothing more).
+KM.RegisterHomeCard({ kind = "chars", id = "rested", order = 20, get = function()
+    if not ns.db then return nil end
+    local out, now = {}, ns.Now()
+    for _, item in ipairs(ns.Characters("rested", true, false)) do
+        local e = item.e
+        if not e.unknown and not e.max then
+            local pct = math.floor(e.pct * 100 + 0.5)
+            out[item.key] = { text = e.full and "full rest" or (pct .. "% rested"), color = e.full and C.warn or nil, level = item.c.level,
+                tip = pct .. "% of a level rested" .. (e.full and ", full: it earns nothing more." or "") .. " " .. ns.FullText(e, now) }
+        end
+    end
+    return out
+end })
+
+KM.RegisterHomeCard({ kind = "attention", id = "rested", order = 70, get = function()
+    if not ns.db then return nil end
+    local me, full = ns.Char(), {}
+    for _, item in ipairs(ns.Characters("rested", true, false)) do
+        if item.key ~= me and item.e.full and not item.e.unknown then full[#full + 1] = item.c.name .. " " .. (item.c.level or "") end
+    end
+    if #full == 0 then return nil end
+    return { { text = (#full == 1 and (full[1] .. " is") or (#full .. " alts are")) .. " full of rest", color = C.info, page = "rested",
+        tip = "Rest stops at 150% of a level, so these alts earn nothing more until you play them: " .. table.concat(full, ", ") .. "." } }
 end })
 
 KM.RegisterSettings({ id = "rested", label = "Rested", order = 51, rows = {
@@ -312,6 +353,7 @@ KM.RegisterSettings({ id = "rested", label = "Rested", order = 51, rows = {
       get = function() return ns.db.ui.showMax end, set = function(v) ns.db.ui.showMax = v; ns.Refresh() end },
     { type = "header", label = "This character" },
     { type = "range", label = "Well Rested perk rank", min = 0, max = ns.PERK_RANKS, step = 1,
+      tip = "Your legacy Well Rested rank on this character: each rank adds 4% to how fast rest builds and to the most you can hold.",
       fmt = function(v) return v == 0 and "None" or ("Rank " .. v) end,
       get = function() local c = ns.db.chars[ns.Char()]; return c and (c.perk or 0) or 0 end,
       set = function(v) if not ns.db.chars[ns.Char()] then ns.Snapshot() end; ns.SetPerk(ns.Char(), v) end },

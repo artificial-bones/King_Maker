@@ -2,8 +2,8 @@ local _, KM = ...
 local ns = KM.Module("Gather")
 
 -- What the old Gather King minimap button did, on the King Maker crown instead: quick actions to open the
--- Gathering page, show or hide the farming ledger, and switch profile (one action that opens a small menu of
--- profiles), plus a line in the crown's tooltip.
+-- Gathering page and switch profile (one action that opens a small menu of profiles), plus a line in the crown's
+-- tooltip. (Its "Farming ledger" action is the Farm Tracker's "Farm Tracker" since King Maker 2.6.)
 
 -- The profile menu, anchored at owner (or the cursor). Radios: the active profile is ticked.
 function ns.ProfileMenu(owner)
@@ -24,12 +24,6 @@ function ns.ProfileMenu(owner)
 end
 
 KM.RegisterQuickAction({ id = "gather-page", label = "Gathering", order = 45, func = function() ns.OpenSettings() end })
-KM.RegisterQuickAction({ id = "gather-ledger", label = "Farming ledger", order = 46, func = function()
-    if not ns.db then return end
-    ns.db.ui.ledger = not ns.db.ui.ledger
-    ns.UpdateLedger()
-    if ns.RefreshSettings then ns.RefreshSettings() end
-end })
 -- Opened a moment later: the crown's own menu closes after the click has run.
 KM.RegisterQuickAction({ id = "gather-profile", label = "Switch gathering profile", order = 47, func = function()
     C_Timer.After(0, function() ns.ProfileMenu(KM.minimapButton) end)

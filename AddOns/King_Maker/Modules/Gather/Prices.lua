@@ -43,6 +43,42 @@ function ns.PriceAge(t)
     return math.floor(mins / 1440) .. " days ago"
 end
 
+---------------------------------------------------------------------------
+-- Materials for the Mat Prices lists (the Farm Tracker's Prices tab; moved here from the old Ledger.lua)
+---------------------------------------------------------------------------
+
+-- Bonus drops that belong to each profession.
+local BONUS_TYPE = {
+    [249391] = "mine", [249425] = "mine", [249426] = "mine",
+    [2835] = "mine", [2836] = "mine", [2838] = "mine", [7912] = "mine", [12365] = "mine",
+    [249399] = "herb", [249424] = "herb", [249274] = "herb",
+    [268415] = "herb", [268416] = "herb", [268417] = "herb", [268418] = "herb",
+}
+ns.BONUS_TYPE = BONUS_TYPE
+
+-- Every material for one profession: known ores/herbs, their bonus drops, and
+-- anything else your (or your guild's) nodes of that type have dropped, like gems.
+local function materials(t)
+    local seen, list = {}, {}
+    local function add(id) if id and not seen[id] then seen[id] = true; table.insert(list, id) end end
+    for _, v in pairs(ns.KNOWN) do if v[1] == t then add(v[3]) end end
+    for id, bt in pairs(BONUS_TYPE) do if bt == t then add(id) end end
+    for _, e in ipairs(ns.MATS[t] or {}) do add(e[1]) end
+    for _, zone in pairs(ns.db.nodes) do
+        for _, node in ipairs(zone) do
+            if node.t == t then
+                if node.stats then for id in pairs(node.stats.items) do add(id) end end
+                for _, g in pairs(node.guild or {}) do
+                    for id in pairs(g.items or {}) do add(id) end
+                end
+            end
+        end
+    end
+    return list
+end
+ns.LedgerMaterials = materials
+ns.MaterialList = materials
+
 function ns.ScanPrices()
     if SK() then return SK().Scan() end
     KM.Print(ns, "Price scanning is King Maker's Scanner module (Scanner King), and it isn't loaded.")
@@ -71,7 +107,4 @@ f:SetScript("OnEvent", function()
         ns.db.prices, ns.db.pricesScanned = nil, nil
     end
     SK().Watch("gather_king", ns.PricedItems) -- asked fresh at each scan
-    SK().RegisterCallback("gather_king", function(event)
-        if event == "PRICES_UPDATED" and ns.UpdateLedger then ns.UpdateLedger() end
-    end)
 end)

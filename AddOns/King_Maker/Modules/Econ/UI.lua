@@ -206,7 +206,7 @@ local function fillRow(r, e, cells)
         end)
     end
     r.star.tex:SetAlpha(ns.db.fav[e.id] and 1 or 0.15)
-    if r.icon then r.icon:SetTexture(ns.Info(e.id).icon) end
+    if r.icon then r.icon:SetTexture(ns.Icon(e.id)) end
     cells.name:SetText(ns.ColoredName(e.id))
     cells.market:SetText(ns.Money(s.market))
     cells.vs30:SetText(ns.Percent(s.vs30, true))
@@ -312,6 +312,16 @@ local function sideButton(parent)
     b:SetScript("OnMouseUp", function() inset(0, 0) end)
     b.count = UI.Text(b, 10, C.dim, "RIGHT")
     b.count:SetPoint("RIGHT", -6, 0)
+    b:HookScript("OnEnter", function(self)
+        local key = self.entry and self.entry.key
+        local tip = key == "deals" and "Items at least 20% under their 30-day average market price, with 5 or more days of history and priced in the last 2 days."
+            or key == "fav" and "Items you starred. Right-click any item in the list, or click its star, to add or remove it."
+        if not tip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(tip, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    b:HookScript("OnLeave", function() GameTooltip:Hide() end)
     return b
 end
 
@@ -368,12 +378,12 @@ local function buildPage(c)
     local cols = {
         col("fav", "", 20),
         col("name", "Item", 160),
-        col("market", "Market", 92, "RIGHT"),
-        col("vs30", "vs 30d", 56, "RIGHT", "Market price now compared with its 30-day average. Below zero: cheaper than usual."),
+        col("market", "Market", 92, "RIGHT", "The latest market price: the average of the cheapest 15-30% listed in a full scan. With no full scan in 30 days, the lowest buyout."),
+        col("vs30", "vs 30d", 56, "RIGHT", "Market price now compared with its 30-day average. Below zero (green): cheaper than usual."),
         col("trend7", "7d trend", 58, "RIGHT", "Average market price this week compared with the week before (until there are two weeks of scans: the price's change over the days there are)."),
         col("listed", "Listed", 52, "RIGHT", "Units on the auction house at the last scan."),
         col("supply", "Supply", 56, "RIGHT", "Listed now compared with the 30-day average. Below zero: drying up."),
-        col("seen", "Scanned", 0),
+        col("seen", "Scanned", 0, nil, "When a scan, yours or a guildmate's, last saw it."),
     }
     tbl = UI.Table(listView, cols, 20, {
         icon = true, noSort = true, fontSize = 11,
@@ -431,11 +441,31 @@ KM.RegisterTooltip(function(tt)
     tt:AddLine(KM.Commas(n) .. " items with price history.", 1, 1, 1)
 end)
 
-KM.RegisterSettings({ id = "econ", label = "Econ", order = 11, rows = {
-    { type = "header", label = "Tooltips" },
-    { type = "check", label = "Averages and trend in item tooltips", tip = "The 30-day average, today against it and the weekly trend, under the prices.",
-      get = function() return ns.db.ui.tooltip end, set = function(v) ns.db.ui.tooltip = v end },
-    { type = "header", label = "Commands" },
-    { type = "text", label = "/ek   open Price History\n/ek item [link]   an item's page\n/ek fav [link]   add or remove a favorite\n"
-        .. "/ek status   how much history you have\n/ek tooltip on|off   lines in item tooltips" },
-} })
+local function days(n) return n == 1 and "1 day" or (n .. " days") end
+local function keepRow(key, label, step, tip, fmt)
+    local d = ns.KEEP[key]
+    return { type = "range", label = label, min = d[2], max = d[3], step = step, tip = tip, fmt = fmt or days,
+        get = function() return ns.Keep()[key] end, set = function(v) ns.db.keep[key] = v end }
+end
+
+-- Rebuilt each time the section opens, so the size line is current.
+KM.RegisterSettings({ id = "econ", label = "Price History", order = 11, rows = function()
+    return {
+        { type = "header", label = "Tooltips" },
+        { type = "check", label = "Averages and trend in item tooltips", tip = "The 30-day average, today against it and the weekly trend, under the prices.",
+          get = function() return ns.db.ui.tooltip end, set = function(v) ns.db.ui.tooltip = v end },
+        { type = "header", label = "History kept" },
+        keepRow("raw", "Keep every scan for", 1, "Every scan's own point, for the 7-day numbers, gone per day and the 7D graph. "
+            .. "After this, a day's scans become one point. More days take more space."),
+        keepRow("day", "Keep a point a day for", 7, "One point a day (an average that keeps each scan's weight) until it's this old, then one a week, "
+            .. "and one per 4 weeks after a year. The 30-day numbers read these. Favorites keep a point a day forever."),
+        keepRow("forget", "Forget items not seen for", 30, "Items nobody has listed for this long leave Price History. Favorites never do.",
+            function(n) return n == 0 and "never" or days(n) end),
+        { type = "button", label = "Compact now", tip = "Roll up old history and forget long-gone items now, with the settings above. It also happens by itself after every scan and at login. Also /ek compact.",
+          func = function() ns.CompactNow() end },
+        { type = "text", label = ns.db and table.concat(ns.StatusLines(), "\n") or "" },
+        { type = "header", label = "Commands" },
+        { type = "text", label = "/ek   open Price History\n/ek item [link]   an item's page\n/ek fav [link]   add or remove a favorite\n"
+            .. "/ek status   how much history you have and its size\n/ek compact   compact now\n/ek tooltip on|off   lines in item tooltips" },
+    }
+end })

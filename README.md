@@ -1,12 +1,36 @@
 # King Maker
 
 One addon for **World of Warcraft: Forever** that does the lot: auction house prices and price history, crafting
-profits, the cheapest way to level a profession, your sales ledger, everything you own and your net worth, which mobs
-are worth farming, gathering spots, what quests are worth and rested XP. All of it in one window, one minimap button and
+profits, the cheapest way to level a profession, your sales ledger, profit and loss on every trade, everything you own
+and your net worth, which mobs
+are worth farming, one tracker and ledger for every farming session, gathering spots, crafting cooldowns on every
+character, shopping lists, what quests are worth and rested XP. All of it in one window, one minimap button and
 one set of auction house prices.
 
 **[Download the latest release](https://github.com/artificial-bones/King_Maker/releases/latest)** (`King_Maker.zip`),
 or install **King Maker** from CurseForge.
+
+## New in 2.8
+
+- **Profit & Loss.** A new page, first in the Gold group: what every trade actually made. Every purchase, loot and
+  vendor buy becomes a lot; every sale is matched to what it cost (oldest first, or newest first if you prefer), and
+  the cost follows your stock through crafting, disenchanting, mail to your alts, quest rewards and trades. `/pnl`.
+- **Home is an overview of your gold**: net worth, this week's results and charts, what needs your attention, where
+  your gold came from, the best things to do right now and every character at a glance.
+- **Guild bests**: the best gold per hour at each farm across your guild, on the Farming Ledger's Guild tab.
+- **Farm Tracker and Farming Ledger.** One floating tracker for mob farming and all gathering (mining, herbs,
+  skinning, fishing, pickpocketing, chests, clams and lockboxes), with Start, Pause, Stop and Split. Every session is
+  saved: the **Farming Ledger** page shows what each one made, gold per hour, a gold-over-time graph and where the
+  money came from. `/farm` or a key binding opens it. It replaces the old farm tracker and farming ledger boxes.
+- **Crafting Cooldowns.** Transmutes, Mooncloth and the Salt Shaker on every character: what's ready, what to make,
+  profit per craft and per week, and a red count by the page when one is ready on the character you're on. `/cdk`.
+- **Shopping, redone.** Deals first (green, biggest saving first), short prices that fit, cost to buy what you still
+  want, the 7-day trend, a detail pane with a price chart, and an auction house panel that looks items up, shows how
+  many are under your max and steps through the deals (every buy is still your click).
+- **Zoom the window**: drag the dots in its bottom-right corner (`/km size 120`, `/km size reset`).
+- **Quest Gold looks up quest gold by itself** the first time each character enters a zone, and ships with every
+  amount learned so far.
+- **Version check**: when a guildmate has a newer King Maker, you get one line in chat. `/km version`.
 
 ## New in 2.0: one addon, one window
 
@@ -36,8 +60,8 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 - **Left-click**: a drawer with **King Maker** on top, then every other addon's minimap button (Questie, DBM,
   Details, anything that uses LibDBIcon, and other buttons around the minimap's edge). Each one works exactly as
   before: clicks, right-clicks, tooltips and menus.
-- **Right-click**: quick actions: Deep Scan, Material Scan, Market Scan, the farm tracker, the farming ledger, any
-  page.
+- **Right-click**: quick actions: Deep Scan, Material Scan, Market Scan, the Farm Tracker, any page. A small number
+  on the crown means a page has something ready (a crafting cooldown, for one).
 - **Drag** it anywhere around the minimap. `/km button` hides it.
 
 ### For the best experience, also install Questie and QuestieDB
@@ -53,14 +77,18 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 
 | Group | Page | Slash | What it does |
 |---|---|---|---|
-| | Home | `/km` | Your numbers at a glance and every quick action |
+| | Home | `/km` | Everything at a glance: net worth, P&L, gold per hour and cooldowns up top, a 30-day chart, what needs your attention, where your gold came from, the best craft / farm / white item / quest zone right now, and your characters |
 | Auction House | Prices | `/sk` | Scans and today's prices |
 | Auction House | Price History | `/ek` | Every item's price and supply over time |
+| Auction House | Shopping | `/shop` | Lists of what to buy with your max price; deals first; buys at the auction house |
 | Auction House | Sales Ledger | `/mlk` | What you sold and bought, profit, buyers, what isn't selling |
 | Crafting | Crafting Profits | `/mk` | The most profitable crafts for your professions |
 | Crafting | Skill-ups | `/suk` | The cheapest way to level a profession |
+| Crafting | Cooldowns | `/cdk` | Transmutes, Mooncloth and salt on every character, and what they're worth |
+| Gold | Profit & Loss | `/pnl` | Every sale matched to what you paid; what you hold, at cost and at today's price |
 | Gold | Inventory | `/ik` | Everything on every character, and your net worth |
 | Gold | Quest Gold | `/qk` | What the level 48+ quests left are worth, zone by zone |
+| Farming | Farming Ledger | `/farm` | Every farming session: what it made, gold per hour, graphs |
 | Farming | Mob Farming, White Items | `/fk` | Which mobs and white items are worth farming |
 | Farming | Gathering | `/gt` | Mining, herb, fishing and treasure spots on your maps |
 | Characters | Rested XP | `/rk` | Rested XP on all your characters |
@@ -132,6 +160,27 @@ The cheapest way to level a profession: what to craft at every skill point, at t
 
 [Full guide](AddOns/King_Maker/Modules/Skillup#readme)
 
+### Profit & Loss (new in 2.7)
+
+What every trade actually made. Every auction house purchase, everything you loot, what you buy from vendors, what you
+craft, disenchant, get from quests or trade for becomes a lot; every sale uses lots up (oldest first, or newest first
+if you'd rather) and its profit is what it brought after the 5% cut minus what those units cost you.
+
+- **Crafting and disenchanting carry the cost** (2.8): a bandage costs what its linen cost you, disenchanted dust its
+  share of the item. Mail to your own characters is "in transit", never a gap; mail to anyone else is gone at once.
+- **Overview**: realized profit, what you'd make selling what you hold now, stock at cost, what's underwater, and
+  beside them (never in them) stock used or gone and sales no purchase covered. Realized per day, where it came from
+  (auction buys, farming, crafting, opening stock, vendors and trades) and every item.
+- **Trades**: each sale and the lots it used, each purchase and what used it (closed, part, open), what left unsold.
+  Search by name.
+- **Holdings**: what you hold at cost and at today's price, the underwater ones marked with the price that breaks
+  even, and what you listed on the auction house at.
+- **Farmed items count as free**, or at their value when looted. Day one reads your whole Sales Ledger, so your past
+  flips are matched straight away. A P&L column on the Sales Ledger, your cost in item tooltips, in Shopping and in
+  Inventory's Items tab.
+
+`/pnl`. [Full guide](AddOns/King_Maker/Modules/Profit#readme)
+
 ### Inventory (was Inventory King)
 
 Everything on every character (bags, bank, warband bank, mailbox, your auctions still up), what it's worth, and your
@@ -139,7 +188,8 @@ net worth.
 
 - **Overview**: net worth, gold on characters and in mailboxes, item value, 30 days of net worth, every character
   ranked.
-- **Items**: auction house categories, filter by character and place, search, sort any column, **Export**.
+- **Items**: auction house categories, filter by character and place, search, sort any column, **Export**; with
+  Profit & Loss, what each item cost you and what selling it now would make.
 - **Item tooltips** show how many you own and where.
 
 Log in on each character and open each bank once. [Full guide](AddOns/King_Maker/Modules/Inventory#readme)
@@ -150,8 +200,8 @@ Ranks mobs by the average gold a kill is worth: coin plus each drop's chance tim
 
 - **Drop rates from real kills**: every loot window you open is recorded.
 - **Best farms**, favorites, recent kills, this zone and every zone; **mob pages** with every drop's chance and value.
-- **Track on map** (with QuestieDB), **White Items** worth farming, and the **farm tracker**: a small box that
-  tallies kills, drops and coin, with a timer for gold per hour.
+- **Track on map** (with QuestieDB) and **White Items** worth farming. Kills and drops also go to the **Farm
+  Tracker** (below).
 
 [Full guide](AddOns/King_Maker/Modules/Farm#readme)
 
@@ -161,10 +211,27 @@ Marks mining, herb, fishing and treasure spots on your world map and minimap, an
 
 - **Auto-tags nodes when you harvest them**, or mark one by hand: `/gt mine thorium`.
 - **Markers** with size, opacity and per-type show/hide; filters like `/gt only thorium, mithril`.
-- **Loot stats per node**, a **farming ledger** with a timer, **profiles**, **guild sync** and share codes.
+- **Loot stats per node**, **profiles**, **guild sync** and share codes. What you gather goes to the **Farm
+  Tracker** (below), whose Prices tab lists raw materials by their auction price.
 - Works with **Leatrix Maps**.
 
 [Full guide](AddOns/King_Maker/Modules/Gather#readme)
+
+### Farm Tracker and Farming Ledger (new in 2.6)
+
+One tracker for everything you farm, and a ledger of every session.
+
+- **The Farm Tracker**: a small floating box with All, Mobs, Gathering and Prices tabs. Mob loot and coin, mining,
+  herbs, skinning, fishing, pickpocketing, chests and opened clams or lockboxes, valued at the auction house after
+  its cut (or a vendor, when that pays more). Start, Pause, Stop & save and Split; it pauses itself when you're idle
+  and can start itself when you begin farming. Its lists grow with what you loot; drag its corner dots for more rows
+  or wider names. Ctrl + mouse wheel zooms it.
+- **The Farming Ledger page**: every session with its gold per hour on a chart; click one for a gold-over-time graph,
+  where the money came from, and its items, mobs, gathering and money (repairs, vendor, quest gold) tables.
+- `/farm` opens or closes the tracker; Key Bindings > AddOns > King Maker has keys for it. `/fk mini` and
+  `/gt ledger` still work.
+
+[Full guide](AddOns/King_Maker/Modules/Tracker#readme)
 
 ### Quest Gold (was Quest King)
 
@@ -176,12 +243,38 @@ worth and where the most is left for the character you're on.
 - **Each quest's worth**: its gold, plus the best reward item at today's prices (auction house after the cut, or
   a vendor), plus any item it always gives, minus what the items you hand in would sell for.
 - **Done, in your log, ready, your level too low, or after another quest**, for the character you're logged in on.
-- **Forever's real quest gold** is learned as you quest (quest givers, your log, turn-ins), and **Ask the game**
-  fetches a whole zone's at once. Amounts not seen yet are estimates, marked ~.
+- **Forever's real quest gold** ships with King Maker (every amount learned so far), is looked up by itself the
+  first time each character enters a zone, and is learned as you quest (quest givers, your log, turn-ins). Amounts not
+  known yet are estimates, marked ~.
 
 Dungeon Quests is gone in 2.4.0: other addons do dungeon quests better.
 
 [Full guide](AddOns/King_Maker/Modules/Quest#readme)
+
+### Shopping
+
+Lists of what you want to buy with your own max price. The page puts deals first (green, biggest saving first) with
+what they cost, how far under your max they are and where the price is heading; the sidebar shows a gold count when
+something is under your max. At the auction house the Shopping panel looks items up, shows how many are listed under
+your max, and buys one click per step: Search all, then Buy, Confirm, Next deal. It never buys on its own, refuses
+anything over your max or your gold, and asks twice before spending a quarter of your gold. Lists from Oracle and
+Cooldowns show live and read-only. After a scan, one line in chat names what's newly under your max. `/shop`,
+`/shop deals`.
+
+[Full guide](AddOns/King_Maker/Modules/Shopping#readme)
+
+### Cooldowns (new in 2.6)
+
+Every profession cooldown on every character: the transmutes (one shared timer, Forever's Legionite included),
+Mooncloth and the Salt Shaker, plus any other long cooldown your profession window shows.
+
+- **What's ready**, with a red count by the page when one is ready on the character you're on (gold when only alts
+  have one), a chat line and a sound when one comes ready, and a login line for your alts.
+- **What it's worth**: the materials and product at today's prices, profit per craft and per week, the best
+  transmute right now, and what you own of the materials on every character.
+- **A live "Cooldown mats" shopping list** for the next week of cooldowns. `/cdk`.
+
+[Full guide](AddOns/King_Maker/Modules/Cooldowns#readme)
 
 ### Rested XP (was Rested King)
 

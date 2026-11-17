@@ -46,6 +46,20 @@ local function at(region, x, y)
     region:SetPoint("TOPLEFT", region.anchorTo or card.child, "TOPLEFT", x, y)
 end
 
+-- The verdict words, for the pills' and the Do column's tooltips.
+local function verdictLines(tt)
+    local function line(word, text)
+        local v = ns.VERDICTS[word]
+        local c = C[v[2]] or C.muted
+        tt:AddDoubleLine(v[1], text, c[1], c[2], c[3], 1, 1, 1)
+    end
+    line("craft", "craft it and sell it")
+    line("disenchant", "craft it, disenchant it, sell the mats")
+    line("sellraw", "farmed mats: selling them raw pays more")
+    line("skip", "bought mats: crafting it loses money")
+    line("noprice", "a material or the item has no price yet")
+end
+
 local function verdictPill(pill, word)
     local v = word and ns.VERDICTS[word]
     if not v then pill:SetCustom("-", C.dim); return end
@@ -86,20 +100,33 @@ local function buildCard(parent)
     card.mats = UI.Table(ch, {
         { key = "name", label = "Reagent", w = 100 },
         { key = "need", label = "Need", w = 32, justify = "RIGHT" },
-        { key = "have", label = "Have", w = 36, justify = "RIGHT" },
-        { key = "each", label = "Each", w = 60, justify = "RIGHT" },
+        { key = "have", label = "Have", w = 36, justify = "RIGHT",
+          tip = "How many this character has in bags and bank: green when it's enough. Grey +n: more on your other characters." },
+        { key = "each", label = "Each", w = 60, justify = "RIGHT",
+          tip = "One, at the cheaper of the lowest buyout and a vendor (v: the vendor's price)." },
         { key = "line", label = "Cost", w = 0, justify = "RIGHT" },
     }, 18, { icon = true, fontSize = 11, noSort = true })
     card.mats:SetWidth(CW)
     card.mats.emptyText = "No reagents."
 
     card.lines = {}
-    for i = 1, 8 do
+    for i = 1, 9 do
         local l = UI.Text(ch, 11, C.muted)
         l:SetWidth(150)
         local v = UI.Text(ch, 11, C.text, "RIGHT")
         v:SetWidth(CW - 150)
-        card.lines[i] = { l = l, v = v }
+        -- a hover area over the label; drawCard sets its tip for the line it shows
+        local hover = CreateFrame("Frame", nil, ch)
+        hover:SetAllPoints(l)
+        hover:EnableMouse(true)
+        hover:SetScript("OnEnter", function(self)
+            if not self.tip then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(self.tip, 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        card.lines[i] = { l = l, v = v, hover = hover }
     end
 
     card.vLabel1 = UI.Text(ch, 10, C.muted)
@@ -108,6 +135,16 @@ local function buildCard(parent)
     card.vLabel2 = UI.Text(ch, 10, C.muted)
     card.vLabel2:SetText("FARMED")
     card.vPill2 = UI.Pill(ch)
+    UI.Tip(card.vPill1, function(tt)
+        tt:AddLine("Bought mats", 1, 0.82, 0)
+        tt:AddLine("The verdict if you buy the materials, so they're a cost.", 1, 1, 1, true)
+        verdictLines(tt)
+    end)
+    UI.Tip(card.vPill2, function(tt)
+        tt:AddLine("Farmed mats", 1, 0.82, 0)
+        tt:AddLine("The verdict if you gathered the materials, so crafting has to beat selling them raw. Vendor reagents are still a cost.", 1, 1, 1, true)
+        verdictLines(tt)
+    end)
 
     -- sparkline: up to 30 bars drawn with the white texture
     card.spark = CreateFrame("Frame", nil, ch)
@@ -150,11 +187,17 @@ local function buildBest(parent)
     best.mode:SetWidth(160)
     best.crafts = UI.Table(f, {
         { key = "name", label = "Item", w = 130 },
-        { key = "gain", label = "Profit", w = 72, justify = "RIGHT" },
+        { key = "gain", label = "Profit", w = 72, justify = "RIGHT", tip = function(tt)
+            if ns.Mode() == "farm" then
+                tt:AddLine("One craft, farmed mats: the better of selling the craft or disenchanting it (after the 5% cut), minus vendor reagents, minus what the mats would fetch raw.", 1, 1, 1, true)
+            else
+                tt:AddLine("One craft, bought mats: the better of selling the craft or disenchanting it (after the 5% cut), minus the materials.", 1, 1, 1, true)
+            end
+        end },
         { key = "listed", label = "Listed", w = 44, justify = "RIGHT", tip = "How many are on the auction house now (your last scan)." },
         { key = "make", label = "Make", w = 36, justify = "RIGHT",
           tip = "How many to craft to sell: a quarter of what's listed, and no more than one day of units leaving the auction house. Nothing listed: make 1 to test the market." },
-        { key = "verdict", label = "Do", w = 0, justify = "RIGHT" },
+        { key = "verdict", label = "Do", w = 0, justify = "RIGHT", tip = function(tt) verdictLines(tt) end },
     }, 18, { icon = true, fontSize = 11, noSort = true, onClick = function(row) ns.Pin(row.spell) end })
     best.crafts:SetPoint("TOPLEFT", 10, -24)
     best.crafts:SetSize(CW, 20 + 18 * 10)
@@ -164,8 +207,8 @@ local function buildBest(parent)
     best.steps = UI.Table(f, {
         { key = "skill", label = "Skill", w = 58 },
         { key = "name", label = "Make", w = 140 },
-        { key = "crafts", label = "x", w = 34, justify = "RIGHT" },
-        { key = "cost", label = "Costs", w = 0, justify = "RIGHT" },
+        { key = "crafts", label = "x", w = 34, justify = "RIGHT", tip = "How many crafts, on average: yellow and green recipes don't always give a point." },
+        { key = "cost", label = "Costs", w = 0, justify = "RIGHT", tip = "What those crafts cost: the materials minus what you get back (Skill-ups' rules). Green +: they make money." },
     }, 18, { fontSize = 11, noSort = true, onClick = function(row) if row.spell then ns.Pin(row.spell) end end })
     best.steps:SetPoint("TOPLEFT", 10, -24 - (20 + 18 * 10) - 28)
     best.steps:SetSize(CW, 20 + 18 * 8)
@@ -326,17 +369,27 @@ local function drawCard()
     y = y - th - 8
 
     local rows = {}
-    local function add(l, v) rows[#rows + 1] = { l, v } end
+    local function add(l, v, tip) rows[#rows + 1] = { l, v, tip } end
     local mode = ns.Mode()
     add(c.crafts > 1 and ("Materials (x" .. c.crafts .. ")") or "Materials",
-        c.missingPrice and (UI.Hex(C.bad) .. "no price for " .. ns.ItemText(c.missingPrice) .. "|r") or KM.Money(c.costAll))
+        c.missingPrice and (UI.Hex(C.bad) .. "no price for " .. ns.ItemText(c.missingPrice) .. "|r") or KM.Money(c.costAll),
+        "The reagents for the crafts above, each at the cheaper of the lowest buyout and a vendor.")
     if c.item then
-        add("Sells for" .. (c.marketReal and " (market)" or ""), KM.Money(c.market) .. (c.made > 1 and UI.Hex(C.dim) .. " each|r" or ""))
-        add("Lowest  /  listed", KM.Money(c.lowest) .. UI.Hex(C.dim) .. "  /  " .. (c.listed and KM.Commas(c.listed) or "-") .. "|r")
-        add("30-day avg  /  7-day trend", KM.Money(c.avg30) .. "  /  " .. pct(c.trend7))
-        add("Profit each, after 5% cut", signed(c.profit))
-        if mode == "farm" and c.farm then add("Beats selling raw by", signed(c.farm.gain)) end
-        add("Disenchant", c.de and (KM.Money(c.de) .. UI.Hex(C.dim) .. "  (" .. short(c.deSale) .. " after cut)|r") or UI.Hex(C.dim) .. "-|r")
+        add("Sells for" .. (c.marketReal and " (market)" or ""), KM.Money(c.market) .. (c.made > 1 and UI.Hex(C.dim) .. " each|r" or ""),
+            "One of the item at its market price from a full scan (marked market), else its lowest buyout. Before the 5% cut.")
+        add("Lowest  /  listed", KM.Money(c.lowest) .. UI.Hex(C.dim) .. "  /  " .. (c.listed and KM.Commas(c.listed) or "-") .. "|r",
+            "The cheapest buyout at your last scan, and how many were listed.")
+        add("30-day avg  /  7-day trend", KM.Money(c.avg30) .. "  /  " .. pct(c.trend7),
+            "From Price History: the average market price over 30 days, and this week's average against last week's.")
+        add("Profit each, after 5% cut", signed(c.profit),
+            "One craft with bought mats: everything it makes at the lowest buyout, after the 5% cut, minus the materials. Green +: a profit.")
+        -- a crafting cooldown (Cooldowns module): ready or time left, and what it's worth a week at that pace
+        local cdText = c.spell and CooldownKing and CooldownKing.PanelText and KM.Safe(CooldownKing.PanelText, c.spell, c.profit)
+        if cdText then add("Cooldown", cdText, "The recipe has a cooldown: READY or how long is left, and what it makes in a week if you craft it every time it's ready.") end
+        if mode == "farm" and c.farm then add("Beats selling raw by", signed(c.farm.gain),
+            "Farmed mats: how much the better of crafting or disenchanting beats selling the materials raw, after vendor reagents.") end
+        add("Disenchant", c.de and (KM.Money(c.de) .. UI.Hex(C.dim) .. "  (" .. short(c.deSale) .. " after cut)|r") or UI.Hex(C.dim) .. "-|r",
+            "What disenchanting one is worth on average, and in grey what everything one craft makes fetches that way after the 5% cut.")
     else
         add("Sells for", UI.Hex(C.dim) .. "an enchant: nothing to sell|r")
     end
@@ -346,9 +399,10 @@ local function drawCard()
             at(l.l, 0, y); at(l.v, 150, y)
             l.l:SetText(r[1]); l.v:SetText(r[2])
             l.l:Show(); l.v:Show()
+            l.hover.tip = r[3]; l.hover:Show()
             y = y - 16
         else
-            l.l:Hide(); l.v:Hide()
+            l.l:Hide(); l.v:Hide(); l.hover:Hide()
         end
     end
     y = y - 6
@@ -435,7 +489,7 @@ local function drawBest()
         end
         cells.name:SetText(name)
         cells.crafts:SetText(tostring(row.crafts or ""))
-        cells.cost:SetText(short(row.cost))
+        cells.cost:SetText((row.cost and row.cost < 0) and (UI.Hex(C.good) .. "+|r" .. short(-row.cost)) or short(row.cost))
     end)
 end
 

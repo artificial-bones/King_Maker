@@ -4,18 +4,18 @@
 
 Gathering spots on your map, inside King Maker. Type `/gt mine thorium` while standing at a node and a Thorium icon appears at that spot on your world map and minimap; harvest a node and it's marked for you. It works with Leatrix Maps, since Leatrix draws on top of the normal world map, and the coordinates match the ones Leatrix shows.
 
-Since King Maker 2.0 it has no minimap button or settings panel of its own: its options are the **Farming > Gathering** page of the King Maker window, and the King Maker crown does its clicks. Your Gather King 1.x markers, profiles and ledger move in by themselves (`GatherKingDB` keeps its shape).
+Since King Maker 2.0 it has no minimap button or settings panel of its own: its options are the **Farming > Gathering** page of the King Maker window, and the King Maker crown does its clicks. Your Gather King 1.x markers and profiles move in by themselves (`GatherKingDB` keeps its shape). Since King Maker 2.6 the farming ledger box is King Maker's **Farm Tracker** (see below).
 
 ## Where things are
 
 | What | Where |
 |---|---|
 | Every option: profiles, node types, display, only these names, delete markers, export and import | King Maker window, **Farming > Gathering** (`/gt settings`, `/km gathering`) |
-| The farming ledger | A small floating box: the crown's **Farming ledger** quick action, the Gathering page, or `/gt ledger` |
+| What you gather, its value and gold per hour | King Maker's **Farm Tracker**: the crown's **Farm Tracker** quick action, the Gathering page tick, `/farm` or `/gt ledger` |
 | Switch profile | Right-click the King Maker crown: **Switch gathering profile** (a menu of your profiles) |
 | The most-used toggles | King Maker **Settings > Gather** |
 
-Prices come from King Maker's **Scanner** (Scanner King): worth per harvest on each marker and gold in the farming ledger. Markers are shared with guildmates running King Maker or Gather King.
+Prices come from King Maker's **Scanner** (Scanner King): worth per harvest on each marker, and gold in the Farm Tracker. Markers are shared with guildmates running King Maker or Gather King.
 
 ## Use
 
@@ -41,7 +41,7 @@ Stand at the node and type one of these:
 | `/gt minimap on` / `/gt minimap off` | Shows or hides markers on the minimap |
 | `/gt opacity 50` | How solid minimap markers are, 10 to 100%. (default 100%) |
 | `/gt size 20` | Changes marker size on the world map (8 to 32) |
-| `/gt ledger` | Shows or hides the farming ledger (`on`, `off`, `reset`, `timer` work too) |
+| `/gt ledger` | Shows or hides the Farm Tracker (`on`, `off`; `reset` saves the session to the Farming Ledger, `timer` pauses or resumes it) |
 | `/gt sync now` | Checks your markers against guildmates online right now and swaps what's missing |
 | `/gt button` | Says where the button went: the King Maker crown (`/km button`) |
 | `/gt help` | Lists every command |
@@ -98,31 +98,27 @@ Hovering a marker shows each item's price next to its drop rate, plus "Worth abo
 
 Prices you scanned with Gather King 1.x move into the Scanner automatically.
 
-### Farming ledger
+### Farm Tracker (was the farming ledger)
 
-A small box (drag it anywhere) lists everything you've mined, picked and fished
-since your last reset, with what it's worth at auction and a running total.
+Since King Maker 2.6 the farming ledger box is the **Farm Tracker**, one box for
+gathering and mob farming alike (its own README: `Modules/Tracker/README.md`):
 
-- **-/+** collapses it to just its title bar, which still shows your total
-  (or gold per hour once the timer has run).
-- **x** closes it; `/gt ledger`, the crown's **Farming ledger** or the Gathering page brings it back.
-- **Reset** clears it (and stops the timer).
-- **Start timer** is optional. While it runs, the box shows the elapsed time and
-  gold per hour for what you gathered with the timer on. Pause and resume it
-  any time. With the timer off, you just see totals.
-- Turn the box on or off on the Gathering page, or with `/gt ledger on|off`.
-  It remembers where you dragged it.
-  `/gt ledger reset` and `/gt ledger timer` work too.
-
-The **Mat Prices** tab at the top of the box lists raw farmable materials,
-most valuable first, with their latest price. Switch between **Mining**,
-**Herbs**, **Skins** (leather, hides and scales), **Cloth** and **Ench**
-(enchanting dusts, essences and shards). Mining and Herbs also include the
-Scarce materials, stones and seeds, plus anything your nodes have dropped, like gems. Scroll with the mouse wheel to see the
-rest. Click **Farming** to go back to your ledger.
-
-Values come from your last price scan (or Auctionator). Items with no price
-show as "no price" and count as zero. A running timer pauses when you log out.
+- It tallies mining, herbs, fishing, treasure and containers (and mobs, skinning
+  and pickpocketing) with their value and gold per hour. Every session is saved
+  to the **Farming Ledger** page (**Farming > Farming Ledger**), so **Reset**
+  became **Stop & save**: nothing is lost.
+- A session starts by itself after a few nodes or catches; the clock pauses when
+  you stop gathering and takes the idle minutes back off.
+- `/gt ledger` still shows and hides it (`on`, `off`); `/gt ledger reset` saves
+  the session and starts fresh; `/gt ledger timer` pauses or resumes it. `/farm`
+  does the same and more.
+- The **Mat Prices** tab is the tracker's **Prices** tab, unchanged: **Mining**,
+  **Herbs**, **Skins**, **Cloth** and **Ench**, most valuable first, scroll with
+  the mouse wheel. Prices there use King Maker's one value rule now (the auction
+  price after the 5% cut, or the vendor price if that's better), so they read a
+  little lower than the old raw lowest buyout.
+- Your old ledger moved into the Farming Ledger as one **Carried over** session,
+  and the tracker shows where your ledger box was.
 
 ### The Gathering page
 
@@ -130,7 +126,7 @@ Open it from the King Maker window (**Farming > Gathering**), the crown or `/gt 
 
 - **Summary** at the top: markers by type, zones, harvests recorded, and this zone.
 - **Profile:** which profile you're using, a button per profile to switch, a box to name a *New profile* (it starts as a copy of the current one) and *Delete this profile*.
-- **Node types:** for each type, whether it shows on the map and (for mining and herbs) whether it gets auto-tagged when you harvest it, plus the auto-tag master switch, guildmates' markers, guild sync and the ledger box.
+- **Node types:** for each type, whether it shows on the map and (for mining and herbs) whether it gets auto-tagged when you harvest it, plus the auto-tag master switch, guildmates' markers, guild sync and the Farm Tracker.
 - **Display:** marker size, minimap markers on or off, minimap marker opacity, hiding the ring you're standing at, and how long harvested nodes stay faded.
 - **Only show these names:** e.g. `thorium, mithril` to see just those nodes (press Enter).
 - **Delete markers:** delete all of one type, or everything, in this zone or in every zone. Each asks you to confirm.

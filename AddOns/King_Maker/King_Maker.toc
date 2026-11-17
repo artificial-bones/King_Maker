@@ -4,9 +4,9 @@
 ## Author: BearBones
 ## X-License: GPL-3.0
 ## X-Credits: Recipe data from ForeverDB.net
-## Version: 2.5.3
+## Version: 2.8.0
 ## IconTexture: Interface\Icons\INV_Crown_01
-## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB, ShoppingKingDB, ProfessionKingDB
+## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB, ShoppingKingDB, ProfessionKingDB, CooldownKingDB, TrackerKingDB, ProfitKingDB
 ## OptionalDeps: QuestieDB, TomTom, LibDBIcon-1.0, Auctionator
 
 Libs\LibStub\LibStub.lua
@@ -16,8 +16,12 @@ Libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
 
 Core\Core.lua
 Core\Theme.lua
+Core\Chart.lua
 Core\Shell.lua
 Core\Settings.lua
+Core\Items.lua
+Core\Loot.lua
+Core\Version.lua
 
 # Scanner
 Modules\Scanner\Core.lua
@@ -67,7 +71,6 @@ Modules\Farm\Map.lua
 Modules\Farm\Mob.lua
 Modules\Farm\White.lua
 Modules\Farm\UI.lua
-Modules\Farm\Session.lua
 
 # Gather
 Modules\Gather\Data.lua
@@ -77,8 +80,17 @@ Modules\Gather\Recorder.lua
 Modules\Gather\Sync.lua
 Modules\Gather\Button.lua
 Modules\Gather\Prices.lua
-Modules\Gather\Ledger.lua
 Modules\Gather\Options.lua
+
+# Tracker (after Farm and Gather: its InitDB moves their old tracker boxes in)
+Modules\Tracker\Core.lua
+Modules\Tracker\Session.lua
+Modules\Tracker\Sources.lua
+Modules\Tracker\HUD.lua
+Modules\Tracker\Page.lua
+Modules\Tracker\Detail.lua
+Modules\Tracker\Trends.lua
+Modules\Tracker\Guild.lua
 
 # Inventory
 Modules\Inventory\Core.lua
@@ -97,6 +109,7 @@ Modules\Mail\Alts.lua
 
 # Quest
 Modules\Quest\Data\Quests.lua
+Modules\Quest\Data\QuestGold.lua
 Modules\Quest\Core.lua
 Modules\Quest\Money.lua
 Modules\Quest\MoneyUI.lua
@@ -119,6 +132,20 @@ Modules\Shopping\Page.lua
 Modules\Profession\Core.lua
 Modules\Profession\Data.lua
 Modules\Profession\Panel.lua
+
+# Cooldowns
+Modules\Cooldowns\Data.lua
+Modules\Cooldowns\Core.lua
+Modules\Cooldowns\Money.lua
+Modules\Cooldowns\UI.lua
+
+# Profit
+Modules\Profit\Core.lua
+Modules\Profit\Replay.lua
+Modules\Profit\Recon.lua
+Modules\Profit\Journal.lua
+Modules\Profit\Moves.lua
+Modules\Profit\Page.lua
 
 Core\Home.lua
 Core\Boot.lua

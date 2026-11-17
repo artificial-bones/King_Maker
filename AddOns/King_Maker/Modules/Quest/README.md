@@ -17,7 +17,7 @@ The bag cleanup (red X on quest items, the "safe to delete" tooltip line, the `/
 ## Quest Gold
 
 **Left:** the zones with level 48+ quests for your faction and class, the zone with the most gold left first. Each
-shows quests left of total, and what they're worth.
+shows quests left of total, and what they're worth. The mouse wheel scrolls the list when it's longer than the window.
 
 **Right:** the zone you click. Its levels, how many quests are left and their worth, then every quest:
 
@@ -30,7 +30,7 @@ shows quests left of total, and what they're worth.
 | Hand in | What the items you hand in would sell for (only ones with an auction price; dropped quest items have none) |
 | Worth | Gold + reward items - hand-in |
 
-Click a quest for every reward choice, the hand-in items, the quest before it, and how the worth adds up.
+Long quest and item names are cut short in the table; hover a quest for them in full. Click a quest for every reward choice, the hand-in items, the quest before it, and how the worth adds up.
 
 ### Forever's real quest gold
 
@@ -38,7 +38,12 @@ Blizzard didn't publish the new amounts, so King Maker learns them:
 
 - whenever a quest giver offers or takes a quest, and for every quest in your log;
 - from what a turn-in actually paid;
-- with **Ask the game**, which asks the server for the zone's quests it doesn't know yet.
+- the first time each character enters a zone (and again after a King Maker update), it quietly asks the server for
+  that zone's quests it doesn't know yet. No button, never in combat; **Settings > Quest** turns it off.
+
+King Maker ships with every amount learned so far (`Data/QuestGold.lua`, refreshed each release), so most zones show
+real gold from the start. Forever pays the same gold at every level, so an amount learned on one character is right
+for all of them.
 
 Learned amounts count on every character. Until a quest's amount is known it's estimated: the typical amount seen
 for quests within two levels of it (once three are known), otherwise 1g, or Classic's amount when that's more.

@@ -45,6 +45,9 @@ local function initCore()
     if db.ui.button == nil then db.ui.button = true end
     db.ui.collapsed = db.ui.collapsed or {}
     db.ui.buttonAngle = db.ui.buttonAngle or 200
+    if db.ui.crownBadge == nil then db.ui.crownBadge = true end
+    if db.ui.versionNotice == nil then db.ui.versionNotice = true end -- a guildmate has a newer King Maker (Version.lua)
+    if type(db.ui.scale) ~= "number" then db.ui.scale = nil end      -- window zoom; clamped to the screen on use
     KM.db = db
 end
 
@@ -155,6 +158,21 @@ SlashCmdList.KINGMAKER = function(msg)
         u.button = rest == "on" or (rest ~= "off" and not u.button)
         KM.UpdateMinimapButton()
         KM.Print("minimap button " .. (u.button and "shown" or "hidden") .. ".")
+    elseif cmd == "size" or cmd == "zoom" or cmd == "scale" then
+        local n = tonumber((rest:gsub("%%", "")))
+        if rest:lower() == "reset" then
+            KM.ResetWindow()
+            KM.Print("window back to 100%, in the middle of the screen.")
+        elseif n then
+            KM.Print("window zoom " .. math.floor(KM.SetScale(n / 100) * 100 + 0.5) .. "%.")
+            KM.Refresh("settings")
+        else
+            KM.Print("window zoom " .. math.floor(KM.ClampScale(KingMakerDB.ui.scale or 1) * 100 + 0.5) .. "% ("
+                .. math.floor(KM.MinScale() * 100 + 0.5) .. "-" .. math.floor(KM.MaxScale() * 100 + 0.5)
+                .. "% on this screen). /km size 120, /km size reset.")
+        end
+    elseif cmd == "version" or cmd == "v" then
+        KM.Print(KM.VersionReport and KM.VersionReport() or ("version " .. KM.version .. "."))
     elseif cmd == "status" then
         KM.Print("version " .. KM.version .. ", " .. #KM.order .. " modules.")
         for _, line in ipairs(report) do KM.Print(line) end
@@ -164,7 +182,9 @@ SlashCmdList.KINGMAKER = function(msg)
         KM.Print("/km <page>   open a page (prices, history, crafting, skillups, ledger, inventory, questgold, mobs, gathering, rested)")
         KM.Print("/km settings   settings")
         KM.Print("/km button [on|off]   minimap button")
+        KM.Print("/km size [percent|reset]   window zoom; reset also puts it back in the middle")
         KM.Print("/km status   version and what was moved in from the old addons")
+        KM.Print("/km version   your version, and the newest a guildmate has")
     else
         local id = findPage(msg)
         if id then KM.Show(id) else KM.Print("no page called '" .. msg .. "'. /km help lists the commands.") end

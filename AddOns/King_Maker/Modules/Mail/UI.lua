@@ -111,11 +111,16 @@ end
 
 local function refreshSummary()
     local s = ns.Summary(since(), onlyChar())
-    tiles.profit:Set("Profit", ns.Money(s.profit), "income - spent - lost", s.profit < 0 and C.bad or (s.profit > 0 and C.good or C.text))
-    tiles.income:Set("Income", ns.Money(s.income), "after the AH cut")
-    tiles.cut:Set("AH cut", ns.Money(s.cut))
-    tiles.spent:Set("Spent", ns.Money(s.spent))
-    tiles.lost:Set("Deposits lost", ns.Money(s.lost))
+    local bw = ns.BoughtWorth(since(), onlyChar())
+    local function tone(v) return v < 0 and C.bad or (v > 0 and C.good or C.text) end
+    local net = s.profit + bw.worth
+    local diff = bw.worth - bw.held
+    tiles.net:Set("Net if sold now", ns.Money(net), "cash + what you still hold", tone(net))
+    tiles.profit:Set("Net cash", ns.Money(s.profit), "sales - purchases - deposits", tone(s.profit))
+    tiles.income:Set("Income", ns.Money(s.income), "after " .. ns.Money(s.cut) .. " AH cut")
+    tiles.spent:Set("Spent", ns.Money(s.spent), s.lost > 0 and (ns.Money(s.lost) .. " deposits lost") or "on the AH")
+    tiles.held:Set("Still holding", ns.Money(bw.worth), bw.held > 0 and ((diff >= 0 and "+" or "-") .. ns.Money(math.abs(diff)) .. " vs paid") or "nothing bought held",
+        bw.held > 0 and tone(diff) or C.text)
     tiles.sales:Set("Sales", tostring(s.sales), s.expired > 0 and (s.expired .. " expired") or nil)
     local bits = {}
     local b = ns.Buyers(since(), onlyChar()).rows[1]
@@ -126,6 +131,21 @@ local function refreshSummary()
     local w = InventoryKing and InventoryKing.NetWorth and InventoryKing.NetWorth()
     if w then table.insert(bits, "Net worth: " .. ns.Money(w.total)) end
     goldText:SetText(#bits > 0 and table.concat(bits, "     ") or grey("No sales in this period yet."))
+    -- Realized P&L for the period, from the Profit & Loss module (click: that page)
+    local pnl = ProfitKing and ProfitKing.Summary and KM.Safe(ProfitKing.Summary, since(), onlyChar())
+    if pnl and ns.pnlBtn then
+        local v = math.floor((pnl.realized or 0) + 0.5)
+        local c = v > 0 and C.good or (v < 0 and C.bad or C.muted)
+        ns.pnlBtn:SetLabel("Realized P&L, period: " .. UI.Hex(c) .. (v > 0 and "+" or (v < 0 and "-" or "")) .. KM.MoneyShort(math.abs(v), true) .. "|r")
+        ns.pnlBtn.summary = pnl
+        ns.pnlBtn:Show()
+    elseif ns.pnlBtn then
+        ns.pnlBtn:Hide()
+    end
+    -- the best-buyer line stops short of the P&L button
+    goldText:ClearAllPoints()
+    goldText:SetPoint("LEFT", goldText:GetParent(), "LEFT", 2, 0)
+    if ns.pnlBtn and ns.pnlBtn:IsShown() then goldText:SetPoint("RIGHT", ns.pnlBtn, "LEFT", -8, 0) end
 
     -- Profit per day: green up from the middle line, red down.
     local days = ns.Daily(DAYS, onlyChar())
@@ -174,8 +194,10 @@ local R = "RIGHT"
 
 local LIST_COLS = {
     sale = {
-        col("t", "Sold", 84), col("name", "Item", 170), col("n", "Qty", 36, R), col("each", "Each", 90, R),
-        col("g", "Price", 96, R), col("cut", "AH cut", 80, R), col("who", "Buyer", 96), col("strategy", "Strategy", 0),
+        col("t", "Sold", 80), col("name", "Item", 150), col("n", "Qty", 36, R), col("each", "Each", 80, R),
+        col("g", "Price", 86, R), col("cut", "AH cut", 64, R), col("who", "Buyer", 90),
+        col("pl", "P&L", 80, R, "What this sale made (Profit & Loss): what it brought after the cut, minus what those units cost you. \"no cost\": no purchase or loot covered it. \"-\": older than Profit & Loss's detail, or the module is off."),
+        col("strategy", "Strategy", 0),
     },
     buy = {
         col("t", "Bought", 84), col("name", "Item", 196), col("n", "Qty", 36, R), col("each", "Each", 96, R),
@@ -190,7 +212,8 @@ local LIST_COLS = {
         col("each", "Avg each", 78, R, "Average price per unit, before the cut."), col("income", "Income", 82, R),
         col("spent", "Spent", 74, R), col("expired", "Expired", 46, R),
         col("through", "Sell-thru", 52, R, "Of the auctions that ended, how many sold."),
-        col("market", "Market now", 78, R, "The Scanner module's market price today, per unit."), col("profit", "Profit", 0, R),
+        col("market", "Market now", 78, R, "The Scanner module's market price today, per unit."),
+        col("profit", "Profit", 0, R, "Income minus what you spent on it and deposits lost, in this period."),
     },
     unsold = {
         col("name", "Item", 140), col("strategy", "Strategy", 72), col("units", "Sold", 38, R, "Units sold."),
@@ -201,9 +224,9 @@ local LIST_COLS = {
         col("why", "Why", 0, nil, "Over market: you asked 10% or more over today's market price. Never sold: none sold in this period. Slow: under half sold."),
     },
     buyers = {
-        col("who", "Buyer", 110), col("mails", "Sales", 44, R, "How many of your auctions they bought (one mail each)."),
+        col("who", "Buyer", 110, nil, "Gold name: a regular, " .. ns.REGULAR .. " or more in this period."), col("mails", "Sales", 44, R, "How many of your auctions they bought (one mail each)."),
         col("units", "Units", 46, R), col("gold", "Paid you", 92, R, "What they paid, before the auction house cut."),
-        col("each", "Avg sale", 84, R), col("share", "Share", 48, R, "Of your sales in this period."),
+        col("each", "Avg sale", 84, R, "What they paid per auction, before the cut."), col("share", "Share", 48, R, "Of your sales in this period."),
         col("kinds", "Items", 42, R, "How many different items."), col("name", "Favourite", 170, nil, "What they've spent the most on."),
         col("last", "Last", 0),
     },
@@ -220,6 +243,7 @@ local function sortValue(page2, e, key)
         if key == "each" then return e.g and e.g / math.max(e.n or 1, 1) or nil end
         if key == "strategy" then return ns.strategyOf[e] or "" end
         if key == "n" then return e.n or 1 end
+        if key == "pl" then local x = ns.SalePL(e); return x and x.pl end
     end
     if key == "name" or key == "strategy" or key == "who" or key == "why" or key == "k" then return e[key] or "" end
     return e[key]
@@ -282,6 +306,19 @@ end
 
 function ns.CurrentList() return current end
 
+-- A sale's P&L from the Profit & Loss module (nil: no module, or the sale isn't in its detail). Cached per redraw.
+local plCache = setmetatable({}, { __mode = "k" })
+function ns.SalePL(e)
+    if not (e and e.k == "sale" and ProfitKing and ProfitKing.ForMail) then return nil end
+    local c = plCache[e]
+    if c == nil then
+        c = KM.Safe(ProfitKing.ForMail, e) or false
+        plCache[e] = c
+    end
+    return c or nil
+end
+function ns.ClearPL() wipe(plCache) end
+
 local function cell(e, key)
     if key == "t" then return when(e.t) end
     if key == "name" and tab ~= "buyers" then return ns.ItemText(e.item, e.name) end
@@ -318,6 +355,15 @@ local function cell(e, key)
         return v and ns.Money(v) or grey("-")
     end
     if key == "cut" then return e.cut and ns.Money(e.cut) or grey("-") end
+    if key == "pl" then
+        local x = ns.SalePL(e)
+        if not x then return grey("-") end
+        if not x.pl then return grey("no cost") end
+        local v = math.floor(x.pl + 0.5)
+        local body = KM.MoneyShort(math.abs(v), true)
+        if v == 0 then return UI.Hex(C.muted) .. body .. "|r" end
+        return (v > 0 and (UI.Hex(C.good) .. "+") or (UI.Hex(C.bad) .. "-")) .. body .. "|r"
+    end
     if key == "dep" then return e.dep and ns.Money(e.dep) or grey("unknown") end
     if key == "who" then return e.who or grey("-") end
     if key == "k" then return e.k == "cancelled" and "cancelled" or "expired" end
@@ -364,6 +410,7 @@ local function listFooter()
 end
 
 local function refreshList()
+    if ns.ClearPL then ns.ClearPL() end
     build()
     for id, t in pairs(tables) do t:SetShown(id == tab) end
     local t = tables[tab]
@@ -417,6 +464,22 @@ local function rowEnter(r)
     if e.item and GameTooltip.SetItemByID then pcall(GameTooltip.SetItemByID, GameTooltip, e.item)
     else GameTooltip:AddLine(ns.ItemText(e.item, e.name)) end
     if tab == "unsold" then unsoldTip(e) end
+    if tab == "sale" then
+        local x = ns.SalePL(e)
+        if x then
+            GameTooltip:AddLine(" ")
+            if x.pl then
+                GameTooltip:AddDoubleLine("P&L", KM.Money(x.pl) .. (x.roi and string.format("  (%+.0f%%)", x.roi * 100) or ""), 1, 0.82, 0, 1, 1, 1)
+            else
+                GameTooltip:AddLine("No purchase or loot covered this sale: cost unknown.", 0.7, 0.7, 0.7, true)
+            end
+            for i, line in ipairs(x.lines or {}) do
+                if i > 5 then break end
+                GameTooltip:AddLine(line, 0.8, 0.8, 0.8, true)
+            end
+            if (x.unknownQ or 0) > 0 and x.pl then GameTooltip:AddLine(x.unknownQ .. " of them had no cost known.", 0.7, 0.7, 0.7, true) end
+        end
+    end
     if tab == "sale" and e.who and buyerCount[e.who] then
         local n = buyerCount[e.who]
         GameTooltip:AddLine(" ")
@@ -485,11 +548,47 @@ local function buildSummary(parent)
     summaryView:SetPoint("TOPLEFT", 0, -64)
     summaryView:SetPoint("BOTTOMRIGHT", 0, 20)
     tiles = {}
-    for i, key in ipairs({ "profit", "income", "cut", "spent", "lost", "sales" }) do
+    for i, key in ipairs({ "net", "profit", "income", "spent", "held", "sales" }) do
         local t = UI.Tile(summaryView, TILE_W, TILE_H)
         t:SetPoint("TOPLEFT", (i - 1) * (TILE_W + 10), 0)
         tiles[key] = t
     end
+    tiles.net:SetTip("Where you'd stand if you sold everything you bought in this period and still hold: net cash plus what those items fetch today (market price after the 5% cut). A week of stocking up no longer reads as a loss: only a drop in price does.")
+    tiles.profit:SetTip("Gold in from auction sales minus gold out on auction purchases and lost deposits. Mats you bought and haven't sold yet count against it. Gold mailed between your characters isn't counted.")
+    tiles.income:SetTip(function(tt)
+        local s = ns.Summary(since(), onlyChar())
+        tt:AddLine("What your auctions sold for in this period, after the auction house's 5% cut.", 1, 1, 1, true)
+        tt:AddDoubleLine("Sold for", ns.Money(s.gross), 0.8, 0.8, 0.8, 1, 1, 1)
+        tt:AddDoubleLine("Auction house cut", "-" .. ns.Money(s.cut), 0.8, 0.8, 0.8, 1, 1, 1)
+        tt:AddDoubleLine("Income", ns.Money(s.income), 0.8, 0.8, 0.8, 1, 1, 1)
+    end)
+    tiles.spent:SetTip(function(tt)
+        local s = ns.Summary(since(), onlyChar())
+        tt:AddLine("Gold you paid for auction house purchases in this period. Deposits lost on auctions that came back are counted apart.", 1, 1, 1, true)
+        tt:AddDoubleLine("Purchases (" .. s.bought .. " bought)", ns.Money(s.spent), 0.8, 0.8, 0.8, 1, 1, 1)
+        tt:AddDoubleLine("Deposits lost", ns.Money(s.lost), 0.8, 0.8, 0.8, 1, 1, 1)
+    end)
+    tiles.sales:SetTip(function(tt)
+        local s = ns.Summary(since(), onlyChar())
+        local ended = s.sales + s.expired
+        tt:AddLine("Auctions that sold in this period (one mail each), and the ones that came back expired or cancelled.", 1, 1, 1, true)
+        tt:AddDoubleLine("Sold", s.sales .. " (" .. s.units .. " units)", 0.8, 0.8, 0.8, 1, 1, 1)
+        tt:AddDoubleLine("Came back", tostring(s.expired), 0.8, 0.8, 0.8, 1, 1, 1)
+        if ended > 0 then tt:AddDoubleLine("Sell-through", string.format("%.0f%%", s.sales / ended * 100), 0.8, 0.8, 0.8, 1, 1, 1) end
+    end)
+    tiles.held:SetTip(function(tt)
+        local bw = ns.BoughtWorth(since(), onlyChar())
+        tt:AddLine("What you bought in this period and still have (counted on your characters by the Inventory module, newest purchases first), at today's market price after the cut.", 1, 1, 1, true)
+        tt:AddDoubleLine("Cost of what you hold", ns.Money(bw.held), 0.8, 0.8, 0.8, 1, 1, 1)
+        tt:AddDoubleLine("Worth now", ns.Money(bw.worth), 0.8, 0.8, 0.8, 1, 1, 1)
+        tt:AddDoubleLine("Used, crafted, sold or mailed away", ns.Money(bw.gone), 0.8, 0.8, 0.8, 1, 1, 1)
+        if bw.unpriced > 0 then tt:AddLine(bw.unpriced .. " held with no market price: counted at what you paid.", 0.7, 0.7, 0.7, true) end
+        if bw.fromPnL then
+            tt:AddLine("From Profit & Loss: the units of these purchases still in your lots (sales and stock used up take them, by its method).", 0.6, 0.6, 0.6, true)
+        else
+            tt:AddLine("An estimate: the newest purchases that add up to what you own. Turn on the Profit & Loss module for real lots.", 0.6, 0.6, 0.6, true)
+        end
+    end)
 
     local goldHolder = CreateFrame("Button", nil, summaryView)
     goldHolder:SetPoint("TOPLEFT", 0, -(TILE_H + 8))
@@ -519,12 +618,27 @@ local function buildSummary(parent)
     end)
     goldHolder:SetScript("OnClick", function() ns.SelectTab("buyers") end)
     goldHolder:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- the accrual view beside the cash one: realized P&L for the period (Profit & Loss module)
+    local pnlBtn = UI.Button(summaryView, "", 220, 20, function() KM.Show("profit") end, "ghost")
+    pnlBtn:SetPoint("TOPRIGHT", summaryView, "TOPRIGHT", 0, -(TILE_H + 8))
+    pnlBtn.label:SetJustifyH("RIGHT")
+    pnlBtn:SetFrameLevel(goldHolder:GetFrameLevel() + 2)
+    UI.Tip(pnlBtn, function(tt)
+        local p = pnlBtn.summary or {}
+        tt:AddLine("Realized P&L")
+        tt:AddLine("Profit, not cash: what your sales in this period brought after the cut, minus what those units cost you (whenever you bought them), minus deposits lost. Stock you bought and still hold isn't a loss here.", 1, 1, 1, true)
+        tt:AddDoubleLine("Realized", ns.Money(p.realized), 0.8, 0.8, 0.8, 1, 1, 1)
+        tt:AddDoubleLine("Sales", tostring(p.sales or 0), 0.8, 0.8, 0.8, 1, 1, 1)
+        tt:AddLine("Click: the Profit & Loss page.", 0.6, 0.6, 0.6)
+    end)
+    pnlBtn:Hide()
+    ns.pnlBtn = pnlBtn
 
     local chart = UI.Panel(summaryView, C.panel)
     chart:SetPoint("TOPLEFT", 0, -(TILE_H + 34))
     chart:SetPoint("RIGHT", summaryView, "RIGHT", 0, 0)
     chart:SetHeight(CHART_H)
-    local head = UI.Heading(chart, "Profit per day, last " .. DAYS .. " days")
+    local head = UI.Heading(chart, "Net cash per day, last " .. DAYS .. " days")
     head:SetPoint("TOPLEFT", 12, -10)
     local mid = CreateFrame("Frame", nil, chart)
     mid:SetPoint("TOPLEFT", 12, -26)
@@ -550,7 +664,7 @@ local function buildSummary(parent)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:AddLine(self.day.day)
             GameTooltip:AddDoubleLine("Income", ns.Money(self.day.income), 1, 1, 1, 1, 1, 1)
-            GameTooltip:AddDoubleLine("Profit", ns.Money(self.day.profit), 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("Net cash", ns.Money(self.day.profit), 1, 1, 1, 1, 1, 1)
             GameTooltip:Show()
         end)
         b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -567,7 +681,7 @@ local function buildSummary(parent)
         { key = "income", label = "Income", w = 110, justify = R, tip = "What it sold for, minus the auction house cut.", sort = function(r) return r.income end },
         { key = "spent", label = "Spent", w = 100, justify = R, tip = "What you bought on the auction house.", sort = function(r) return r.spent end },
         { key = "lost", label = "Deposits lost", w = 100, justify = R, tip = "Deposits on auctions that expired or were cancelled.", sort = function(r) return r.lost end },
-        { key = "profit", label = "Profit", w = 110, justify = R, sort = function(r) return r.profit end },
+        { key = "profit", label = "Profit", w = 110, justify = R, tip = "Income minus spent and deposits lost, for that strategy in this period. Flips pair a purchase with its sale (within 30 days), so their profit is the margin.", sort = function(r) return r.profit end },
         { key = "through", label = "Sell-through", w = 0, justify = R, tip = "Of the auctions that ended, how many sold.", sort = function(r) return through(r) end },
     }
     stratTable = UI.Table(summaryView, cols, 22, {
@@ -721,18 +835,88 @@ end
 KM.RegisterQuickAction({ id = "ledger", label = "Sales Ledger", order = 15, func = function() ns.Toggle(true) end })
 
 KM.RegisterTooltip(function(tt)
-    if not ns.db then return end
+    if not ns.db or (ProfitKing and ProfitKing.IsTracking and ProfitKing.IsTracking()) then return end -- P&L's line replaces it
     local week = ns.Summary(ns.Now() - 7 * 86400)
     tt:AddDoubleLine("Profit, last 7 days", ns.Money(week.profit), 1, 1, 1, 1, 1, 1)
 end)
 
-KM.RegisterHomeTile({ id = "ledger-profit", order = 20, get = function()
-    if not ns.db then return nil end
+-- With the Profit & Loss module, Home's profit tile is its realized P&L (its own tile); this cash one steps aside.
+local function pnlTracks() return ProfitKing and ProfitKing.IsTracking and ProfitKing.IsTracking() end
+
+KM.RegisterHomeTile({ id = "ledger-profit", order = 20, page = "ledger", spark = function()
+    if not ns.db or pnlTracks() then return nil end
+    local v = {}
+    for _, d in ipairs(ns.Daily(30)) do v[#v + 1] = d.profit end
+    return v, C.good
+end, get = function()
+    if not ns.db or (ProfitKing and ProfitKing.IsTracking and ProfitKing.IsTracking()) then return nil end
     local week = ns.Summary(ns.Now() - 7 * 86400)
     return "Profit, 7 days", ns.Money(week.profit), week.sales .. " sale" .. (week.sales == 1 and "" or "s")
         .. (week.lost > 0 and (", " .. ns.Money(week.lost) .. " deposits lost") or ""),
         week.profit < 0 and C.bad or (week.profit > 0 and C.good or C.text)
+end, tip = function(tt)
+    local week = ns.Summary(ns.Now() - 7 * 86400)
+    tt:AddLine("Auction gold in minus auction gold out over the last 7 days, on all your characters.", 1, 1, 1, true)
+    tt:AddDoubleLine("Sales, after the 5% cut", ns.Money(week.income), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Bought on the auction house", ns.Money(-week.spent), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Deposits lost on expired auctions", ns.Money(-week.lost), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddLine("Green: up. Red: you spent more than you made. Open the Sales Ledger for any period.", 0.7, 0.7, 0.7, true)
 end })
+
+-- Home: auction sales by strategy (where your gold came from), items that don't sell, and the daily chart while the
+-- Profit & Loss module isn't tracking (its realized chart replaces this cash one).
+KM.RegisterHomeCard({ kind = "income", id = "ledger-sales", order = 10, get = function(since)
+    if not ns.db then return nil end
+    local out = {}
+    for _, r in ipairs(ns.Summary(since).strategies) do
+        if r.income > 0 then
+            out[#out + 1] = { label = tostring(r.key), value = r.income, page = "ledger",
+                tip = "Auction house sales under the strategy " .. tostring(r.key) .. ", after the 5% cut: " .. r.sales
+                    .. " sale" .. (r.sales == 1 and "" or "s") .. ", " .. KM.Money(r.income) .. "." }
+        end
+    end
+    return out
+end })
+
+KM.RegisterHomeCard({ kind = "attention", id = "ledger-unsold", order = 40, get = function()
+    if not ns.db then return nil end
+    local n, lost, names = 0, 0, {}
+    for _, r in ipairs(ns.NotSelling(ns.Now() - 30 * 86400)) do
+        if r.why and (r.held == nil or r.held > 0) then
+            n, lost = n + 1, lost + (r.lost or 0)
+            if #names < 5 then names[#names + 1] = (r.name or tostring(r.key)) .. (r.why == "over" and " (priced over the market)" or (r.why == "never" and " (never sold)" or " (sells slowly)")) end
+        end
+    end
+    if n == 0 then return nil end
+    return { { text = n .. " item" .. (n == 1 and "" or "s") .. " not selling", color = C.warn, value = lost > 0 and ("-" .. KM.MoneyShort(lost, true)) or nil,
+        page = "ledger", tab = function() ns.SelectTab("unsold") end,
+        tip = function(tt)
+            tt:AddLine("Auctions that keep expiring in the last 30 days (" .. KM.Money(lost) .. " in deposits lost):", 1, 1, 1, true)
+            for _, s in ipairs(names) do tt:AddLine(s, 0.8, 0.8, 0.8, true) end
+            tt:AddLine("Click for the Sales Ledger's Not selling tab.", 0.6, 0.6, 0.6)
+        end } }
+end })
+
+KM.RegisterHomeCard({ kind = "chart", id = "ledger-daily", order = 21, label = "Daily profit", title = "Auction profit per day, 30 days",
+    emptyText = "No auction mail in the last 30 days yet: open your mailbox after something sells.",
+    shown = function() return ns.db ~= nil and not pnlTracks() end,
+    get = function()
+        local pts, any = {}, false
+        for _, d in ipairs(ns.Daily(30)) do
+            if d.profit ~= 0 or d.income ~= 0 then any = true end
+            pts[#pts + 1] = { d.d * 86400 + 43200, d.profit, d.profit < 0 and C.bad or C.good, d }
+        end
+        if not any then return nil end
+        return { series = { { pts = pts, style = "bars", agg = "none" } }, zero = true,
+            format = function(v) return KM.MoneyShort(v, true) end,
+            xformat = function(x) return date and date("%d %b", x) or tostring(x) end,
+            hover = function(x, p)
+                local d = p and p[4] or {}
+                GameTooltip:AddLine(date and date("%d %b", x) or "", C.accent[1], C.accent[2], C.accent[3])
+                GameTooltip:AddDoubleLine("Profit", KM.Money(d.profit), 1, 1, 1, 1, 1, 1)
+                GameTooltip:AddDoubleLine("Sales after the cut", KM.Money(d.income), 0.8, 0.8, 0.8, 1, 1, 1)
+            end }
+    end })
 
 KM.RegisterSettings({ id = "mail", label = "Sales Ledger", order = 15, rows = {
     { type = "header", label = "Sales Ledger" },
@@ -744,7 +928,7 @@ KM.RegisterSettings({ id = "mail", label = "Sales Ledger", order = 15, rows = {
     { type = "check", label = "My characters beside the mailbox", tip = "A list of your other characters next to the mailbox: click one to put its name in Send Mail's To: box.",
       get = function() return ns.db.ui.alts end, set = function(v) ns.SetAlts(v) end },
     { type = "button", label = "Export the ledger", func = function() ns.Export() end, tip = "The whole ledger as comma-separated text, for a spreadsheet." },
-    { type = "button", label = "Clear the whole ledger", func = function() StaticPopup_Show("MAILKING_RESET") end, tip = "Asks first. Your strategies stay." },
+    { type = "button", label = "Clear the whole ledger", func = function() StaticPopup_Show("MAILKING_RESET") end, tip = "Deletes every recorded sale, purchase and expired auction, for all your characters; it can't be undone. Asks first. Your strategies stay." },
     { type = "header", label = "Commands" },
     { type = "text", label = "/mlk   open the Sales Ledger\n/mlk status   what's been recorded\n/mlk export   the ledger for a spreadsheet\n/mlk alts   your characters beside the mailbox\n/mlk reset yes   clear the whole ledger" },
 } })

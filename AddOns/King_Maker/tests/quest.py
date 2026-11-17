@@ -1,5 +1,5 @@
 # Quest (was Quest King): /qk and Quest Gold (the 48+ quests' worth per zone for this
-# character, learning Forever's real quest gold, Ask the game) and its page.
+# character, learning Forever's real quest gold, the lookup when you enter a zone) and its page.
 import os, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from km import fresh, last, outputs
 
@@ -82,7 +82,7 @@ L.execute('QNS.QUESTS[9007] = { 1422, 59, 50, "", 0, {}, {}, 0, "", {}, 0, "Unse
 assert L.eval("(QNS.QuestGold(9007))") == 21000, "median of 18000, 21000, 30000 (levels 57-61)"
 assert L.eval("(QNS.QuestGold(9003))") == 10000, "level 52: one real amount nearby is too few, so 1g"
 
-# Ask the game: one request per unknown quest in the zone, answers fill the gold in
+# asking the server: one request per unknown quest in the zone, answers fill the gold in
 L.execute("""
 ASKED = {}
 C_QuestLog.RequestLoadQuestByID = function(q) ASKED[#ASKED + 1] = q end
@@ -105,6 +105,42 @@ tan = [z for z in ns.Zones().values() if z.name == "Tanaris"][0]
 assert tan.total == before - 1 and tan.missing == 1, (before, tan.total, tan.missing)
 # seeing it for real later (picked up, gold shown) brings it back
 ns.LearnGold(9008, 20000); assert L.eval("QuestKingDB.noData[9008]") is None
+# entering a zone: one lookup per character and zone (per King Maker version), never in combat, nothing printed
+L.execute("ASKED = {}; QuestKingDB.gold[9003] = nil; QuestKingDB.asked = {}; PLAYER.map = 1446")
+assert ns.AutoAsk() >= 1 and (L.execute("RUN_TIMERS()") or L.eval("ASKED[1]")) == 9003
+assert ns.AutoAsk() == 0, "the second visit doesn't ask again"
+L.execute("FIRE('QUEST_DATA_LOAD_RESULT', 9003, true)")
+# a new King Maker version asks again; the entering-world event does it by itself after the map settles
+L.execute("for _, t in pairs(QuestKingDB.asked) do for m in pairs(t) do t[m] = 'old' end end; ASKED = {}; QuestKingDB.gold[9003] = nil")
+L.execute("FIRE('ZONE_CHANGED_NEW_AREA'); RUN_TIMERS()")
+assert L.eval("ASKED[1]") == 9003, "entering the zone after an update asks again"
+L.execute("FIRE('QUEST_DATA_LOAD_RESULT', 9003, true)")
+# in combat: put off until combat ends
+L.execute("QuestKingDB.asked = {}; ASKED = {}; QuestKingDB.gold[9003] = nil; InCombatLockdown = function() return true end")
+assert ns.AutoAsk() == 0 and L.eval("ASKED[1]") is None
+L.execute("InCombatLockdown = function() return false end; FIRE('PLAYER_REGEN_ENABLED'); RUN_TIMERS()")
+assert L.eval("ASKED[1]") == 9003, "asked once combat ended"
+L.execute("FIRE('QUEST_DATA_LOAD_RESULT', 9003, true)")
+# a sub-map (a town in the zone) climbs to its zone; the setting turns it off
+L.execute("QuestKingDB.asked = {}; ASKED = {}; QuestKingDB.gold[9003] = nil; PLAYER.map = 99901")
+L.execute("local get = C_Map.GetMapInfo; C_Map.GetMapInfo = function(m) if m == 99901 then return { mapID = m, name = 'Gadgetzan', parentMapID = 1446 } end return get and get(m) end")
+assert ns.AutoAsk() >= 1 and (L.execute("RUN_TIMERS()") or L.eval("ASKED[1]")) == 9003, "Gadgetzan counts as Tanaris"
+L.execute("FIRE('QUEST_DATA_LOAD_RESULT', 9003, true)")
+L.execute("QuestKingDB.asked = {}; ASKED = {}; QuestKingDB.gold[9003] = nil; QuestKingDB.autoAsk = false")
+assert ns.AutoAsk() == 0 and L.eval("ASKED[1]") is None, "setting off: no lookup"
+L.execute("QuestKingDB.autoAsk = true; QuestKingDB.gold[9003] = 12000; PLAYER.map = 1423")
+# the amounts shipped with King Maker count as real; one learned in game wins; shipped "not in Forever" too
+L.execute("QNS.QUESTS[9010] = { 1446, 55, 50, '', 0, {}, {}, 0, '', {}, 0, 'Shipped' }; QNS.QUEST_GOLD[9010] = 15000")
+g, guess = L.eval("QNS.QuestGold(9010)")
+assert g == 15000 and not guess, (g, guess)
+L.execute("ASKED = {}; QuestKingDB.asked = {}; PLAYER.map = 1446"); ns.AutoAsk(); L.execute("RUN_TIMERS()")
+assert 9010 not in list(L.eval("ASKED").values()), "a shipped amount isn't asked for"
+ns.LearnGold(9010, 16000); assert L.eval("(QNS.QuestGold(9010))") == 16000
+L.execute("QNS.QUESTS[9011] = { 1446, 55, 50, '', 0, {}, {}, 0, '', {}, 0, 'Shipped none' }; QNS.QUEST_NODATA[9011] = true")
+assert ns.QuestState(9011) == "nodata"
+ns.LearnGold(9011, 9000); assert ns.QuestState(9011) != "nodata", "learned for real: back in"
+assert L.eval("QNS.QUEST_GOLD ~= nil and next(QNS.QUEST_GOLD) ~= nil"), "the shipped amounts load"
+L.execute("QNS.QUESTS[9010], QNS.QUESTS[9011], QuestKingDB.gold[9010], QuestKingDB.gold[9011] = nil, nil, nil, nil; PLAYER.map = 1423")
 print("QUEST GOLD LOGIC OK")
 
 
@@ -116,6 +152,7 @@ def texts():
 
 qk("gold")
 assert KM.IsShown("questgold") and not KM.errorShown, last(L)
+assert L.eval('BTN("Ask the game")') is None, "no Ask the game button: it looks up by itself"
 ns.goldTable.SetHeight(ns.goldTable, 600); ns.goldTable.Layout(ns.goldTable)
 assert any("Western Plaguelands" in x for x in texts()), "opens on the zone with the most left"
 L.execute('for _, f in ipairs(FRAMES) do if rawget(f, "zone") and f.zone.name == "Tanaris" then f:Click() end end')
@@ -128,6 +165,42 @@ L.execute("QuestKingDB.qgHideDone = true"); ns.RefreshQuestGold()
 rows = ns.goldTable.data
 assert [rows[i].id for i in range(1, len(rows) + 1)] == [9008, 9003, 9009] and not KM.errorShown, last(L)  # Sand Quest (done) hidden; most worth first
 L.execute("QuestKingDB.qgHideDone = false")
+
+# The columns never overlap and fit the pane (the reward used to be a middle w = 0 column under the money columns).
+cols = ns.goldCols
+x = 8
+for i in range(1, len(cols) + 1):
+    c = cols[i]
+    assert c.w > 0 and c.x == x, (c.key, c.w, c.x, x)
+    x += c.w
+assert x <= ns.goldPaneW, (x, ns.goldPaneW)
+
+# The zone list: as many rows as the side panel holds (557 in the window), the wheel scrolls the rest; nothing is
+# drawn below the panel.
+L.execute("""
+QNS._Zones = QNS.Zones
+QNS.Zones = function()
+  local t = {}
+  for i = 1, 40 do t[i] = { map = 5000 + i, name = "Zone " .. i, left = 1, total = 2, worth = 50000 - i, gold = 100, lo = 50, hi = 52,
+    guesses = 0, missing = 0, quests = {} } end
+  return t
+end""")
+side = ns.goldSide
+L.globals().QSIDE = side
+L.execute("RESIZE(QSIDE, 230, 557)"); ns.RefreshQuestGold()
+assert ns.QuestZoneRows() == 32, ns.QuestZoneRows()
+shown = L.eval("(function() local n, low = 0, 0 for _, f in ipairs(FRAMES) do if rawget(f, 'zone') and f:IsShown() and f.parent == QSIDE then n = n + 1; low = math.max(low, -f.point[3] + f.h) end end return n, low end)()")
+assert shown[0] == 32 and shown[1] <= 557, shown
+assert any(x == "|cffffffffZone 1|r" for x in [str(f) for f in L.eval("(function() local t = {} for _, f in ipairs(FRAMES) do if rawget(f, 'zone') then t[#t+1] = f.label.text end end return t end)()").values()])
+L.execute("QSIDE:RunScript('OnMouseWheel', -1); QSIDE:RunScript('OnMouseWheel', -1); QSIDE:RunScript('OnMouseWheel', -1)")
+names = [f for f in L.eval("(function() local t = {} for _, f in ipairs(FRAMES) do if rawget(f, 'zone') and f:IsShown() then t[#t+1] = f.zone.name end end return t end)()").values()]
+assert names[0] == "Zone 9" and names[-1] == "Zone 40" and len(names) == 32, (names[:2], names[-1], len(names))
+L.execute("QSIDE:RunScript('OnMouseWheel', 5)")
+names = [f for f in L.eval("(function() local t = {} for _, f in ipairs(FRAMES) do if rawget(f, 'zone') and f:IsShown() then t[#t+1] = f.zone.name end end return t end)()").values()]
+assert names[0] == "Zone 1", names[:2]
+L.execute("QNS.Zones = QNS._Zones"); ns.RefreshQuestGold()
+assert not KM.errorShown, last(L)
+print("ZONE LIST OK")
 qk("dungeons"); assert "Quest Gold took its place" in last(L)
 qk("gold"); assert not KM.IsShown(), "/qk gold toggles it closed"
 print("PAGE OK")
@@ -138,7 +211,14 @@ assert L.eval('MENU_ITEM("Quest Gold") ~= nil') and L.eval('MENU_ITEM("Dungeon Q
 L.execute('MENU_ITEM("Quest Gold").fn()'); assert KM.IsShown("questgold")
 L.execute('GameTooltip.lines = {}; KingMakerMinimapButton:RunScript("OnEnter")')
 assert any("Quest gold:" in str(x) for x in L.eval("GameTooltip.lines").values())
-KM.Show("home"); assert "QUEST GOLD" in texts() and not KM.errorShown, last(L)
+KM.Show("home"); assert not KM.errorShown, last(L)
+best = [b for b in KM.home.bestItems.values() if b.label == "Quests"]
+assert best and "Western Plaguelands" in best[0].sub and best[0].page == "questgold", "Home: the best quest zone"
+assert not [a for a in KM.home.attItems.values() if a.page == "questgold"], "not in a quest zone: no attention row"
+L.execute("PLAYER.map = 1446"); KM.Refresh()
+here = [a for a in KM.home.attItems.values() if a.page == "questgold"]
+assert here and here[0].text.startswith("Tanaris: ") and "left here" in here[0].text, "in Tanaris: what's left here"
+L.execute("PLAYER.map = nil")
 KM.OpenSettings("quest"); assert "Hide quests you've done" in texts() and not KM.errorShown
 print("SHELL OK")
 

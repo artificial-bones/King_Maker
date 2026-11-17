@@ -5,7 +5,7 @@ local C = UI.C
 
 -- The Gathering page of the King Maker window (Farming > Gathering), or /gt settings. It replaces Gather King's
 -- Blizzard settings panel. Everything here belongs to the active profile, except the delete buttons, which act
--- on the markers shared by all profiles, and the account-wide ticks (guild sync, the ledger). This is the only
+-- on the markers shared by all profiles, and the account-wide ticks (guild sync, the Farm Tracker). This is the only
 -- place with bulk "delete all" buttons.
 --
 --   top        a small summary: markers by type, zones, harvests recorded, this zone
@@ -50,10 +50,16 @@ local function check(label, x, y, get, set, tip)
 end
 
 -- "Label    [-] value [+]"
-local function stepper(label, x, y, fmt, step)
+local function stepper(label, x, y, fmt, step, tip)
     local fs = UI.Text(child, 12, C.text)
     fs:SetPoint("TOPLEFT", x, y - 4)
     fs:SetText(label)
+    if tip then
+        local hit = CreateFrame("Frame", nil, child)
+        hit:SetPoint("TOPLEFT", x, y)
+        hit:SetSize(196, 22)
+        UI.Tip(hit, tip)
+    end
     local minus = UI.Button(child, "-", 24, 22, function() step(-1); KM.Refresh("gathering") end)
     minus:SetPoint("TOPLEFT", x + 200, y)
     local val = UI.Text(child, 12, C.accent, "CENTER")
@@ -152,6 +158,7 @@ local function buildProfiles(y)
         confirm("Delete the profile '" .. name .. "'?\n\nYour markers are kept.", function() ns.DeleteProfile(name); KM.Refresh("gathering") end)
     end)
     delBtn:SetPoint("LEFT", newBtn, "RIGHT", 6, 0)
+    UI.Tip(delBtn, "Deletes the profile you're using (its settings) and switches to Default. Your markers are shared by all profiles and stay.")
     return y - 116
 end
 
@@ -177,6 +184,7 @@ local function buildTypes(y)
         if t == "mine" or t == "herb" then
             local rec = UI.Check(child, function(v) ns.S().record[t] = v end)
             rec:SetPoint("TOPLEFT", 262, rowY)
+            UI.Tip(rec, "Put a marker on the map when you harvest a " .. ns.TYPES[t].label:lower() .. " node (with Auto-tag nodes below ticked). Only mining and herbs can be told apart when you harvest them.")
             table.insert(refreshers, function() rec:SetChecked(ns.S().record[t]) end)
         end
     end
@@ -188,10 +196,10 @@ local function buildTypes(y)
         ns.db.sync.guild = v
         if v and IsInGuild() then ns.SyncNow() end
     end, "Markers you add go to guildmates running King Maker or Gather King; theirs come to you. Deletes stay yours.")
-    check("Show the farming ledger box (all profiles)", 0, y - 72, function() return ns.db.ui.ledger end, function(v)
-        ns.db.ui.ledger = v
-        ns.UpdateLedger()
-    end, "A small floating box with everything you've gathered, its value, and gold per hour while its timer runs.")
+    check("Show the Farm Tracker", 0, y - 72, function() return TrackerKing and TrackerKing.HUDShown() or false end, function(v)
+        if TrackerKing and TrackerKing.SetHUD then KM.Safe(TrackerKing.SetHUD, v) end
+    end, "King Maker's floating Farm Tracker: what you're gathering (and killing) right now, its value and gold per hour. "
+        .. "Every session is saved to the Farming Ledger. Also /farm.")
     return y - 100
 end
 
@@ -207,7 +215,7 @@ local function buildDisplay(y)
         local v = math.floor(ns.S().minimapAlpha * 100 + 0.5) + 10 * d
         ns.S().minimapAlpha = math.min(100, math.max(10, v)) / 100
         ns.Refresh()
-    end)
+    end, "Lower lets the game's own node dot show through a minimap marker.")
     check("Hide a minimap marker while I'm standing at it", x, y - 108, function() return ns.S().hideNear end,
         function(v) ns.S().hideNear = v end)
     -- Nodes you harvested recently show gray and faded until they've likely respawned.
@@ -217,7 +225,7 @@ local function buildDisplay(y)
     end, function(d)
         ns.S().fadeMinutes = math.min(30, math.max(0, (ns.S().fadeMinutes or 0) + d))
         ns.UpdatePinStates()
-    end)
+    end, "A node you harvested shows grey and faded for this long: about until it respawns.")
 
     heading("Only show these names", x, y - 174)
     local only = UI.EditBox(child, 300, 22, "e.g. thorium, mithril, black lotus")
@@ -257,6 +265,8 @@ local function deleteRow(y, scope)
         end)
         b.scope = scope
         b:SetPoint("TOPLEFT", x, y)
+        UI.Tip(b, "Deletes " .. (t and (ns.TYPES[t].label:lower() .. " markers") or "every marker") .. (scope == "zone" and " in the zone you're in" or " in every zone")
+            .. ", for all profiles. Asks first; /gt undo brings them back until you /reload.")
         x = x + 98
     end
 end
@@ -298,6 +308,7 @@ local function buildShare(y)
     end
     local expAll = UI.Button(child, "Export all", 100, 22, function() showCode(ns.ExportCode()) end)
     expAll:SetPoint("TOPLEFT", 0, y - 22)
+    UI.Tip(expAll, "Every marker you have, in every zone, as one code in the box below.")
     local expZone = UI.Button(child, "Export this zone", 130, 22, function()
         local mapID = currentMap()
         if mapID then showCode(ns.ExportCode(mapID)) end
@@ -310,6 +321,7 @@ local function buildShare(y)
         KM.Refresh("gathering")
     end, "primary")
     imp:SetPoint("LEFT", expZone, "RIGHT", 6, 0)
+    UI.Tip(imp, "Adds the markers in the pasted code to yours; ones you already have are skipped. They count as shared markers, so they show with Show markers shared by guildmates.")
     return y - 90
 end
 
@@ -376,17 +388,16 @@ KM.RegisterSettings({ id = "gather", label = "Gather", order = 45, rows = functi
         { type = "choice", label = "Profile", options = profiles, get = function() return ns.ActiveProfile() end,
           set = function(v) ns.UseProfile(v) end },
         { type = "header", label = "Markers (this profile)" },
-        { type = "check", label = "Auto-tag nodes when I harvest them", get = function() return ns.S().auto end,
+        { type = "check", label = "Auto-tag nodes when I harvest them", tip = "A marker goes on the map when you mine or pick a node. Which types: the Gathering page.", get = function() return ns.S().auto end,
           set = function(v) ns.S().auto = v end },
         { type = "check", label = "Show markers on the minimap", get = function() return ns.S().minimap end,
           set = function(v) ns.S().minimap = v; ns.Refresh() end },
         { type = "header", label = "All profiles" },
-        { type = "check", label = "Sync markers with my guild", get = function() return ns.db.sync.guild end,
+        { type = "check", label = "Sync markers with my guild", tip = "Markers you add go to guildmates running King Maker or Gather King; theirs come to you.", get = function() return ns.db.sync.guild end,
           set = function(v) ns.db.sync.guild = v; if v and IsInGuild() then ns.SyncNow() end end },
-        { type = "check", label = "Show the farming ledger box", get = function() return ns.db.ui.ledger end,
-          set = function(v) ns.db.ui.ledger = v; ns.UpdateLedger() end },
+        { type = "text", label = "The farming ledger box is King Maker's Farm Tracker now, with every session saved to the Farming Ledger: Settings > Farm Tracker, or /farm." },
         { type = "header", label = "Commands" },
         { type = "text", label = "/gt mine|herb|fish|treasure [name]   mark a node here\n/gt delete nearby   /gt undo   /gt list\n"
-            .. "/gt profile [name|new <name>|delete <name>]\n/gt ledger [on|off|reset|timer]   /gt settings   /gt help for the rest" },
+            .. "/gt profile [name|new <name>|delete <name>]\n/gt ledger [on|off|reset|timer]   the Farm Tracker\n/gt settings   /gt help for the rest" },
     }
 end })

@@ -59,6 +59,10 @@ working; it only has to learn to read `King_Maker.lua` (and, while stubs remain,
 6. **No own main window.** It becomes one or more pages: `KM.RegisterPage{ id, group, label, icon, order, title,
    subtitle, badge, build, refresh, hide }`. The page container is about **764 x 560**. Old `Toggle(show)` calls
    become `KM.Show(id)` / `KM.Toggle(false)`. Several old tabs become a `UI.Tabs` strip at the top of the page.
+   `badge` returns a string or number (gold text) or a count badge `{ count = n, color = "red" | "gold", tip = "..." }`
+   (a disc, summed on a collapsed group's header; `crownBadge = true` also puts it on the minimap crown); call
+   `KM.RefreshBadges()` when the count changes. The player can zoom the whole window (corner grip, `/km size`): the
+   layout never reflows, so a page is always drawn for the same container size.
 7. **Draw only with `KM.UI`** (Theme.lua): `UI.Panel`, `UI.Text`, `UI.Button`, `UI.CheckLabel`, `UI.Tabs`,
    `UI.EditBox`, `UI.MenuButton`, `UI.Tile`, `UI.Table`, `UI.Scroll`, `UI.Bar`, `UI.Pill`. No `UIPanelButtonTemplate`,
    `BackdropTemplate` dialog art, `UICheckButtonTemplate` or `InputBoxTemplate` anywhere.

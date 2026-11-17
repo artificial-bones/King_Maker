@@ -1,5 +1,5 @@
 # Farm (was Farm King), with Scanner and a stand-in QuestieDB: kill and loot attribution, empty kills, recent
-# kills, values and filters, the farm tracker HUD and its timer, the Mob Farming and White Items pages (list,
+# kills, values and filters, /fk mini (the Farm Tracker), the Mob Farming and White Items pages (list,
 # tabs, item hunt, mob page, map pins), guild sync packing, the crown's quick actions, Home tile and settings.
 import os, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from km import fresh, last, outputs
@@ -62,7 +62,7 @@ LibQuestieDB = { Support = { Get = function(name) return { private = {
 
 
 def load(questie=False, **kw):
-    L, KM = fresh(only=["Scanner", "Farm"], extra=EXTRA + (QUESTIE if questie else ""), **kw)
+    L, KM = fresh(only=["Scanner", "Farm", "Tracker"], extra=EXTRA + (QUESTIE if questie else ""), **kw)
     return L, KM, KM.mods.Farm
 
 
@@ -144,6 +144,16 @@ assert list(L.eval("FarmKingDB.recent").values()) == [113, 299]
 L.execute('KILL(G(299, 63), "Young Wolf"); RUN_TIMERS()')
 assert list(L.eval("FarmKingDB.recent").values()) == [299, 113] and mobs(L)[299].k == 6
 print("RECENT OK")
+# fast auto-loot (Leatrix Plus, FasterLoot) empties the window before LOOT_OPENED: read at LOOT_READY
+L.execute("""
+LOOT, LOOTINFO = { { link = "|Hitem:2318:0|h", qty = 2, sources = { G(7777, 1), 2 } }, { qty = 0, sources = { G(7777, 1), 120 } } }, {}
+FIRE("LOOT_READY", true)
+LOOT, LOOTINFO = {}, {}
+FIRE("LOOT_OPENED", true)
+FIRE("LOOT_CLOSED")
+""")
+m = mobs(L)[7777]; assert m.k == 1 and m.c == 120 and m.i[2318][2] == 2, (m.k, m.c)
+L.execute("FarmKingDB.mobs[7777] = nil; table.remove(FarmKingDB.recent, 1)")
 
 # Value of a kill: AH price after the cut, vendor for grey and soulbound, nothing for quest items
 L.execute("""
@@ -165,45 +175,24 @@ assert abs(ns.Value(299).gold - 5 / 6 * 114) < 1e-6
 L.execute("FarmKingDB.filter.coin = true; FarmKingDB.filter.q0 = true")
 print("VALUE OK")
 
-# The farm tracker HUD: this session's kills, drops, coin, total; gold per hour while the timer runs
-fk("mini")
-mini = ns.miniFrame
-assert mini is not None and mini.shown and L.eval("FarmKingDB.ui.mini") is True and L.eval("FarmKingMini.shown")
-assert mini.collapse and mini.close and mini.body, "a UI.HUD: collapse, close, body"
+# The farm tracker is King Maker's Farm Tracker now (tracker.py tests it in full): /fk mini shows and hides it,
+# and the kills Farm detects reach its session (the kills above started one by themselves: 3 actions in 5 minutes).
+hud = L.eval("KingMakerFarmTracker")
+assert hud is not None and hud.shown and L.eval("TrackerKingDB.ui.hud") is True, "the session that started showed it"
+fk("mini"); assert not hud.shown
+fk("mini"); assert hud.shown
+assert hud.collapse and hud.close and hud.body, "a UI.HUD: collapse, close, body"
+assert L.eval("TrackerKing.State()") == "running" and L.eval("TrackerKing.Live().auto") is True
+kills = L.eval("TrackerKing.Live().kills"); assert kills >= 3, kills
+L.execute('KILL(G(299, 64), "Young Wolf"); LOOTABLE[G(299, 64)] = true; FLOOT({ { nil, 0, { G(299, 64), 10000 } } }); LOOT_ALL(); RUN_TIMERS()')
+live = L.eval("TrackerKingDB.live['Jay-Forever']")
+assert live.kills == kills + 1 and live.mobs[299].c == 10000 and live.coin == 10000, (live.kills, live.mobs[299].c)
+assert mobs(L)[299].c == 10940, "Farm's own lifetime numbers still count"
 t = texts(L)
-assert "Kills: 8" in t, t  # 6 wolves, 2 boars
-assert "Young Wolf x6" in t and "Stonetusk Boar x2" in t, t
-assert any("Light Leather|r x5" in x for x in t) and "Coin" in t and "Total" in t, t
-total, gph, secs = ns.SessionTotals()
-assert abs(total - (940 + 5 * 114 + 5 + 25 * 13)) < 1e-6 and gph is None, total
-# the timer: only loot taken while it runs counts toward gold per hour
-L.execute('GetTime = function() return 200 end')
-L.execute('BTN("Start timer"):Click()')
-assert L.eval("FarmKingDB.session.timer.running") is True and L.eval('BTN("Pause timer")') is not None
-L.execute('GetTime = function() return 200 + 1800 end')
-L.execute('KILL(G(299, 64), "Young Wolf"); LOOTABLE[G(299, 64)] = true; FLOOT({ { nil, 0, { G(299, 64), 10000 } } }); RUN_TIMERS()')
-total, gph, secs = ns.SessionTotals()
-assert secs == 1800 and abs(gph - 20000) < 1e-6, (secs, gph)  # 1 gold in half an hour
-L.execute("RUN_ONUPDATE(1)")
-assert L.eval("FarmKingDB.session.timer.last") == 1800
-L.execute('FIRE("PLAYER_LOGIN")')  # a /reload pauses it, keeping its time
-assert L.eval("FarmKingDB.session.timer.running") == False and ns.SessionTotals()[2] == 1800
-# collapse shows gold per hour in the title; the position is kept in ui.miniPos (the 1.x shape)
-L.execute("FarmKingMini.collapse:Click()")
-assert L.eval("FarmKingDB.ui.miniCollapsed") is True and mini.collapsed
-assert mini.title.text.startswith("Farm tracker  ") and "/hr" in mini.title.text, mini.title.text
-L.execute("FarmKingMini.collapse:Click()")
-assert not L.eval("FarmKingDB.ui.miniCollapsed") and mini.title.text == "Farm tracker"
-L.execute('FarmKingMini:ClearAllPoints(); FarmKingMini:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 50, -60); FarmKingMini.scripts.OnDragStop(FarmKingMini)')
-assert list(L.eval("FarmKingDB.ui.miniPos").values()) == ["TOPLEFT", "TOPLEFT", 50, -60]
-L.execute('BTN("Reset"):Click(); RUN_TIMERS()')
-assert L.eval("POPUPS[#POPUPS].name") == "FARMKING_CONFIRM"
-assert ns.SessionTotals()[0] == 0 and "Nothing killed yet" in "".join(texts(L))
-# x closes it (and turns it off)
-L.execute("FarmKingMini.close:Click()")
-assert not mini.shown and L.eval("FarmKingDB.ui.mini") is False
-fk("mini on"); assert mini.shown
-fk("mini off"); assert not mini.shown
+assert "Coin" in t and "Young Wolf" not in "".join(t), t
+fk("mini off"); assert not hud.shown and L.eval("TrackerKingDB.ui.hud") is False
+fk("mini on"); assert hud.shown
+fk("mini"); assert not hud.shown
 print("MINI OK")
 
 # The Mob Farming page without QuestieDB: mobs you've seen; Best farms needs enough kills
@@ -244,6 +233,21 @@ t = texts(L)
 assert "Young Wolf" in t and "GOLD PER KILL" in t and "< Back" in t and "Track on map" in t and "Light Leather" in "".join(t), t
 assert "Seen at 9 spots." in t, [x for x in t if "spot" in x]
 assert "Favorite" in "".join(t)
+# its three tiles explain themselves on hover, the gold one with a coin / drops breakdown
+tips = L.eval("""(function()
+  local out = {}
+  for _, f in ipairs(FRAMES) do
+    if f.labelText == "Gold per kill" or f.labelText == "Coin per kill" or f.labelText == "Kills recorded" then
+      GameTooltip.lines = {}
+      if f.tip and f:GetScript("OnEnter") then f:RunScript("OnEnter") end
+      out[f.labelText] = table.concat(GameTooltip.lines, "\\n")
+    end
+  end
+  return out
+end)()""")
+assert len(list(tips.keys())) == 3, list(tips.keys())
+assert all(tips[k].startswith(k) and len(tips[k]) > len(k) + 20 for k in tips.keys()), dict(tips)
+assert "Coin|" in tips["Gold per kill"] and "Drops|" in tips["Gold per kill"], tips["Gold per kill"]
 # track it: pins on the world map from where it was seen
 L.execute('CHECK("Track on map"):Click()')
 assert L.eval("FarmKingDB.track[299]")
@@ -302,10 +306,11 @@ print("GUILD OK")
 
 # The crown: quick actions, tooltip line; Home tile; Settings section; slash leftovers
 L.execute('KingMakerMinimapButton:Click("RightButton")')
-for label in ("Mob Farming", "This zone's mobs", "Farm tracker"):
+for label in ("Mob Farming", "This zone's mobs", "Farm Tracker"):
     assert L.eval('MENU_ITEM("%s") ~= nil' % label), label
-L.execute('MENU_ITEM("Farm tracker").fn()'); assert mini.shown and L.eval("FarmKingDB.ui.mini") is True
-L.execute('KingMakerMinimapButton:Click("RightButton"); MENU_ITEM("Farm tracker").fn()'); assert not mini.shown
+assert L.eval('MENU_ITEM("Farm tracker")') is None, "Farm's own tracker action is gone"
+L.execute('MENU_ITEM("Farm Tracker").fn()'); assert hud.shown and L.eval("TrackerKingDB.ui.hud") is True
+L.execute('KingMakerMinimapButton:Click("RightButton"); MENU_ITEM("Farm Tracker").fn()'); assert not hud.shown
 KM.Show("home")
 L.execute('KingMakerMinimapButton:Click("RightButton"); MENU_ITEM("This zone\'s mobs").fn()')
 assert KM.CurrentPage() == "mobs" and L.eval('SIDE("This zone")').active
@@ -313,13 +318,13 @@ assert sorted(ids(ns)) == [113, 299]  # both seen in Elwynn
 L.execute('KingMakerMinimapButton.scripts.OnEnter(KingMakerMinimapButton)')
 assert any("kills recorded." in str(x) for x in L.eval("GameTooltip.lines").values())
 KM.Show("home")
-assert "FARM SESSION" in texts(L), "a session exists: the Home tile shows it"
+assert "FARMING NOW" in texts(L), "a session is live: the Farm Tracker's Home tile shows it"
 KM.OpenSettings("farm")
 assert not KM.errorShown, last(L)
-t = texts(L); assert "Show the farm tracker" in t and "Forget every guildmate's drop data" in t
+t = texts(L); assert any("Settings > Farm Tracker" in x for x in t) and "Forget every guildmate's drop data" in t
 fk("button"); assert "/km button" in last(L)
 fk("status"); assert "mobs seen" in last(L)
-fk("help"); assert any("/fk mini" in o for o in outputs(L))
+fk("help"); assert any("/fk mini" in o and "/farm" in o for o in outputs(L))
 fk("white"); assert KM.CurrentPage() == "whites"
 fk("mob 299"); assert KM.CurrentPage() == "mobs" and ns.CurrentMob() == 299
 assert not KM.errorShown, last(L)
@@ -422,9 +427,10 @@ assert L.eval("KingMakerDB.moved.FarmKingDB") is not None
 assert L.eval("FarmKingDB.mobs[299].k") == 3 and L.eval("FarmKingDB.filter.minKills") == 10 and L.eval("FarmKingDB.filter.q0") is True
 assert L.eval("FarmKingDB.ui.button") is None and L.eval("FarmKingDB.ui.buttonAngle") is None
 assert ns.db.mobs[299].k == 3 and ns.Value(299).kills == 3
-L.execute('FIRE("PLAYER_LOGIN")')   # the tracker was on in 1.x: it comes back where it was
-mini = L.eval("FarmKingMini")
-assert mini and mini.shown and mini.points[1][1] == "CENTER" and mini.points[1][4] == 10
+L.execute('FIRE("PLAYER_LOGIN")')   # the tracker was on in 1.x: the Farm Tracker comes back where it was
+hud = L.eval("KingMakerFarmTracker")
+assert hud and hud.shown and hud.points[1][1] == "CENTER" and hud.points[1][4] == 10
+assert L.eval("FarmKingDB.ui.mini") is None and L.eval("FarmKingDB.ui.miniPos") is None and L.eval("FarmKingDB.session") is None
 print("MIGRATION OK")
 
 print("farm: ok")

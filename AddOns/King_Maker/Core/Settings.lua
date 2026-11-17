@@ -7,7 +7,7 @@ local _, KM = ...
 --       { type = "header", label = "Tooltips" },
 --       { type = "check",  label = "Prices in item tooltips", tip = "...", get = fn() -> bool, set = fn(bool) },
 --       { type = "range",  label = "Pin size", min = 8, max = 32, step = 1, get = fn, set = fn(n), fmt = fn(n) },
---       { type = "choice", label = "Value items at", options = { { "market", "Market" }, ... }, get = fn, set = fn(v) },
+--       { type = "choice", label = "Value items at", options = { { "market", "Market", tip? }, ... }, get = fn, set = fn(v), tip = "..." },
 --       { type = "button", label = "Forget guild data", func = fn, tip = "..." },
 --       { type = "text",   label = "A grey note, wrapped." },
 --       { type = "custom", height = 120, build = fn(frame, width), refresh = fn(frame) },
@@ -26,6 +26,15 @@ end
 KingMaker.RegisterSettings = KM.RegisterSettings
 
 local ROW_W = 470
+
+-- A hover area over a row's label (range and choice rows), so its tip shows wherever you point.
+local function labelTip(f, tip)
+    if not tip then return end
+    local hover = CreateFrame("Frame", nil, f)
+    hover:SetPoint("LEFT", 0, 0)
+    hover:SetSize(250, 22)
+    UI.Tip(hover, tip)
+end
 
 local function buildRow(parent, row, y)
     local h = 26
@@ -62,7 +71,8 @@ local function buildRow(parent, row, y)
         val:SetWidth(64)
         local plus = UI.Button(f, "+", 24, 22, function() step(1) end)
         plus:SetPoint("LEFT", val, "RIGHT", 4, 0)
-        if row.tip then UI.Tip(minus, row.tip) end
+        if row.tip then UI.Tip(minus, row.tip); UI.Tip(plus, row.tip) end
+        labelTip(f, row.tip)
         f.refresh = function()
             local v = KM.Safe(row.get) or row.min
             val:SetText(row.fmt and row.fmt(v) or tostring(v))
@@ -79,7 +89,9 @@ local function buildRow(parent, row, y)
             b:SetPoint("LEFT", x, 0)
             x = x + w + 4
             buttons[opt[1]] = b
+            if opt[3] or row.tip then UI.Tip(b, opt[3] or row.tip) end
         end
+        labelTip(f, row.tip)
         f.refresh = function()
             local v = KM.Safe(row.get)
             for value, b in pairs(buttons) do b:SetActive(value == v) end
@@ -171,12 +183,22 @@ KM.RegisterPage({ id = "settings", group = "system", label = "Settings", icon = 
 KM.RegisterSettings({ id = "general", label = "General", order = 0, rows = function()
     local rows = {
         { type = "header", label = "King Maker" },
-        { type = "check", label = "Show the minimap button", get = function() return KingMakerDB.ui.button end,
+        { type = "check", label = "Show the minimap button", tip = "The crown on the minimap: left-click opens this window, right-click shows quick actions. /km works either way.",
+          get = function() return KingMakerDB.ui.button end,
           set = function(v) KingMakerDB.ui.button = v; KM.UpdateMinimapButton() end },
-        { type = "range", label = "Window size", min = 0.7, max = 1.4, step = 0.05,
+        { type = "check", label = "Count on the minimap crown", tip = "A small disc on the crown when a page has something ready (crafting cooldowns, for one).",
+          get = function() return KingMakerDB.ui.crownBadge ~= false end,
+          set = function(v) KingMakerDB.ui.crownBadge = v and true or false; KM.RefreshBadges() end },
+        { type = "range", label = "Window zoom", min = 0.7, max = 2.0, step = 0.05,
           get = function() return KingMakerDB.ui.scale or 1 end, set = function(v) KM.SetScale(math.floor(v * 20 + 0.5) / 20) end,
-          fmt = function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end },
-        { type = "text", label = "Left-click the crown on the minimap to open this window, right-click it for quick actions (scans, trackers). /km opens it too; every old slash command (/sk, /ek, /mk, ...) still works." },
+          fmt = function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end,
+          tip = "Makes the whole window bigger or smaller, up to what fits on your screen. You can also drag the dots in its bottom-right corner." },
+        { type = "button", label = "Reset window zoom and position", tip = "Back to 100% and the middle of the screen, for when the window ends up off screen.",
+          func = function() KM.ResetWindow() end },
+        { type = "check", label = "Tell me when a guildmate has a newer King Maker", tip = "Guildmates running King Maker tell each other their version. When one has a newer one, you get a line in chat (once per session). /km version shows the newest seen.",
+          get = function() return KingMakerDB.ui.versionNotice ~= false end,
+          set = function(v) KingMakerDB.ui.versionNotice = v and true or false end },
+        { type = "text", label = "Drag the dots in the window's bottom-right corner to zoom it (double-click them for 100%; /km size 120 or /km size reset work too). Left-click the crown on the minimap to open this window, right-click it for quick actions (scans, trackers). /km opens it too; every old slash command (/sk, /ek, /mk, ...) still works." },
         { type = "header", label = "Moved in from the old King addons" },
     }
     local done = KM.MigrationReport and KM.MigrationReport() or {}

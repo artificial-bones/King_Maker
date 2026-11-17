@@ -55,6 +55,9 @@ forget one you've deleted or moved.
 - **Search** by item name or category.
 - **Click a column to sort**: bags, bank, mail, on AH, total, how many characters hold it, price each,
   worth. A price marked **(v)** is a vendor price.
+- With **Profit & Loss** on, two more columns: **Avg cost** (what the units you hold cost you, on average) and **If
+  sold** (what they'd make sold now, after the 5% cut, minus that cost; units with no lot are left out). How many
+  characters hold it moves to the item's tooltip.
 - Hover an item for who holds it and where. Shift-click links it in chat.
 
 **Item tooltips** everywhere show how many you own and on which characters.
@@ -96,6 +99,8 @@ Ctrl+A, then Ctrl+C, and paste it into a spreadsheet.
 
 ```lua
 InventoryKing.GetCount(itemID)    -- total, { ["Name-Realm"] = n } across bags, bank, mail and auctions
+InventoryKing.GetPlaces(itemID)   -- { ["Name-Realm"] = { bags, bank, mail, ah, bagsT, bankT, mailT, ahT } }: how many in
+                                  -- each place and when it was last read (nil: never), characters holding any
 InventoryKing.NetWorth()          -- { total, gold, mail, assets, items, chars }, in copper
 InventoryKing.GetCharacters()     -- { { who, class, level, gold, mail, assets, items, worth, seen, bankSeen } }
 InventoryKing.GetHistory(days, who) -- { { day, gold, assets, total } }, oldest first

@@ -144,7 +144,7 @@ print("LEDGER OK")
 # The page: every tab draws, right-click sets a strategy
 mlk("")
 assert KM.IsShown("ledger") and KM.CurrentPage() == "ledger" and not KM.errorShown, last(L)
-assert L.eval("HASFONT('PROFIT')") and L.eval("HASFONT('Best buyer: Bob')"), "Summary tiles and best buyer"
+assert (L.eval("HASFONT('NET CASH')") or L.eval("HASFONT('Net cash')")) and L.eval("HASFONT('Best buyer: Bob')"), "Summary tiles and best buyer"
 assert len(rows(ns.stratTable)) >= 3, "strategy table"
 for t in ["summary", "sale", "buy", "expired", "items", "unsold", "buyers"]:
     ns.SelectTab(t)
@@ -281,6 +281,36 @@ click(ns.sideBtn)
 ns.db.ui.period = 7
 ns.SelectTab("summary")
 assert L.eval("HASFONT('Best buyer: Bob, 3 sales (60%)')")
+# net if sold now: purchases you still hold (Inventory's count, newest first) at today's price, the rest is gone
+L.globals().MNS = ns
+L.execute("""
+SAVED_SK, SAVED_IK = ScannerKing, InventoryKing
+ScannerKing = ScannerKing or {}
+SAVED_GMP = ScannerKing.GetMarketPrice
+ScannerKing.GetMarketPrice = function(id) return BW_PRICES[id] end
+BW_PRICES, BW_OWN = {}, {}
+for _, e in ipairs(MNS.db.entries) do if e.k == "buy" and e.item then BW_PRICES[e.item] = 1000 end end
+""")
+buys = [e for e in ns.db.entries.values() if e.k == "buy" and e.item]
+assert buys, "the test save has purchases"
+# no Inventory module: everything bought counts as held
+L.execute("InventoryKing = nil")
+bw = ns.BoughtWorth(0, None)
+assert bw.gone == 0 and bw.held + sum((e.g or 0) for e in ns.db.entries.values() if e.k == "buy" and not e.item) == bw.paid
+assert bw.worth == sum(int(1000 * (e.n or 1) * 0.95) for e in buys), bw.worth
+# Inventory says you own none of them: all gone, nothing held
+L.execute("InventoryKing = { GetCount = function(id) return BW_OWN[id] or 0, {} end }")
+bw = ns.BoughtWorth(0, None)
+assert bw.worth == 0 and bw.held == 0 and bw.gone > 0
+# you own one of the first item: only one unit counts, priced today, at the newest purchase's cost
+first = buys[0]; L.execute("BW_OWN[%d] = 1" % first.item)
+bw = ns.BoughtWorth(0, None)
+assert bw.worth == int(1000 * 0.95), bw.worth
+assert 0 < bw.held <= max((e.g or 0) for e in buys if e.item == first.item)
+ns.SelectTab("sale"); ns.SelectTab("summary")
+assert L.eval("HASFONT('NET IF SOLD NOW')") or L.eval("HASFONT('Net if sold now')"), "the net-if-sold tile"
+assert L.eval("HASFONT('STILL HOLDING')") or L.eval("HASFONT('Still holding')")
+L.execute("ScannerKing.GetMarketPrice = SAVED_GMP; ScannerKing, InventoryKing = SAVED_SK, SAVED_IK")
 assert not KM.errorShown, last(L)
 print("BUYERS OK")
 
@@ -418,5 +448,85 @@ L.execute('GetInboxHeaderInfo = function(i) return nil, nil, INBOX[i].sender, "h
 L.execute('INBOX = { { sender = "Fresh Start" } }; FIRE("MAIL_INBOX_UPDATE")')
 assert L.eval("MailKingDB.altNames['Fresh-Forever']") == "Fresh Start"
 print("ALTS OK")
+
+# 2.6.0: one mail, one entry. A sale's money is bid - cut + deposit (2000 - 100 + 600 = 2500).
+def lsale(money=2500, who="Bob", days=28, inv=True):
+    i = f', {{ "seller", "Linen Cloth", "{who}", 2000, 2000, 600, 100, 20 }}' if inv else ""
+    return f'{{ "Auction successful: Linen Cloth (20)", {money}, {days}{i} }}'
+L, KM, ns = load()
+assert L.eval("MailKingDB.dedupe") == 1 and not any("counted twice" in str(o) for o in outputs(L)), "a new save: nothing to clean"
+L.execute("GOT = {}; MailKing.RegisterCallback('ENTRY', function(ev, e) table.insert(GOT, { ev = ev, e = e }) end, 'test')")
+L.execute("MailKing.RegisterCallback('ENTRY', function() error('boom') end, 'broken')")  # a broken addon breaks nothing
+assert not L.eval("MailKing.RegisterCallback('NOPE', print)") and not L.eval("MailKing.RegisterCallback('ENTRY', 5)")
+# the buyer's name loads on the second read: one entry, with the name
+L.execute("MAIL({ " + lsale(who="") + " })")
+assert len(entries(L)) == 1 and entries(L)[0].who == "", [e.who for e in entries(L)]
+L.execute("MAIL({ " + lsale() + " })")
+assert len(entries(L)) == 1 and entries(L)[0].who == "Bob", [e.who for e in entries(L)]
+# the gold taken (money 0, the invoice still there): still one
+L.execute("MAIL({ " + lsale(money=0) + " })")
+assert len(entries(L)) == 1
+# a sale with no invoice whose gold was taken: nothing to learn, not recorded
+L.execute("MAIL({ " + lsale(money=0, days=20, inv=False) + " })")
+assert len(entries(L)) == 1
+# the ENTRY callback ran once, with a copy; the broken one didn't stop it
+assert L.eval("#GOT") == 1 and L.eval("GOT[1].ev") == "ENTRY" and L.eval("GOT[1].e.name") == "Linen Cloth"
+assert L.eval("GOT[1].e ~= MailKingDB.entries[1]"), "a copy"
+assert L.eval("MailKingDB.dedupe") == 1
+
+# two identical sale mails in one inbox: two entries; reading again: still two
+L, KM, ns = load()
+L.execute("MAIL({ " + lsale() + ", " + lsale() + " })")
+assert len(entries(L)) == 2, len(entries(L))
+L.execute("MAIL({ " + lsale() + ", " + lsale() + " })"); assert len(entries(L)) == 2
+seen = [k for k in L.eval("MailKingDB.seen").keys()]
+assert any(k.endswith("#2") for k in seen) and all(k.startswith("sale|Linen Cloth|20|2500|") for k in seen), seen
+# one of them taken (gone from the inbox), the other read again: still two
+L.execute("MAIL({ " + lsale() + " })"); assert len(entries(L)) == 2
+L.execute("MAIL({ " + lsale(money=0) + " })"); assert len(entries(L)) == 2
+# identical but a minute or more apart in expiry: two mails, each counted once
+L.execute("MAIL({ " + lsale(days=10) + ", " + lsale(days=10 + 120 / 86400) + " })"); assert len(entries(L)) == 4
+L.execute("MAIL({ " + lsale(days=10 + 120 / 86400) + " })"); assert len(entries(L)) == 4
+
+# a mail recorded under the 2.5.x key (kind|name|n|money|who| + expiry / 600) isn't recorded again,
+# even after its buyer's name loaded or its gold was taken
+L, KM, ns = load()
+L.execute("""local b = math.floor((NOW + 28 * 86400) / 600)
+MailKingDB.seen["sale|Linen Cloth|20|2500||" .. b] = NOW
+MailKingDB.seen["buy|Green Sword|1|0|Ann|" .. (math.floor((NOW + 30 * 86400) / 600) + 1)] = NOW""")
+L.execute("MAIL({ " + lsale() + " })"); assert len(entries(L)) == 0
+L.execute("MAIL({ " + lsale(money=0) + " })"); assert len(entries(L)) == 0
+L.execute('MAIL({ { "Auction won: Green Sword", 0, 30, { "buyer", "Green Sword", "Ann", 5000, 5000, 0, 0, 1 }, { "Green Sword", 6000, 1 } } })')
+assert len(entries(L)) == 0
+L.execute("MAIL({ " + lsale(days=27) + " })"); assert len(entries(L)) == 1, "a different mail still counts"
+# RESET after /mlk reset yes
+L.execute("RESETS = 0; MailKing.RegisterCallback('RESET', function(ev) if ev == 'RESET' then RESETS = RESETS + 1 end end)")
+L.eval("SlashCmdList.MAILKING")("reset yes")
+assert L.eval("RESETS") == 1 and len(entries(L)) == 0
+
+# The one-time cleanup: three copies of one sale and two of another (seconds apart) become one each; the copy with
+# the buyer's name stays, dated the earliest. The same sale an hour later is another mail.
+DUPES = """MailKingDB = { entries = {
+  { t = 1759000000, k = 'sale', name = 'Lesser Moonstone', n = 1, g = 597, cut = 29, dep = 120, who = '', c = 'Jay-Forever' },
+  { t = 1759000001, k = 'sale', name = 'Lesser Moonstone', n = 1, g = 597, cut = 29, dep = 120, who = 'Beezus', c = 'Jay-Forever' },
+  { t = 1759000002, k = 'sale', name = 'Lesser Moonstone', n = 1, g = 597, cut = 29, dep = 120, who = '', item = 1705, c = 'Jay-Forever' },
+  { t = 1759000100, k = 'buy', name = 'Green Sword', n = 1, g = 5000, item = 6000, c = 'Jay-Forever' },
+  { t = 1759000500, k = 'sale', name = 'Tigerseye', n = 2, g = 400, cut = 20, c = 'Jay-Forever' },
+  { t = 1759000501, k = 'sale', name = 'Tigerseye', n = 2, g = 400, cut = 20, c = 'Jay-Forever' },
+  { t = 1759003600, k = 'sale', name = 'Lesser Moonstone', n = 1, g = 597, cut = 29, dep = 120, who = 'Ann', c = 'Jay-Forever' },
+  { t = 1759000000, k = 'sale', name = 'Lesser Moonstone', n = 1, g = 597, cut = 29, dep = 120, c = 'Alt-Forever' },
+} }"""
+L, KM, ns = load(seed=DUPES)
+es = entries(L)
+assert len(es) == 5, [(e.name, e.t) for e in es]
+moon = [e for e in es if e.name == "Lesser Moonstone" and e.c == "Jay-Forever"]
+assert len(moon) == 2 and moon[0].who == "Beezus" and moon[0].t == 1759000000 and moon[0].item == 1705, (moon[0].who, moon[0].t)
+assert moon[1].who == "Ann" and len([e for e in es if e.name == "Tigerseye"]) == 1
+assert [e.name for e in es] == ["Lesser Moonstone", "Green Sword", "Tigerseye", "Lesser Moonstone", "Lesser Moonstone"], "order kept"
+assert L.eval("MailKingDB.dedupe") == 1
+assert any("Sales Ledger: removed 3 mails that had been counted twice" in str(o) for o in outputs(L)), outputs(L)
+L.execute("HELD = MailKingDB"); ns.InitDB()
+assert len(entries(L)) == 5 and L.eval("MailKingDB == HELD"), "a second InitDB changes nothing"
+print("ONE MAIL OK")
 
 print("mail: ok")

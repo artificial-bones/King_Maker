@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="KINGMAKER_TOGGLE" category="King Maker">KingMaker.Toggle()</Binding>
+    <Binding name="KINGMAKER_FARM_HUD" category="King Maker">TrackerKing.ToggleHUD()</Binding>
+    <Binding name="KINGMAKER_FARM_STARTSTOP" category="King Maker">TrackerKing.Toggle()</Binding>
+    <Binding name="KINGMAKER_FARM_PAUSE" category="King Maker">TrackerKing.PauseOrResume()</Binding>
+    <Binding name="KINGMAKER_FARM_SPLIT" category="King Maker">TrackerKing.Split()</Binding>
+    <Binding name="KINGMAKER_FARM_LEDGER" category="King Maker">TrackerKing.OpenLedger()</Binding>
+</Bindings>

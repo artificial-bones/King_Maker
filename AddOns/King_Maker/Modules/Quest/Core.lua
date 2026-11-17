@@ -9,6 +9,7 @@ local ns = KM.Module("Quest", { title = "Quest King", short = "Quest", legacy = 
 
 local DEFAULTS = {
     qgHideDone = false, -- Quest Gold: leave out quests you've done
+    autoAsk = true,     -- Quest Gold: ask the server for a zone's unknown quest gold the first time you enter it
 }
 
 QuestKing = ns
@@ -67,6 +68,7 @@ function ns.InitDB()
     end
     db.gold = db.gold or {} -- quest ID -> copper: Forever's real quest gold, learned in game (Money.lua), every character
     db.noData = db.noData or {} -- quest ID -> true: the server had nothing on it (not in Forever yet); out of the totals
+    db.asked = db.asked or {} -- "Name-Realm" -> { [uiMap] = King Maker version }: zones whose quest gold was asked for
     db.dqDone, db.dqHide60, db.dqHideDone, db.dqView = nil, nil, nil, nil -- Dungeon Quests (gone in 2.4.0)
     db.button, db.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     db.marks, db.tooltip = nil, nil -- bag cleanup (gone in 2.5.3)

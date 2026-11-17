@@ -131,7 +131,10 @@ local function fillRow(r, row, cells)
     local info = ns.ItemInfo(row.item)
     if r.icon then r.icon:SetTexture(info.icon) end
     local color = UI.QUALITY[info.q or 1] or "ffffff"
-    cells.item:SetText("|cff" .. color .. ns.ItemName(row.item) .. "|r" .. (row.made > 1 and (" x" .. row.made) or ""))
+    -- a recipe with a crafting cooldown (Cooldowns module) can't be made at will: a violet "CD 4d" tag says so
+    local cd = row.recipe and CooldownKing and CooldownKing.Length and KM.Safe(CooldownKing.Length, row.recipe.spell)
+    local cdTag = cd and (UI.Hex(C.violet) .. "  CD " .. (cd >= 86400 and (math.floor(cd / 86400 + 0.5) .. "d") or (math.floor(cd / 3600 + 0.5) .. "h")) .. "|r") or ""
+    cells.item:SetText("|cff" .. color .. ns.ItemName(row.item) .. "|r" .. (row.made > 1 and (" x" .. row.made) or "") .. cdTag)
     local p = ns.PROF_BY_ID[row.prof]
     cells.skill:SetText((tab == "best" and p and (p.name:sub(1, 4) .. " ") or "") .. (row.skill > 0 and row.skill or ""))
     cells.mats:SetText(row.missing and "|cffff4040missing|r" or money(mode == "farm" and row.raw or row.cost))
@@ -374,16 +377,41 @@ local function buildPage(c)
     tabsHolder:SetHeight(24)
 
     -- The ranked list.
+    local function farm() return ns.db.mode == "farm" end
     local cols = {
-        { key = "item", label = "Item", w = 196 },
-        { key = "skill", label = "Skill", w = 64 },
-        { key = "mats", label = "Mat cost", w = 84, justify = "RIGHT" },
-        { key = "craft", label = "Craft sells", w = 84, justify = "RIGHT", tip = "What the crafted item(s) sell for, after the 5% auction cut." },
+        { key = "item", label = "Item", w = 196,
+          tip = "Greyed out: a pattern you don't have. A violet CD tag: the recipe has a cooldown (how long), so you can't make it at will. Hover a row for every figure behind it." },
+        { key = "skill", label = "Skill", w = 64, tip = "The skill the recipe needs. On the Best tab the profession comes first, cut to four letters." },
+        { key = "mats", label = "Mat cost", w = 84, justify = "RIGHT", tip = function(tt)
+            if farm() then
+                tt:AddLine("Raw value: what the auction-house materials would sell for raw, at the lowest buyout after the 5% cut. Vendor reagents aren't in it: they come off the profit instead.", 1, 1, 1, true)
+            else
+                tt:AddLine("What the materials cost, each at the cheaper of the lowest buyout and a vendor. \"missing\": a material has no price yet.", 1, 1, 1, true)
+            end
+        end },
+        { key = "craft", label = "Craft sells", w = 84, justify = "RIGHT", tip = "What the crafted item(s) sell for: the lowest buyout times how many one craft makes, after the 5% auction cut." },
         { key = "de", label = "DE sells", w = 84, justify = "RIGHT", tip = "Average disenchant value of the item(s), after the cut." },
         { key = "listed", label = "Listed", w = 50, justify = "RIGHT",
           tip = "How many of the crafted item are on the auction house: supply, not sales. Lots listed means competition." },
-        { key = "best", label = "Best", w = 74 },
-        { key = "gain", label = "Profit", w = 0, justify = "RIGHT" },
+        { key = "best", label = "Best", w = 74, tip = function(tt)
+            tt:AddLine("The best thing to do with the materials:", 1, 1, 1, true)
+            tt:AddDoubleLine("CRAFT", "craft it and sell it", C.good[1], C.good[2], C.good[3], 1, 1, 1)
+            tt:AddDoubleLine("DISENCHANT", "craft it, disenchant it, sell the mats", C.violet[1], C.violet[2], C.violet[3], 1, 1, 1)
+            if farm() then
+                tt:AddDoubleLine("SELL RAW", "crafting doesn't beat selling the mats", C.warn[1], C.warn[2], C.warn[3], 1, 1, 1)
+            else
+                tt:AddDoubleLine("SKIP", "crafting it loses money", C.dim[1], C.dim[2], C.dim[3], 1, 1, 1)
+            end
+            tt:AddDoubleLine("?", "a material has no price yet", C.muted[1], C.muted[2], C.muted[3], 1, 1, 1)
+        end },
+        { key = "gain", label = "Profit", w = 0, justify = "RIGHT", tip = function(tt)
+            if farm() then
+                tt:AddLine("Gain vs raw: the better of Craft sells and DE sells, minus vendor reagents, minus what the materials would fetch sold raw. Above zero, crafting beats selling them.", 1, 1, 1, true)
+            else
+                tt:AddLine("The better of Craft sells and DE sells, minus the material cost. Above zero, buying the mats and crafting makes money.", 1, 1, 1, true)
+            end
+            tt:AddLine("The list is sorted by it; the red line sits under the last row worth doing.", 0.7, 0.7, 0.7, true)
+        end },
     }
     tbl = UI.Table(c, cols, 20, {
         icon = true, noSort = true, fontSize = 11,
@@ -433,6 +461,30 @@ KM.RegisterPage({
 -- The crown and Settings
 ---------------------------------------------------------------------------
 
+-- Home's Best right now: the most profitable craft you know (crafts only, no disenchanting), in the page's mode.
+-- Ranking every recipe is the page's work, so Home reuses the answer for a minute, or until the next price scan.
+local bestCache, bestAt, bestScan = nil, -1, nil
+local function lastScan() local sc = KM.mods.Scanner; return sc and sc.db and math.max(sc.db.lastDeep or 0, sc.db.lastQuick or 0) or 0 end
+KM.RegisterHomeCard({ kind = "best", id = "market-craft", order = 10, get = function()
+    if not ns.db then return nil end
+    local now = GetTime and GetTime() or 0
+    if now - bestAt > 60 or now < bestAt or bestScan ~= lastScan() then
+        bestAt, bestScan = now, lastScan()
+        bestCache = false
+        local rows = ns.Rank(nil, ns.db.mode, { noDE = true, recipes = "mine" })
+        local r = rows[1]
+        if r and r.gain and r.gain > 0 then bestCache = { item = r.item, gain = r.gain, made = r.made } end
+    end
+    local b = bestCache
+    if not b then return nil end
+    local info = ns.ItemInfo(b.item)
+    return { label = "Craft", sub = info.name or ("Item " .. b.item), value = "+" .. KM.MoneyShort(b.gain, true), color = C.good,
+        icon = info.icon, page = PAGE,
+        tip = "The most profitable recipe you know right now: " .. (info.name or "?") .. ", " .. KM.Money(b.gain) .. " a craft"
+            .. (ns.db.mode == "farm" and " over selling the materials raw." or " after buying the materials and the 5% cut.")
+            .. " Uses the professions ticked on Crafting Profits. Click for Crafting Profits." }
+end })
+
 KM.RegisterQuickAction({ id = "market-crafting", label = "Crafting Profits", order = 20, func = function() ns.Toggle(true) end })
 
 local function viewChoices()
@@ -443,7 +495,7 @@ end
 
 KM.RegisterSettings({ id = "market", label = "Market", order = 20, rows = {
     { type = "header", label = "Crafting Profits" },
-    { type = "choice", label = "Count materials as", options = { { "buy", "Yrgna Special" }, { "farm", "Ethical Gaming" } },
+    { type = "choice", label = "Count materials as", options = { { "buy", "Yrgna Special", MODES.buy.hint }, { "farm", "Ethical Gaming", MODES.farm.hint } },
       get = function() return ns.db.mode end, set = function(v) ns.db.mode = v; ns.Refresh() end },
     { type = "text", label = "Yrgna Special: you buy the materials, so they're a cost (flips). Ethical Gaming: you gathered them, so crafting is compared with selling them raw. Vendor reagents are a cost either way." },
     { type = "check", label = "Include disenchanting", tip = "Count crafting, disenchanting and selling the enchanting materials as an option.",
@@ -452,7 +504,7 @@ KM.RegisterSettings({ id = "market", label = "Market", order = 20, rows = {
       get = function() return ns.db.deOnly end, set = function(v) ns.db.deOnly = v; ns.Refresh() end },
     { type = "check", label = "No procs (disenchanting only)", tip = "Value disenchants without the rare shard and crystal procs.",
       get = function() return ns.db.deNoProcs end, set = function(v) ns.db.deNoProcs = v; ns.Refresh() end },
-    { type = "choice", label = "Recipes to show", options = viewChoices(),
+    { type = "choice", label = "Recipes to show", options = viewChoices(), tip = "All: every recipe, patterns you lack greyed out. Mine: trainer recipes and patterns you have. Patterns I lack: only the ones you don't have.",
       get = function() return ns.db.recipes end, set = function(v) ns.db.recipes = v; ns.Refresh() end },
     { type = "button", label = "Clear my have/don't-have marks", func = function() SlashCmdList.MARKETKING("recipes reset") end,
       tip = "Back to what your trade skill windows show, for this character." },

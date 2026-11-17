@@ -17,7 +17,7 @@ King 1.x history, favorites and settings move in by themselves.
 |---|---|
 | The list and every item's page | King Maker window, **Auction House > Price History** (`/ek` or `/km history`) |
 | Open it from the minimap | Right-click the King Maker crown: **Price History** |
-| Tooltip setting | King Maker **Settings > Econ** |
+| Tooltip and history settings | King Maker **Settings > Price History** |
 
 ## Getting data in
 
@@ -102,9 +102,31 @@ what the auction house shows:
 
 ## How much it keeps
 
-Every scan from the last 7 days, then one point per day for 120 days, then one
-point per week. Favorites keep one point per day forever. The heavy work after
-a Deep Scan is done a little each frame, so the game doesn't freeze.
+A whole auction house is thousands of items, so older history is summed up as
+it ages. Each summary point keeps the averages with every scan's weight, so the
+7-day and 30-day numbers come out the same.
+
+| Age | What's kept | Setting |
+|---|---|---|
+| Up to 7 days | Every scan | **Keep every scan for** (7 to 30 days) |
+| Up to 30 days | One point a day | **Keep a point a day for** (14 to 180 days) |
+| Up to 180 days | One point a week | |
+| Older | One point per 4 weeks | |
+
+Favorites keep a point a day forever. Items nobody has listed for 90 days are
+forgotten (**Forget items not seen for**, 30 to 365 days, or never); favorites
+never are.
+
+It all happens by itself at login and after every scan, a little each frame so
+the game doesn't freeze. **Settings > Price History > Compact now** (or
+`/ek compact`) does it straight away, for example after lowering a setting, and
+says how much space it saved. `/ek status` shows how many items and points you
+have and about how much space they take.
+
+History is saved packed into one short line per item, so even a whole auction
+house loads quickly at login and `/reload`. History from older versions
+converts itself the first time you log in with 2.6.1, a few items a frame; if
+you log out halfway it carries on next time.
 
 ## Tooltips
 
@@ -117,7 +139,8 @@ hides these lines; `/sk tooltip off` hides the Scanner's.
 | `/ek` | Open or close Price History |
 | `/ek item [link]` | Open an item's page |
 | `/ek fav [link]` | Add or remove a favorite |
-| `/ek status` | How much history you have |
+| `/ek status` | How much history you have and about how much space it takes |
+| `/ek compact` | Sum up old history and forget long-gone items now |
 | `/ek tooltip on` / `off` | Price History's lines in item tooltips |
 
 `/ek button` now points you to the King Maker crown (`/km button`).
@@ -126,7 +149,8 @@ hides these lines; `/sk tooltip off` hides the Scanner's.
 
 ```lua
 EconKing.GetStats(itemID)    -- market, avg7, avg30, vs30, trend7, listed, supply, gonePerDay, ... or nil
-EconKing.GetHistory(itemID)  -- { { time, market, lowest, listed, auctions, added, gone, scans }, ... } oldest first
+EconKing.GetHistory(itemID)  -- { { time, market, lowest, listed, auctions, added, gone, scans, gap }, ... } oldest first
+                             -- (daily and older points are averages; scans says how many each stands for)
 EconKing.IsFavorite(itemID)
 ```
 

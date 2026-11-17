@@ -147,7 +147,12 @@ local function fontstring()
   function t:SetFont(f, size, flags) self.font = { f, size, flags } end
   function t:GetFont() if self.font then return unpack(self.font) end return "Fonts\\FRIZQT__.TTF", 12, "" end
   function t:SetFontObject(o) self.fontObject = o end
-  function t:GetStringWidth() return #(tostring(self.text or "")) * 6 end
+  -- 6 px a character, as the text shows: colour codes, link wrappers and |T..|t icons (2 characters) don't count
+  function t:GetStringWidth()
+    local s = tostring(self.text or "")
+    s = s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", "  "):gsub("|H.-|h", ""):gsub("|h", "")
+    return #s * 6
+  end
   function t:GetStringHeight() return 12 end
   function t:SetJustifyH(j) self.justifyH = j end
   function t:SetJustifyV(j) self.justifyV = j end
@@ -193,10 +198,20 @@ function CreateFrame(kind, name, parent, template)
   function f:GetNumPoints() return #self.points end
   function f:GetPoint(i) return unpack(self.points[i or 1] or {}) end
   function f:GetCenter() return self.cx or 0, self.cy or 0 end
-  function f:GetLeft() return self.cx or 0 end
-  function f:GetTop() return self.cy or 0 end
-  function f:GetEffectiveScale() return 1 end
-  function f:GetScale() return 1 end
+  function f:GetLeft() return self.left or self.cx or 0 end       -- tests set f.left / f.top (scaled units)
+  function f:GetTop() return self.top or self.cy or 0 end
+  function f:SetScale(s) self.scale = s end
+  function f:GetScale() return self.scale or 1 end
+  function f:GetEffectiveScale()
+    local p = self.parent
+    return (self.scale or 1) * (p and p.GetEffectiveScale and p:GetEffectiveScale() or 1)
+  end
+  function f:SetResizable(v) self.resizable = not not v end
+  function f:IsResizable() return self.resizable or false end
+  function f:SetResizeBounds(a, b, c, d) self.bounds = { a, b, c, d } end
+  function f:GetResizeBounds() if self.bounds then return unpack(self.bounds) end return 0, 0, 0, 0 end
+  function f:StartSizing(p) self.sizing = p or "BOTTOMRIGHT"; SIZING = self end
+  function f:StopMovingOrSizing() self.sizing = nil end
   function f:GetFrameStrata() return self.strata or "MEDIUM" end
   function f:SetFrameStrata(s) self.strata = s end
   function f:GetFrameLevel() return self.level or 1 end
@@ -264,7 +279,11 @@ UISpecialFrames = {}
 ATTACHMENTS_MAX_RECEIVE, ATTACHMENTS_MAX_SEND = 16, 12
 function GetScreenWidth() return 1024 end
 function GetScreenHeight() return 768 end
-function GetCursorPosition() return 10, 10 end
+CURSOR_X, CURSOR_Y = 10, 10
+function GetCursorPosition() return CURSOR_X, CURSOR_Y end
+function GetPhysicalScreenSize() return PHYS_W or 1920, PHYS_H or 1080 end
+-- Resolve a size change the way the client does for an anchored frame: new size, then OnSizeChanged.
+function RESIZE(f, w, h) f.w, f.h = w, h; f:RunScript("OnSizeChanged", w, h) end
 SHIFT, CTRL, ALT = false, false, false
 function IsShiftKeyDown() return SHIFT end
 function IsControlKeyDown() return CTRL end
@@ -779,3 +798,116 @@ function hooksecurefunc(a, b, c)
     local orig = a[b]; a[b] = function(...) local r = { orig(...) }; c(...); return unpack(r) end
   end
 end
+
+---------------------------------------------------------------- crafting cooldowns (King Maker 2.6 Cooldowns)
+-- SPELL_CD[id] / ITEM_CD[id] = { start, duration } in GetTime() units; KNOWN_SPELLS[id] = true; SECRET_CD = true makes
+-- every cooldown number secret (as in combat). PROFS = { { name = "Alchemy", cur = 300, max = 300 }, ... } feeds
+-- GetProfessions; COMBAT = true puts you in combat. TRADESKILL.recipes[id].cd = seconds left (nil = ready), .day.
+SPELL_CD, ITEM_CD, KNOWN_SPELLS, SECRET_CD = {}, {}, {}, false
+SECRETS = SECRETS or {}
+function SECRET(v) local s = {}; SECRETS[s] = v; return s end
+function issecretvalue(v) return type(v) == "table" and SECRETS[v] ~= nil end
+COMBAT = false
+function InCombatLockdown() return COMBAT == true end
+C_Spell.GetSpellCooldown = function(id)
+  local c = SPELL_CD[id] or { 0, 0 }
+  local s, d = c[1], c[2]
+  if SECRET_CD then s, d = SECRET(s), SECRET(d) end
+  return { startTime = s, duration = d, isEnabled = true, modRate = 1 }
+end
+C_SpellBook = C_SpellBook or {}
+C_SpellBook.IsSpellKnown = function(id) return KNOWN_SPELLS[id] == true end
+C_Container.GetItemCooldown = function(id)
+  local c = ITEM_CD[id] or { 0, 0 }
+  if SECRET_CD then return SECRET(c[1]), SECRET(c[2]), 1 end
+  return c[1], c[2], 1
+end
+C_Item.GetItemCount = function(id, bank)
+  local n = 0
+  for bag, slots in pairs(BAGS) do
+    if bank or bag >= 0 then for _, e in pairs(slots) do if e.id == id then n = n + (e.count or 1) end end end
+  end
+  return n
+end
+C_TradeSkillUI.GetRecipeCooldown = function(id)
+  local r = TRADESKILL and TRADESKILL.recipes[id]
+  if r and r.cd then return r.cd, r.day or false, 0, 0 end
+  return nil, false, 0, 0
+end
+PROFS = {}
+function GetProfessions() local t = {} for i in ipairs(PROFS) do t[i] = i end return unpack(t) end
+function GetProfessionInfo(i) local p = PROFS[i] if p then return p.name, 1, p.cur, p.max end end
+
+---------------------------------------------------------------- Farm Tracker (King Maker 2.6): loot, money, merchant
+-- Added by the Farm Tracker lane; additive only. A loot slot may carry locked = true (a roll) and quest = true.
+-- OPEN_LOOT now fires LOOT_READY, then LOOT_OPENED(autoLoot = false, isFromItem); LOOT_ALL() takes every slot
+-- (LOOT_SLOT_CLEARED for each, then LOOT_CLOSED). SET_MONEY(n) changes your gold and fires PLAYER_MONEY.
+function GetLootSlotInfo(i)
+  local e = slot(i) or {}
+  local isCoin = not e.link
+  return nil, e.name or (e.link and "x") or "5 Silver", e.qty or 1, nil, e.quality or 1, e.locked or false, e.quest or false, nil, false, isCoin
+end
+function OPEN_LOOT(slots, info, fromItem) LOOT, LOOTINFO = slots, info or {}; FIRE("LOOT_READY", false); FIRE("LOOT_OPENED", false, fromItem or false) end
+function LOOT_ALL() for i = 1, #LOOT do FIRE("LOOT_SLOT_CLEARED", i) end CLOSE_LOOT() end
+function SET_MONEY(n) MONEY = n; FIRE("PLAYER_MONEY") end
+AFK = false
+function UnitIsAFK(u) return (u == "player" or u == nil) and AFK or false end
+REPAIR = 0
+function GetRepairAllCost() return REPAIR, REPAIR > 0 end
+function CanMerchantRepair() return true end
+Enum.PlayerInteractionType.TradePartner, Enum.PlayerInteractionType.TaxiNode, Enum.PlayerInteractionType.Trainer = 1, 6, 7
+Enum.PlayerInteractionType.GuildBanker, Enum.PlayerInteractionType.AccountBanker = 10, 68
+INSTANCE = false
+function IsInInstance() return INSTANCE, INSTANCE and "party" or "none" end
+SPELLS[921], SPELLS[13262] = "Pick Pocket", "Disenchant"
+
+---------------------------------------------------------------- group loot rolls and master loot (King Maker 2.7.0)
+-- Additive. ROLLS[rollID] = { id, count }; START_ROLL(rollID, itemID, count) fires START_LOOT_ROLL. LOOT_METHOD
+-- ("freeforall" | "group" | "master") and LOOT_THRESHOLD (2 = green) for GetLootMethod / GetLootThreshold.
+-- GIVE(itemID, n) puts n into bag 0 and fires BAG_UPDATE_DELAYED (a roll won, master loot handed out, a trade).
+-- SELF_LOOT_LINE(itemID, n) is the client's own "You receive loot" line; the enUS globalstrings below.
+ROLLS, LOOT_METHOD, LOOT_THRESHOLD = {}, "freeforall", 2
+LOOT_ITEM_SELF = "You receive loot: %s."
+LOOT_ITEM_SELF_MULTIPLE = "You receive loot: %sx%d."
+LOOT_ITEM_PUSHED_SELF = "You receive item: %s."
+LOOT_ITEM_PUSHED_SELF_MULTIPLE = "You receive item: %sx%d."
+LOOT_ITEM = "%s receives loot: %s."
+function GetLootRollItemLink(id) local r = ROLLS[id]; return r and LINK(r.id) end
+function GetLootRollItemInfo(id)
+  local r = ROLLS[id]; if not r then return nil end
+  local i = ITEMS[r.id] or {}
+  return 100000 + r.id, i.name, r.count or 1, i.quality or 2, false
+end
+function GetLootMethod() return LOOT_METHOD, 0, nil end
+function GetLootThreshold() return LOOT_THRESHOLD end
+function START_ROLL(rollID, id, count) ROLLS[rollID] = { id = id, count = count }; FIRE("START_LOOT_ROLL", rollID, 60000) end
+function GIVE(id, n)
+  n = n or 1
+  for _, e in pairs(BAGS[0]) do if e.id == id then e.count = (e.count or 1) + n; FIRE("BAG_UPDATE_DELAYED"); return end end
+  local s = 1
+  while BAGS[0][s] do s = s + 1 end
+  BAGS[0][s] = { id = id, count = n }
+  FIRE("BAG_UPDATE_DELAYED")
+end
+function SELF_LOOT_LINE(id, n)
+  local text = (n and n > 1) and format(LOOT_ITEM_SELF_MULTIPLE, LINK(id), n) or format(LOOT_ITEM_SELF, LINK(id))
+  FIRE("CHAT_MSG_LOOT", text, PLAYER.name)
+end
+---------------------------------------------------------------- mail you send and trades (King Maker 2.8 Profit & Loss)
+-- Additive. SENDMAIL = { to = "Name", items = { { itemID, n }, ... } } feeds GetSendMailItem (the modern returns: name,
+-- itemID, texture, count, quality, canUse) and GetSendMailItemLink. The Send button and To: box are the test's to make.
+-- TRADE = { give = { { itemID, n } }, get = { { itemID, n } }, pm = copper you give, tm = copper you get } feeds the
+-- trade window's functions; UNITS.NPC = { name = } is who you trade with.
+SENDMAIL = { to = "", items = {} }
+ATTACHMENTS_MAX_SEND, MAX_TRADABLE_ITEMS = 12, 6
+function GetSendMailItem(i) local a = SENDMAIL.items[i]; if a then local it = ITEMS[a[1]] or {}; return it.name or "x", a[1], 1, a[2] or 1, it.quality or 1, true end end
+function GetSendMailItemLink(i) local a = SENDMAIL.items[i]; return a and LINK(a[1]) end
+TRADE = nil
+local function tradeSlot(side, i) local t = TRADE and TRADE[side]; return t and t[i] end
+local function tradeInfo(a) if a then local it = ITEMS[a[1]] or {}; return it.name or "x", 1, a[2] or 1, it.quality or 1, true, nil end end
+function GetTradePlayerItemLink(i) local a = tradeSlot("give", i); return a and LINK(a[1]) end
+function GetTradePlayerItemInfo(i) return tradeInfo(tradeSlot("give", i)) end
+function GetTradeTargetItemLink(i) local a = tradeSlot("get", i); return a and LINK(a[1]) end
+function GetTradeTargetItemInfo(i) return tradeInfo(tradeSlot("get", i)) end
+function GetPlayerTradeMoney() return TRADE and TRADE.pm or 0 end
+function GetTargetTradeMoney() return TRADE and TRADE.tm or 0 end

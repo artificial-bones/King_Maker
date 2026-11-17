@@ -19,11 +19,12 @@ local _, KM = ...
 --   UI.EditBox(parent, w, h, hint, onChange)           search / text box
 --   UI.NumberBox(parent, w, onChange)
 --   UI.MenuButton(parent, w, getLabel, gen)            button that opens a MenuUtil menu: gen(owner, root)
---   UI.Tile(parent, w, h)               stat card: tile:Set(label, value, sub, color)
+--   UI.Tile(parent, w, h)               stat card: tile:Set(label, value, sub, color); tile:SetTip(text | fn(tt, tile))
 --   UI.Table(parent, cols, rowH, opts)  header + pooled rows + wheel + sortable headers: tbl:SetRows(list, fill)
 --   UI.Scroll(parent)                   wheel-scrolled child frame: sc.child, sc:SetContentHeight(h)
 --   UI.Window(name, title, w, h, opts)  themed floating dialog (Deep Scan, exports): frame.body, frame:SetTitle
 --   UI.HUD(name, title, w, opts)        themed small tracker frame (Farm session, Gather ledger)
+--   UI.Grip(parent)                     corner grip of six dots: g:Tint(c), g.readout
 --   UI.Hex(c), UI.Click()
 
 local UI = {}
@@ -150,8 +151,9 @@ function UI.Click()
     end
 end
 
--- Shows a simple tooltip on owner from a string or a function(tooltip).
+-- Shows a simple tooltip on owner from a string or a function(tooltip). Turns the mouse on for plain frames.
 function UI.Tip(owner, tip)
+    if owner.EnableMouse then owner:EnableMouse(true) end
     owner:HookScript("OnEnter", function(self)
         local t = type(tip) == "function" and tip or nil
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -369,7 +371,24 @@ function UI.Tile(parent, w, h)
     t.sub = UI.Text(t, 10, C.dim)
     t.sub:SetPoint("TOPLEFT", t.value, "BOTTOMLEFT", 0, -4)
     t.sub:SetPoint("RIGHT", -8, 0)
+    -- tile:SetTip(tip): a hover tooltip headed by the tile's label in gold, then tip (a string, or
+    -- function(tooltip, tile) that adds its own lines, e.g. a breakdown with AddDoubleLine). Call it again to change.
+    function t:SetTip(tip)
+        self.tip = tip
+        if self.tipHooked then return end
+        self.tipHooked = true
+        self:EnableMouse(true)
+        self:SetScript("OnEnter", function(s)
+            if not s.tip then return end
+            GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+            if s.labelText and s.labelText ~= "" then GameTooltip:AddLine(s.labelText, C.accent[1], C.accent[2], C.accent[3]) end
+            if type(s.tip) == "function" then s.tip(GameTooltip, s) else GameTooltip:AddLine(s.tip, 1, 1, 1, true) end
+            GameTooltip:Show()
+        end)
+        self:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
     function t:Set(label, value, sub, color)
+        self.labelText = label
         self.label:SetText((label or ""):upper())
         self.value:SetText(value or "")
         local c = color or C.text
@@ -602,6 +621,27 @@ local function goldEdge(f)
 end
 UI.GoldEdge = goldEdge
 
+-- A corner grip: six dots in a 16 px button, dim until hovered (the main window's zoom grip, Shell.lua, looks the same).
+-- g:Tint(color) recolours the dots; g.readout is a small gold text above it for "120%" or "12 rows" while dragging.
+function UI.Grip(parent)
+    local g = CreateFrame("Button", nil, parent)
+    g:SetSize(16, 16)
+    g.dots = {}
+    for _, d in ipairs({ { 0, 0 }, { 1, 0 }, { 2, 0 }, { 0, 1 }, { 1, 1 }, { 0, 2 } }) do
+        local t = g:CreateTexture(nil, "OVERLAY")
+        t:SetTexture(WHITE)
+        t:SetSize(2, 2)
+        t:SetPoint("BOTTOMRIGHT", -1 - d[1] * 5, 1 + d[2] * 5)
+        setColor(t, C.dim)
+        g.dots[#g.dots + 1] = t
+    end
+    g.readout = UI.Text(g, 10, C.accent, "RIGHT")
+    g.readout:SetPoint("BOTTOMRIGHT", g, "TOPRIGHT", 0, 2)
+    g.readout:Hide()
+    function g:Tint(c) for _, t in ipairs(self.dots) do setColor(t, c) end end
+    return g
+end
+
 -- A dialog: title bar, close button, Escape closes it, draggable. opts.strata (default "DIALOG").
 function UI.Window(name, title, w, h, opts)
     opts = opts or {}
@@ -635,6 +675,20 @@ end
 
 -- A small tracker that floats during play. opts.getPos() -> {point,x,y}, opts.setPos(pos), opts.onClose(),
 -- opts.onCollapse(collapsed). frame.body is the content; frame:SetCollapsed(bool) shows only the title bar.
+-- Optional (2.6, the Farm Tracker):
+--   opts.status = true                         f.dot, an 8 px square left of the title: f:SetStatus(color | nil)
+--   opts.buttons = { { label, tip, onClick } }  extra 18 px buttons left of [-] (f.extra[i])
+--   opts.onWheel = fn(delta)                   mouse wheel over the box (lists scroll)
+--   opts.zoom = { get = fn, set = fn }         Ctrl+wheel scales the box 70-140%
+--   f:SetRightText(text)                       right-aligned title text (a timer, gold per hour), shown collapsed too
+-- Optional (2.6, the Farm Tracker's title bar and corner grip):
+--   f:SetTitleParts(status, timer, rate, short) the title as three parts that never overlap: the status on the left,
+--                                              the timer and the rate (f.timer, f.rate) right-aligned before the
+--                                              buttons. Short of room: the status's short form, then no rate, then
+--                                              the status cut with "...". Laid out again on every call (f.titleLayout).
+--   opts.resize = { start, drag = fn(dx, dy) -> readout text, stop, reset, tip }   a corner grip (f.grip, the dots
+--                                              of the main window's zoom grip): drag(dx, dy) gets how far the mouse
+--                                              moved right and down, in the box's units; double-click calls reset
 function UI.HUD(name, title, w, opts)
     opts = opts or {}
     local f = CreateFrame("Frame", name, UIParent)
@@ -676,6 +730,163 @@ function UI.HUD(name, title, w, opts)
         self.body:SetShown(not self.collapsed)
         self:SetHeight(self.collapsed and 28 or self.fullHeight)
         self.collapse:SetLabel(self.collapsed and "+" or "-")
+        if self.grip then self.grip:SetShown(not self.collapsed) end
+    end
+    if opts.status then
+        f.dot = f:CreateTexture(nil, "OVERLAY")
+        f.dot:SetTexture(WHITE)
+        f.dot:SetSize(8, 8)
+        f.dot:SetPoint("TOPLEFT", 10, -11)
+        f.title:SetPoint("TOPLEFT", 24, -9)
+        function f:SetStatus(c)
+            c = c or C.dim
+            self.dot:SetVertexColor(c[1], c[2], c[3], 1)
+        end
+        f:SetStatus(nil)
+    end
+    local leftOf = f.collapse
+    f.extra = {}
+    f.buttonsW = 6 + 18 + 4 + 18          -- the close and fold buttons, from the box's right edge
+    for i, b in ipairs(opts.buttons or {}) do
+        local eb = UI.Button(f, b.label or b[1], b.w or 18, 18, b.onClick or b[3])
+        eb:SetPoint("RIGHT", leftOf, "LEFT", -4, 0)
+        if b.tip or b[2] then UI.Tip(eb, b.tip or b[2]) end
+        f.extra[i] = eb
+        f.buttonsW = f.buttonsW + 4 + (b.w or 18)
+        leftOf = eb
+    end
+    f.right = UI.Text(f, 11, C.text, "RIGHT")
+    f.right:SetPoint("RIGHT", leftOf, "LEFT", -6, 0)
+    function f:SetRightText(text) self.right:SetText(text or "") end
+
+    -- The three-part title (SetTitleParts): each part gets its own width, so they can't run into each other.
+    f.timer = UI.Text(f, 11, C.text, "RIGHT")
+    f.rate = UI.Text(f, 11, C.text, "RIGHT")
+    local GAP = 8
+    local titleX = opts.status and 24 or 10
+    -- the text's whole width, not the part a set width shows (GetUnboundedStringWidth where the client has it)
+    local function textW(fs)
+        return (fs.GetUnboundedStringWidth and fs:GetUnboundedStringWidth()) or fs:GetStringWidth() or 0
+    end
+    local function measure(fs, s)
+        fs:SetText(s or "")
+        if not s or s == "" then return 0 end
+        return math.ceil(textW(fs))
+    end
+    -- text cut to width w with "..." (plain text; a cut never splits a UTF-8 character)
+    local function fit(fs, text, w)
+        text = text or ""
+        fs:SetText(text)
+        if text == "" or textW(fs) <= w then return end
+        for n = #text - 1, 1, -1 do
+            local cut = text:sub(1, n):gsub("[\192-\255][\128-\191]*$", ""):gsub("%s+$", "")
+            fs:SetText(cut .. "...")
+            if cut ~= "" and textW(fs) <= w then return end
+        end
+        fs:SetText("")
+    end
+    function f:LayoutTitle()
+        local p = self.parts
+        if not p then return end
+        local W = self:GetWidth() or 0
+        local rightEdge = W - self.buttonsW - 6          -- where the right-hand texts end
+        local avail = rightEdge - titleX
+        local tw, rw = measure(self.timer, p.timer), measure(self.rate, p.rate)
+        local function room() return avail - (tw > 0 and tw + GAP or 0) - (rw > 0 and rw + GAP or 0) end
+        local full = measure(self.title, p.status)
+        local text = p.status
+        if full > room() and p.short then text = p.short end
+        if measure(self.title, text) > room() and rw > 0 then          -- even short it doesn't fit: no rate
+            rw = 0
+            self.rate:SetText("")
+            if full <= room() then text = p.status end
+        end
+        if room() < 0 and tw > 0 then tw = 0; self.timer:SetText("") end   -- a box too narrow for the clock
+        local sw = math.max(0, room())
+        self.title:ClearAllPoints()
+        self.title:SetPoint("TOPLEFT", titleX, -9)
+        self.title:SetWidth(math.max(1, sw))
+        fit(self.title, text, sw)
+        self.rate:ClearAllPoints()
+        self.rate:SetPoint("RIGHT", self, "TOPLEFT", rightEdge, -14)
+        self.rate:SetWidth(math.max(1, rw))
+        local timerRight = rw > 0 and (rightEdge - rw - GAP) or rightEdge
+        self.timer:ClearAllPoints()
+        self.timer:SetPoint("RIGHT", self, "TOPLEFT", timerRight, -14)
+        self.timer:SetWidth(math.max(1, tw))
+        self.titleLayout = { statusL = titleX, statusW = sw, timerL = timerRight - tw, timerW = tw,
+            rateL = rightEdge - rw, rateW = rw, buttonsL = W - self.buttonsW }
+    end
+    function f:SetTitleParts(status, timer, rate, short)
+        self.parts = { status = status or "", timer = timer, rate = rate, short = short }
+        self.right:SetText("")
+        self:LayoutTitle()
+    end
+
+    -- The corner grip (opts.resize): same six dots as the main window's zoom grip.
+    if opts.resize then
+        local rs = opts.resize
+        local g = UI.Grip(f)
+        g:SetPoint("BOTTOMRIGHT", -2, 2)
+        g:SetFrameLevel((f:GetFrameLevel() or 1) + 10)
+        local function stop(self)
+            if not self.drag then return end
+            self.drag = nil
+            self:SetScript("OnUpdate", nil)
+            self.readout:Hide()
+            if rs.stop then rs.stop() end
+        end
+        g:SetScript("OnMouseDown", function(self, button)
+            if button ~= "LeftButton" then return end
+            GameTooltip:Hide()
+            -- grow right and down from where the top-left corner is now
+            local l, t, s = f:GetLeft(), f:GetTop(), f:GetScale() or 1
+            local uh = UIParent:GetHeight() or 0
+            if l and t and s > 0 then
+                f:ClearAllPoints()
+                f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", l, t - uh / s)
+                if opts.setPos then opts.setPos({ point = "TOPLEFT", x = l, y = t - uh / s }) end
+            end
+            local es = f:GetEffectiveScale() or 1
+            local x0, y0 = GetCursorPosition()
+            local moved = false
+            self.drag = true
+            if rs.start then rs.start() end
+            self:SetScript("OnUpdate", function()
+                local x, y = GetCursorPosition()
+                local dx, dy = (x - x0) / es, (y0 - y) / es
+                if not moved and math.abs(dx) + math.abs(dy) < 3 then return end
+                moved = true
+                local text = rs.drag and rs.drag(dx, dy)
+                if text then self.readout:SetText(text); self.readout:Show() end
+            end)
+        end)
+        g:SetScript("OnMouseUp", function(self) stop(self); if not (self.IsMouseOver and self:IsMouseOver()) then self:Tint(C.dim) end end)
+        g:SetScript("OnHide", stop)
+        g:SetScript("OnDoubleClick", function() if rs.reset then rs.reset() end end)
+        g:SetScript("OnEnter", function(self)
+            self:Tint(C.accent)
+            if self.drag or not rs.tip then return end
+            GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+            if type(rs.tip) == "function" then rs.tip(GameTooltip) else GameTooltip:AddLine(rs.tip, 1, 1, 1, true) end
+            GameTooltip:Show()
+        end)
+        g:SetScript("OnLeave", function(self) if not self.drag then self:Tint(C.dim) end GameTooltip:Hide() end)
+        f.grip = g
+    end
+    if opts.onWheel or opts.zoom then
+        f:EnableMouseWheel(true)
+        f:SetScript("OnMouseWheel", function(self, delta)
+            if opts.zoom and IsControlKeyDown and IsControlKeyDown() then
+                local z = math.max(0.7, math.min(1.4, (opts.zoom.get() or 1) + (delta > 0 and 0.05 or -0.05)))
+                z = math.floor(z * 20 + 0.5) / 20
+                opts.zoom.set(z)
+                self:SetScale(z)
+                return
+            end
+            if opts.onWheel then opts.onWheel(delta) end
+        end)
+        if opts.zoom then f:SetScale(opts.zoom.get() or 1) end
     end
     return f
 end

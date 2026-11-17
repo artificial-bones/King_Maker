@@ -12,10 +12,10 @@ times what it sells for, priced by King Maker's **Scanner** (Scanner King).
 |---|---|
 | The mob list and a mob's page | King Maker window, **Farming > Mob Farming** (`/fk`, `/km mobs`) |
 | White Items | **Farming > White Items** (`/fk white`) |
-| The farm tracker | A small floating box: the crown's **Farm tracker** quick action, the button on Mob Farming, or `/fk mini` |
+| The farm tracker | King Maker's **Farm Tracker**: the crown's **Farm Tracker** quick action, the button on Mob Farming, `/farm` or `/fk mini` |
 | Mobs in your zone | Right-click the King Maker crown: **This zone's mobs** |
-| Settings | **Settings > Farm**: guild sharing, Min kills, near my level, the farm tracker |
-| Home | A **Farm session** tile while the farm tracker has something in it |
+| Settings | **Settings > Farm**: guild sharing, Min kills, near my level (the tracker's are under **Settings > Farm Tracker**) |
+| Home | The Farm Tracker's **Farming now** tile while a session runs |
 
 Farm has no minimap button of its own any more: the King Maker crown does its
 clicks. Its saved data (`FarmKingDB`) keeps the 1.x shape, and a 1.x
@@ -124,19 +124,21 @@ prices every item, so run one first.
 
 ## Farm tracker
 
-The crown's **Farm tracker** quick action, the **Farm tracker** button on Mob
-Farming, or `/fk mini` shows a small movable box that tallies what you're
-farming:
+Since King Maker 2.6 the farm tracker box is King Maker's **Farm Tracker**: one
+box for mob farming and gathering together (its own README:
+`Modules/Tracker/README.md`). The **Farm tracker** button on Mob Farming, the
+crown's **Farm Tracker** quick action, `/farm` and `/fk mini` all show it.
 
-- every mob you've killed, how many, and what their kills brought in,
-- every drop, how many, and what they're worth, plus the coin you looted,
-- the total.
+- The kills Farm spots count in the tracker's session; it also counts what you
+  skin, pickpocket and gather, which the old box never did.
+- Every session is saved to the **Farming Ledger** page, so there's no Reset any
+  more: **Stop & save**, **Split** or **Discard**.
+- The timer is automatic: a session starts by itself after a few kills, a
+  `/reload` keeps it running, and idle minutes are taken back off.
+- Your old tally moved into the Farming Ledger as one **Carried over** session.
 
-**Start timer** adds gold per hour for what you farm while it runs; without it
-you just see totals. Pause and resume it as you like (a `/reload` pauses it and
-keeps its time). **Reset** clears the box, `-` folds it to its title bar (which
-still shows your total or gold per hour), `x` closes it. It remembers where you
-dragged it.
+Farm's own numbers (drop rates, gold per kill) are unchanged and still count
+every corpse, as before.
 
 ## Your guild
 
@@ -160,7 +162,7 @@ Drop data is shared on request, so it costs nothing until someone asks:
 | `/fk status` | What's been recorded, and whether QuestieDB was found |
 | `/fk share on` / `off` | Answer guildmates' requests for your drop data |
 | `/fk forget guild` | Drop every guildmate's data |
-| `/fk mini on` / `off` | The farm tracker |
+| `/fk mini on` / `off` | The Farm Tracker (also `/farm`) |
 | `/fk button` | Says where the button went: the King Maker crown (`/km button`) |
 
 ## For addon authors

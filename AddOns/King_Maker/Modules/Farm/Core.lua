@@ -11,8 +11,8 @@ local ns = KM.Module("Farm", { title = "Farm King", short = "Farm", legacy = "Fa
 -- Drop rates come from your own kills, plus your guild's when they share.
 --
 -- In King Maker it has no window or minimap button of its own: the list and a mob's page are the "mobs"
--- page (UI.lua, Mob.lua), White Items is the "whites" page (White.lua), the session tracker is a floating
--- HUD (Session.lua), and its clicks are quick actions on the King Maker crown.
+-- page (UI.lua, Mob.lua), White Items is the "whites" page (White.lua), and its clicks are quick actions on the
+-- King Maker crown. The session tracker is King Maker's Farm Tracker (Modules\Tracker), which Farm feeds kills.
 
 FarmKing = { API_VERSION = 1 }
 local API = FarmKing
@@ -29,66 +29,19 @@ function ns.Money(v)
 end
 
 ---------------------------------------------------------------------------
--- Items: name, quality, icon, vendor price, binding, class
+-- Items: the shared cache and value rule (Core\Items.lua since King Maker 2.6; the Farm Tracker uses the same)
 ---------------------------------------------------------------------------
 
-local waiting = false
-local itemCache = {}
-
 -- { name, q = quality, icon, sell = vendor copper, bop = bind on pickup, class }
-function ns.Item(id)
-    local c = itemCache[id]
-    if c and c.name then return c end
-    c = c or {}
-    local get = (C_Item and C_Item.GetItemInfo) or GetItemInfo
-    if get then
-        local name, _, quality, _, _, _, _, _, _, icon, sell, classID, _, bind = get(id)
-        if name then
-            c.name, c.q, c.icon, c.sell, c.class, c.bop = name, quality, icon, sell or 0, classID, bind == 1
-        end
-    end
-    if not c.name then
-        local inst = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
-        if inst and not c.icon then
-            local _, _, _, _, icon, classID = inst(id)
-            c.icon, c.class = icon, c.class or classID
-        end
-        if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
-        waiting = true
-    end
-    itemCache[id] = c
-    return c
-end
+ns.Item = KM.Item
+ns.ItemText = KM.ItemText
+ns.TakeWaiting = KM.TakeItemWaiting
+ns.QUALITY_COLOR = KM.QUALITY_COLOR
 
-function ns.TakeWaiting()
-    local w = waiting
-    waiting = false
-    return w
-end
-
-local QUALITY = { [0] = "|cff9d9d9d", "|cffffffff", "|cff1eff00", "|cff0070dd", "|cffa335ee", "|cffff8000" }
-ns.QUALITY_COLOR = QUALITY
-function ns.ItemText(id)
-    local i = ns.Item(id)
-    return (QUALITY[i.q or 1] or "|cffffffff") .. (i.name or ("Item " .. id)) .. "|r"
-end
-
-local CUT = 0.95
-
--- What one of an item is worth to you: grey and bind-on-pickup items go to a
--- vendor; anything else the better of the auction house (after its 5% cut)
--- and a vendor. Quest items are worth nothing here. Also returns where the
+-- What one of an item is worth to you: grey and bind-on-pickup items go to a vendor; anything else the better of
+-- the auction house (after its 5% cut) and a vendor. Quest items are worth nothing here. Also returns where the
 -- value came from ("ah", "vendor") or nil when it isn't known yet.
-function ns.ItemValue(id)
-    local i = ns.Item(id)
-    if i.class == 12 then return 0, "quest" end
-    if not i.name then return nil end
-    local vendor = i.sell or 0
-    if i.q == 0 or i.bop then return vendor, "vendor" end
-    local ah = ScannerKing and ScannerKing.GetMarketPrice and ScannerKing.GetMarketPrice(id)
-    if ah and ah * CUT > vendor then return ah * CUT, "ah" end
-    return vendor, "vendor"
-end
+ns.ItemValue = KM.ItemValue
 
 ---------------------------------------------------------------------------
 -- Saved data, slash command
@@ -104,7 +57,6 @@ function ns.InitDB()
     db.track = db.track or {}     -- npcID -> true: spawns shown on the world map
     db.corpses = db.corpses or {} -- corpse GUID -> when it was counted (kept an hour)
     db.recent = db.recent or {}   -- npcIDs you killed, the latest first (Recent kills)
-    db.session = db.session or {} -- the mini tracker's tally (Session.lua)
     db.ui = db.ui or {}
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     db.filter = db.filter or {}
@@ -140,7 +92,13 @@ SlashCmdList.FARMKING = function(msg)
     elseif cmd == "button" then
         KM.Print(ns, "The King Maker crown on the minimap replaces this button: /km button")
     elseif cmd == "mini" then
-        ns.SetMini(rest:lower() == "on" or (rest:lower() ~= "off" and not ns.db.ui.mini))
+        -- the old farm tracker box is King Maker's Farm Tracker now (also /farm)
+        if TrackerKing and TrackerKing.SetHUD then
+            local on = rest:lower() == "on" or (rest:lower() ~= "off" and not TrackerKing.HUDShown())
+            KM.Safe(TrackerKing.SetHUD, on)
+        else
+            KM.Print(ns, "The Farm Tracker isn't loaded.")
+        end
     elseif cmd == "status" then
         local mobs, kills = 0, 0
         for _, m in pairs(ns.db.mobs) do mobs = mobs + 1; kills = kills + (m.k or 0) end
@@ -154,7 +112,7 @@ SlashCmdList.FARMKING = function(msg)
         KM.Print(ns, "/fk status   what's been recorded")
         KM.Print(ns, "/fk share [on|off]   answer guildmates' requests for your drop data")
         KM.Print(ns, "/fk forget guild   drop every guildmate's data")
-        KM.Print(ns, "/fk mini [on|off]   the farm tracker: this session's kills, drops and gold per hour")
+        KM.Print(ns, "/fk mini [on|off]   the Farm Tracker (also /farm)")
     end
 end
 
