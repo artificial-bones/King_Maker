@@ -4,7 +4,7 @@
 ## Author: BearBones
 ## X-License: GPL-3.0
 ## X-Credits: Recipe data from ForeverDB.net
-## Version: 2.8.0
+## Version: 2.8.1
 ## IconTexture: Interface\Icons\INV_Crown_01
 ## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB, ShoppingKingDB, ProfessionKingDB, CooldownKingDB, TrackerKingDB, ProfitKingDB
 ## OptionalDeps: QuestieDB, TomTom, LibDBIcon-1.0, Auctionator
@@ -90,7 +90,6 @@ Modules\Tracker\HUD.lua
 Modules\Tracker\Page.lua
 Modules\Tracker\Detail.lua
 Modules\Tracker\Trends.lua
-Modules\Tracker\Guild.lua
 
 # Inventory
 Modules\Inventory\Core.lua

@@ -97,8 +97,8 @@ makes the whole box bigger or smaller (70 to 140%).
 
 ## The Farming Ledger
 
-Four tabs share the top bar with **Export**, **All characters / This character** and the period (7 days, 30 days,
-All): **Sessions**, **Trends**, **Mat Prices** and **Guild**.
+Three tabs share the top bar with **Export**, **All characters / This character** and the period (7 days, 30 days,
+All): **Sessions**, **Trends** and **Mat Prices**.
 
 **Sessions.** Six tiles for the period you pick (7 days, 30 days, All): farmed,
 gold per hour (and how it compares with the period before), time, sessions,
@@ -123,28 +123,6 @@ again) and **Top items farmed**. Carried-over sessions never count here.
 average (Price History), when you last farmed it, how many an hour you farm it, and
 your best gold per hour in a session that farmed it. Click an item for its Price
 History.
-
-**Guild** (new in 2.7). The best gold per hour at each farm across your guild, from guildmates
-running King Maker, with yours beside it. Each farm shows the guild's best, who set it (in their
-class colour), when, the top item of that session and your own best (**yours** when you hold the
-guild's). Filter by **Mobs**, **Gathering** or **Mixed**, and **Near my level** (the zone's mobs
-from Mob Farming, from 5 levels under you to 3 over; with no mob data, the level the best was set
-at). Click a farm for everyone's best there. Six tiles: farms on the board, the guild's best, your
-best, where you lead, guildmates heard from and whether you're sharing.
-
-What's shared is only each character's **personal best per farm**: its top 20 farms, from sessions
-of 10+ active minutes in the last 60 days (carried-over sessions never count). Never your sessions.
-The guild channel stays quiet:
-
-| When | What goes out |
-|---|---|
-| You save a session that sets a new best | One short message, 5 seconds later (nothing if it isn't a best) |
-| You log in | One fingerprint of your bests, 25 to 45 seconds later. Guildmates whose copy matches stay quiet; one whose copy differs asks, and you send only the farms that differ |
-| A guildmate logs in behind on you | Your fingerprint once more (at most every 10 minutes), so they can ask |
-
-At most 6 messages a minute, a few answers per 10 minutes. A guildmate's best leaves the board after
-60 days (setting), or when they leave the guild. When a guildmate sets a new guild record, you get
-one line in chat.
 
 **Export** (or `/farm export`) puts the sessions shown into a window as
 comma-separated text: Ctrl+A, Ctrl+C, paste into a spreadsheet. Money is in copper,
@@ -185,7 +163,6 @@ Tracker shows if either old box was showing, where that box was.
 | `/farm ledger` | Open the Farming Ledger (also `/km farming`) |
 | `/farm export` | The ledger's sessions as text for a spreadsheet |
 | `/farm auto on` / `off` | Start sessions by themselves when you farm |
-| `/farm guild` (`on`, `off`) | Guild bests: share yours and show your guild's, or neither |
 | `/farm status` | State, time, farmed, gold per hour |
 | `/fk mini`, `/gt ledger` | The old commands still work: show or hide it; `/gt ledger reset` saves the session, `/gt ledger timer` pauses it |
 
@@ -202,9 +179,6 @@ Tracker shows if either old box was showing, where that box was.
 | Save an idle session after | 20 min (10, 60, Never) |
 | Count party coin shares / quest gold / disenchanting | On / off / off |
 | Keep | 200 sessions (100, 500) |
-| Share my best farms with my guild | On (off: nothing is sent or answered; guildmates' new bests still arrive) |
-| Show guild bests | On (off: guildmates' messages are ignored) |
-| Forget guild bests after | 60 days (30, 90) |
 
 ## For addon authors
 
@@ -224,5 +198,4 @@ describes it.
 
 `python tests/run.py tracker` (from `AddOns/King_Maker`) runs the tracker with the
 Scanner, Farm, Gather and Econ against the shared stand-in for the game
-(`tests/tracker.py`; needs `pip install lupa`). `python tests/run.py leaderboard` runs
-guild bests with two clients passing their messages to each other (`tests/leaderboard.py`).
+(`tests/tracker.py`; needs `pip install lupa`).

@@ -17,7 +17,6 @@ or install **King Maker** from CurseForge.
   the cost follows your stock through crafting, disenchanting, mail to your alts, quest rewards and trades. `/pnl`.
 - **Home is an overview of your gold**: net worth, this week's results and charts, what needs your attention, where
   your gold came from, the best things to do right now and every character at a glance.
-- **Guild bests**: the best gold per hour at each farm across your guild, on the Farming Ledger's Guild tab.
 - **Farm Tracker and Farming Ledger.** One floating tracker for mob farming and all gathering (mining, herbs,
   skinning, fishing, pickpocketing, chests, clams and lockboxes), with Start, Pause, Stop and Split. Every session is
   saved: the **Farming Ledger** page shows what each one made, gold per hour, a gold-over-time graph and where the

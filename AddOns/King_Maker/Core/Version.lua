@@ -9,8 +9,8 @@ local _, KM = ...
 --   V<version>   "this is my version": sent once, 15-25 s after login
 --   R<version>   an answer to an older V: sent by one guildmate with a newer version (whoever's random 2-8 s
 --                delay ends first; the others hear the answer and stand down), at most once a minute
--- The prefix is King Maker's one prefix: the Farm Tracker's guild bests (Modules\Tracker\Guild.lua) use it too, with
--- the kinds F, A and B; this file reads only V and R.
+-- The prefix is King Maker's one prefix; this file reads only V and R (2.8.0's guild bests also sent F, A and B:
+-- those are ignored).
 -- Nothing is sent outside a guild. KingMakerDB.newest keeps the newest version seen ({ v, who, t }) for /km version.
 -- Settings > General: "Tell me when a guildmate has a newer King Maker" (KingMakerDB.ui.versionNotice, default on);
 -- your own version is always announced, so the guild still hears about it.

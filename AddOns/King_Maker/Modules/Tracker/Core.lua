@@ -12,11 +12,10 @@ local ns = KM.Module("Tracker", { title = "Farm Tracker", short = "Tracker", db 
 --   Page.lua      the Farming Ledger page (Sessions), quick actions, Home tile, crown tooltip, settings
 --   Detail.lua    one saved session: tiles, charts, Items / Mobs / Gathering / Money
 --   Trends.lua    the ledger's Trends and Mat Prices tabs, and its export (2.6.2)
---   Guild.lua     guild bests (2.7): personal bests per farm shared with guildmates, the ledger's Guild tab
 --
 -- Saved data: TrackerKingDB (account-wide, version 1): live[char] = the session in progress per character,
--- sessions = finished ones (each tagged with its character), settings, ui, guild = guildmates' bests per guild
--- (Guild.lua). See the King Dashboard contract.
+-- sessions = finished ones (each tagged with its character), settings, ui. See the King Dashboard
+-- contract.
 
 TrackerKing = { API_VERSION = 1 }   -- functions only, never saved data (house style)
 local API = TrackerKing
@@ -25,13 +24,12 @@ ns.API = API
 local DEFAULTS = {
     settings = {
         startActions = 3, idlePause = 300, idleStop = 1200, offlineStop = 7200, minKeep = 120,
-        keep = 200, detailDays = 45, guildDays = 60,
+        keep = 200, detailDays = 45,
     },
     -- booleans, defaulted with `if s.x == nil then s.x = v end`
-    flags = { autoStart = true, autoResume = true, countQuest = false, countDE = false, countShares = true, hudOnStart = true,
-        guildShare = true, guildShow = true },
-    ui = { hudTab = "all", priceTab = "mine", hudScale = 1, tab = "sessions", period = 30, guildAct = "all" },
-    uiFlags = { hud = false, hudCollapsed = false, mine = false, revalue = false, guildNear = false },
+    flags = { autoStart = true, autoResume = true, countQuest = false, countDE = false, countShares = true, hudOnStart = true },
+    ui = { hudTab = "all", priceTab = "mine", hudScale = 1, tab = "sessions", period = 30 },
+    uiFlags = { hud = false, hudCollapsed = false, mine = false, revalue = false },
 }
 
 function ns.Settings() return ns.db.settings end
@@ -47,7 +45,11 @@ function ns.InitDB()
     db.live = db.live or {}
     db.sessions = db.sessions or {}
     db.migrated = db.migrated or {}
-    db.guild = db.guild or {}
+    -- 2.8.0's guild bests are gone (farms are your own): drop guildmates' bests and the settings that shared yours
+    db.guild = nil
+    for _, k in ipairs({ "guildDays", "guildShare", "guildShow" }) do db.settings[k] = nil end
+    db.ui.guildAct, db.ui.guildNear = nil, nil
+    if db.ui.tab == "guild" then db.ui.tab = "sessions" end
     for k, v in pairs(DEFAULTS.settings) do if db.settings[k] == nil then db.settings[k] = v end end
     for k, v in pairs(DEFAULTS.flags) do if db.settings[k] == nil then db.settings[k] = v end end
     for k, v in pairs(DEFAULTS.ui) do if db.ui[k] == nil then db.ui[k] = v end end
@@ -274,7 +276,6 @@ local function help()
     print("  /farm ledger   open the Farming Ledger (also /km farming)")
     print("  /farm export   the ledger's sessions as text for a spreadsheet")
     print("  /farm auto on|off   start sessions by themselves when you farm")
-    print("  /farm guild [on|off]   share your best farms with your guild and show theirs (Farming Ledger > Guild)")
     print("  /farm status   state, time, farmed, gold per hour")
 end
 
@@ -306,8 +307,6 @@ SlashCmdList.KINGMAKERFARM = function(msg)
         local st = ns.Settings()
         st.autoStart = rest == "on" or (rest ~= "off" and not st.autoStart)
         KM.Print(ns, "sessions start by themselves when you farm: " .. (st.autoStart and "on." or "off."))
-    elseif cmd == "guild" then
-        if ns.GuildCommand then ns.GuildCommand(rest) end
     elseif cmd == "status" then
         status()
     else

@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ORDER = ["core", "scanner", "econ", "market", "skillup", "farm", "gather", "tracker", "leaderboard", "inventory", "mail", "quest", "rested",
+ORDER = ["core", "scanner", "econ", "market", "skillup", "farm", "gather", "tracker", "inventory", "mail", "quest", "rested",
          "minimap", "shopping", "profession", "cooldowns", "profit", "oracle", "all"]
 
 # run_tests.py passes folder paths; suite names are bare words (note "core" vs the Core folder on Windows)

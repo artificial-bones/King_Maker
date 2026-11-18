@@ -1000,4 +1000,22 @@ assert len(list(KM.LootExpects().values())) == 0, "old expectations are pruned"
 assert not KM.errorShown, last(L)
 print("ROLLS OK")
 
+# guild bests are gone (2.8.1): a 2.8.0 save loses guildmates' bests and the sharing settings, no Guild tab, nothing sent
+OLD_GUILD = ("TrackerKingDB = { version = 1, sessions = {}, live = {}, settings = { guildShare = true, guildShow = true, guildDays = 60 },"
+             " ui = { tab = 'guild', guildAct = 'all', guildNear = true },"
+             " guild = { ['Guild-Realm'] = { Bob = { t = 1, f = 'x', farms = { ['1429:Mobs'] = { m = 1429, a = 'Mobs', g = 100 } } } } } }")
+L, KM, ns = load(seed=OLD_GUILD)
+assert L.eval("TrackerKingDB.guild") is None, "guildmates' bests dropped"
+for k in ("guildShare", "guildShow", "guildDays"):
+    assert L.eval("TrackerKingDB.settings.%s" % k) is None, k
+assert L.eval("TrackerKingDB.ui.tab") == "sessions" and L.eval("TrackerKingDB.ui.guildNear") is None
+L.execute('RUN_TIMERS(); RECV("KingMaker1", "F1abc", "Bob-Realm"); RECV("KingMaker1", "Bwwww", "Bob-Realm"); RUN_TIMERS()')
+assert not [m for m in L.eval("SENT").values() if m.prefix == "KingMaker1" and str(m.text)[:1] in "FAB"], "no guild bests sent"
+L.globals().TRK = ns; KM.Show("farming")
+assert L.eval("TRK.P.tabs.buttons.guild") is None and L.eval("TRK.P.tabs.buttons.trends") is not None
+L.eval("SlashCmdList.KINGMAKERFARM")("guild")
+assert not any("guild" in o.lower() for o in outputs(L)[-15:]), "/farm guild is gone: it shows the help, which has no guild line"
+assert not KM.errorShown, last(L)
+print("NO GUILD OK")
+
 print("tracker: ok")

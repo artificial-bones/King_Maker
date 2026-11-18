@@ -5,8 +5,8 @@ local C = UI.C
 
 -- The Farming Ledger page (Farming > Farming Ledger, /km farming, /farm ledger) and the Farm Tracker's place in the
 -- shell: crown quick actions, the Home tile, a crown tooltip line, the sidebar status line and Settings > Farm Tracker.
--- The page has four tabs on one top bar (with Export, the character filter and the period): Sessions (here),
--- Trends and Mat Prices (Trends.lua), Guild (Guild.lua); a session opens in the list's place (Detail.lua).
+-- The page has three tabs on one top bar (with Export, the character filter and the period): Sessions (here),
+-- Trends and Mat Prices (Trends.lua); a session opens in the list's place (Detail.lua).
 
 ---------------------------------------------------------------------------
 -- Sums over sessions (time-weighted: gold per hour is total value over total active time, never an average of rates)
@@ -171,15 +171,6 @@ KM.RegisterSettings({ id = "tracker", label = "Farm Tracker", order = 42, rows =
       get = function() return S().countQuest end, set = function(v) S().countQuest = v end },
     { type = "check", label = "Count disenchanting", tip = "Disenchanting turns an item you already had into mats, so counting it can count the same gold twice. The session you're farming follows at once; saved sessions keep how they were counted.",
       get = function() return S().countDE end, set = function(v) ns.SetCountDE(v) end },
-    { type = "header", label = "Guild bests" },
-    { type = "check", label = "Share my best farms with my guild",
-      tip = "Guildmates running King Maker see your best gold per hour at each farm (your top 20, sessions of 10+ active minutes), never your sessions. A new best is one short message; at login one fingerprint, and only what differs is exchanged. Off: nothing is sent.",
-      get = function() return S().guildShare end, set = function(v) ns.SetGuildShare(v) end },
-    { type = "check", label = "Show guild bests", tip = "Read what guildmates share and show it on the Farming Ledger's Guild tab. Off: their messages are ignored.",
-      get = function() return S().guildShow end, set = function(v) ns.SetGuildShow(v) end },
-    { type = "choice", label = "Forget guild bests after", options = { { 30, "30 days" }, { 60, "60 days" }, { 90, "90 days" } },
-      tip = "A best from a session older than this leaves the board; so does a guildmate who leaves the guild. Your own bests shared come from the same days.",
-      get = function() return S().guildDays end, set = function(v) S().guildDays = v; KM.Safe(ns.GuildPrune) end },
     { type = "header", label = "Ledger" },
     { type = "choice", label = "Keep", options = { { 100, "100" }, { 200, "200" }, { 500, "500" } },
       get = function() return S().keep end, set = function(v) S().keep = v; ns.Prune() end },
@@ -190,7 +181,7 @@ KM.RegisterSettings({ id = "tracker", label = "Farm Tracker", order = 42, rows =
     { type = "header", label = "Commands" },
     { type = "text", label = "/farm   show or hide the Farm Tracker\n/farm start | stop | pause | split | discard\n"
         .. "/farm ledger   the Farming Ledger (also /km farming)\n/farm export   the sessions as text for a spreadsheet\n"
-        .. "/farm auto on|off   start sessions by themselves\n/farm guild [on|off]   guild bests\n/farm status\n"
+        .. "/farm auto on|off   start sessions by themselves\n/farm status\n"
         .. "Key bindings: Esc > Options > Key Bindings > AddOns > King Maker." },
 } })
 
@@ -371,11 +362,11 @@ end
 
 -- The top bar the three tabs share: Sessions | Trends | Mat Prices, Export, the character filter and the period.
 local TABS = { { id = "sessions", label = "Sessions", w = 82 }, { id = "trends", label = "Trends", w = 72 },
-    { id = "prices", label = "Mat Prices", w = 90 }, { id = "guild", label = "Guild", w = 64 } }
+    { id = "prices", label = "Mat Prices", w = 90 } }
 
 function ns.Tab()
     local t = U().tab
-    if t ~= "trends" and t ~= "prices" and t ~= "guild" then t = "sessions" end
+    if t ~= "trends" and t ~= "prices" then t = "sessions" end
     return t
 end
 
@@ -389,7 +380,6 @@ local function buildTop(c)
     P.tabs:SetPoint("TOPLEFT", 0, 0)
     UI.Tip(P.tabs.buttons.trends, "What you farmed per day, your best farms and the items that made the most.")
     UI.Tip(P.tabs.buttons.prices, "Gathering mats: what they sell for now, against what they're worth to you (how fast you farm them and your gold per hour when you do).")
-    UI.Tip(P.tabs.buttons.guild, "The best gold per hour at each farm across your guild: yours beside the guild's, from guildmates running King Maker.")
     local items = {}
     for _, p in ipairs(PERIODS) do items[#items + 1] = { id = p[1], label = p[2], w = 70 } end
     P.periods = UI.Tabs(top, items, function(id) U().period = id; KM.Refresh("farming") end, 24)
@@ -569,7 +559,6 @@ local function build(c)
     if ns.BuildDetail then ns.BuildDetail(c) end
     if ns.BuildTrends then ns.BuildTrends(c) end
     if ns.BuildPrices then ns.BuildPrices(c) end
-    if ns.BuildGuild then ns.BuildGuild(c) end
     c:SetScript("OnSizeChanged", function(self) if self:IsShown() then KM.Refresh("farming") end end)
 end
 
@@ -578,9 +567,8 @@ local function refreshTop()
     local tab = ns.Tab()
     P.tabs:Select(tab)
     P.periods:Select(u.period or 30)
-    P.periods:SetShown(tab ~= "prices" and tab ~= "guild")
-    P.export:SetShown(tab ~= "prices" and tab ~= "guild")
-    P.charBtn:SetShown(tab ~= "guild")
+    P.periods:SetShown(tab ~= "prices")
+    P.export:SetShown(tab ~= "prices")
     P.charBtn:SetLabel(u.mine and "This character" or "All characters")
     P.charBtn:SetActive(u.mine and true or false)
     P.charBtn:ClearAllPoints()
@@ -598,14 +586,13 @@ local function refresh(c)
         P.top:Show()
         refreshTop()
         local tab = ns.Tab()
-        show = (tab == "trends" and P.trends) or (tab == "prices" and P.prices) or (tab == "guild" and P.guild) or P.list
+        show = (tab == "trends" and P.trends) or (tab == "prices" and P.prices) or P.list
     end
-    for _, f in ipairs({ P.list, P.detail, P.trends, P.prices, P.guild }) do if f ~= show then f:Hide() end end
+    for _, f in ipairs({ P.list, P.detail, P.trends, P.prices }) do if f ~= show then f:Hide() end end
     show:Show()
     if show == P.detail then ns.RefreshDetail(c)
     elseif show == P.trends then ns.RefreshTrends(c)
     elseif show == P.prices then ns.RefreshPrices(c)
-    elseif show == P.guild then ns.RefreshGuild(c)
     else ns.RefreshList(c) end
 end
 
@@ -630,7 +617,6 @@ KM.RegisterPage({
         if P.view == "detail" then return "One farming session: what you looted, where it came from and what it made per hour." end
         if ns.db and ns.Tab() == "trends" then return "Your farming over time: gold per day, your best farms and what made the most." end
         if ns.db and ns.Tab() == "prices" then return "What gathering mats sell for, and what they're worth to you: how fast you farm them and what that pays." end
-        if ns.db and ns.Tab() == "guild" then return "The best gold per hour at each farm across your guild, with yours beside it." end
         return "Every farming session: what you looted, what it's worth and your gold per hour."
     end,
     badge = function() return ns.State() == "running" and "LIVE" or "" end,
