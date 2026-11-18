@@ -57,10 +57,10 @@ dw = ns.DisenchantResults(2, 18, 2); assert dw[1][1] == 10940 and abs(dw[1][2] -
 assert ns.DisenchantResults(1, 18, 4) is None and ns.DisenchantResults(2, 18, 7) is None
 # the King Dashboard runs Data/Recipes.lua on its own with a bare table for `...`: it must still work
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-for fn in ("Recipes", "Patterns", "Disenchant", "Vendor"):
+for fn in ("Recipes", "Patterns", "Disenchant", "Vendor", "Enchants"):
     src = open(os.path.join(ROOT, "Modules", "Market", "Data", fn + ".lua"), encoding="utf-8").read()
     L.globals().SRC = src
-    n = L.eval("(function() local ns = {} local f = assert(loadstring(SRC)) f('Market_King', ns) local c = 0 for _ in pairs(ns.RECIPES or ns.PATTERNS or ns.DE_UNCOMMON or ns.VENDOR_ITEMS) do c = c + 1 end return c end)()")
+    n = L.eval("(function() local ns = {} local f = assert(loadstring(SRC)) f('Market_King', ns) local c = 0 for _ in pairs(ns.RECIPES or ns.ENCHANTS or ns.PATTERNS or ns.DE_UNCOMMON or ns.VENDOR_ITEMS) do c = c + 1 end return c end)()")
     assert n > 5, (fn, n)
 print("DATA OK")
 
@@ -149,8 +149,11 @@ assert any("Taught by a trainer" in x for x in tip)
 r1.RunScript(r1, "OnLeave")
 mk("mode farm"); t = fonts()
 assert "RAW VALUE" in t and "GAIN VS RAW" in t, t
-assert "Ethical Gaming" in t and "Yrgna Special" in t
-assert L.eval("BTN('Ethical Gaming')").active and not L.eval("BTN('Yrgna Special')").active
+assert "Use my mats" in t and "Buy mats" in t and not any("Yrgna" in x or "Ethical" in x for x in t)
+assert L.eval("BTN('Use my mats')").active and not L.eval("BTN('Buy mats')").active
+mk("mode buy"); assert L.eval("MarketKingDB.mode") == "buy"
+mk("mode mine"); assert L.eval("MarketKingDB.mode") == "farm", "/mk mode mine = Use my mats"
+assert any("Use my mats" in o for o in outputs(L)[-2:])
 # vendor prices seen at a merchant replace the estimate
 L.execute("""
 C_MerchantFrame = nil
@@ -240,13 +243,13 @@ FIRE("TRADE_SKILL_SHOW")
 assert ns.HasRecipe(3321) and "pattern recipe" in last(L), last(L)
 assert ns.HasRecipe(3325)                                         # Gemmed Copper Gauntlets (Plans), matched by item
 # NEW_RECIPE_LEARNED marks one known straight away
-lacking0 = [s for s in ns.PATTERNS.keys() if ns.RECIPES[s][2] == 2 and not ns.HasRecipe(s)]
+lacking0 = [s for s in ns.PATTERNS.keys() if ns.RECIPES[s] and ns.RECIPES[s][2] == 2 and not ns.HasRecipe(s)]
 L.execute('FIRE("NEW_RECIPE_LEARNED", %d)' % lacking0[-1]); assert ns.HasRecipe(lacking0[-1])
 L.execute("MarketKingDB.chars[next(MarketKingDB.chars)].known[%d] = nil" % lacking0[-1])
 # right-click marks: off and back on; a mark that matches what we'd work out isn't stored
 ns.SetHasRecipe(3321, False); assert not ns.HasRecipe(3321)
 ns.SetHasRecipe(3321, True); assert ns.HasRecipe(3321) and L.eval("next(MarketKingDB.chars[next(MarketKingDB.chars)].owned)") is None
-lacking = [s for s in ns.PATTERNS.keys() if ns.RECIPES[s][2] == 2 and not ns.HasRecipe(s)]
+lacking = [s for s in ns.PATTERNS.keys() if ns.RECIPES[s] and ns.RECIPES[s][2] == 2 and not ns.HasRecipe(s)]
 ns.SetHasRecipe(lacking[0], True); assert ns.HasRecipe(lacking[0])
 # filters
 allr = list(ns.Rank(2, "buy", L.table_from({"recipes": "all"}))[0].values())
@@ -275,8 +278,8 @@ print("PATTERNS OK")
 # /mk, the crown and Settings
 mk("button"); assert "crown" in last(L), last(L)
 mk("help"); assert any("/mk mode" in str(o) for o in outputs(L))
-mk("mode"); assert L.eval("MarketKingDB.mode") == "farm" and "Ethical Gaming" in last(L)
-mk("mode"); assert L.eval("MarketKingDB.mode") == "buy" and "Yrgna Special" in last(L)
+mk("mode"); assert L.eval("MarketKingDB.mode") == "farm" and "Use my mats" in last(L)
+mk("mode"); assert L.eval("MarketKingDB.mode") == "buy" and "Buy mats" in last(L)
 L.execute("SCAN_OPENED = 0; local real = ScannerKing.OpenMarketScan; ScannerKing.OpenMarketScan = function() SCAN_OPENED = SCAN_OPENED + 1 end")
 mk("scan"); assert L.eval("SCAN_OPENED") == 1
 KM.Show("crafting")
@@ -290,7 +293,7 @@ L.execute('MENU_ITEM("Crafting Profits").fn()'); assert KM.IsShown("crafting")
 KM.OpenSettings("market"); assert KM.IsShown("settings") and not KM.errorShown, last(L)
 t = fonts()
 assert "Count materials as" in t and "Include disenchanting" in t and any("/mk recipes" in str(x) for x in t)
-farm_choice = [f for f in L.eval("FRAMES").values() if type(f.label) != type(None) and f.SetLabel and getattr(f.label, "text", None) == "Ethical Gaming" and f.shown != False][-1]
+farm_choice = [f for f in L.eval("FRAMES").values() if type(f.label) != type(None) and f.SetLabel and getattr(f.label, "text", None) == "Use my mats" and f.shown != False][-1]
 click(farm_choice); assert L.eval("MarketKingDB.mode") == "farm"
 mk("mode buy")
 for pid in ("home", "prices", "settings", "crafting"):
@@ -325,5 +328,24 @@ MarketKingDB = { learned = { [2661] = { 2851, 2, 0, { 2840, 6 }, 1 }, [2662] = {
 assert L3.eval("MarketKingDB.learned[2661]") is None and L3.eval("MarketKingDB.learned[2662]") is not None
 assert L3.eval("MarketKingDB.learned[999002]") is not None
 print("LEARNED CLEANUP OK")
+
+# --- 2.9: profession skills live here now (Skill-ups is gone): read at login and on changes, moved in from its save,
+# shown on the crown's tooltip ----------------------------------------------------------------------------------
+L2, KM2 = fresh(only=["Scanner", "Market"], seed="""PROFS = { { name = "Tailoring", cur = 150, max = 225 }, { name = "Mining", cur = 80, max = 150 } }
+SkillupKingDB = { chars = { ["Old Alt-Forever"] = { known = { [3321] = true }, skills = { [2] = { cur = 200, max = 225 } } } },
+  vendor = { [2880] = 90 } }
+MarketKingDB = { vendor = { [2880] = 100 } }""")
+m2 = KM2.mods.Market
+assert m2.Skill(8) == (150, 225) and m2.Skill(7) == (80, 150) and m2.Skill(4) == (0, 0)
+assert L2.eval("SkillupKingDB") is None
+assert L2.eval("MarketKingDB.chars['Old Alt-Forever'].skills[2].cur") == 200 and L2.eval("MarketKingDB.chars['Old Alt-Forever'].known[3321]") is True
+assert L2.eval("MarketKingDB.vendor[2880]") == 100, "a price Market already had wins"
+L2.execute('PROFS[1].cur = 151; FIRE("SKILL_LINES_CHANGED")')
+assert m2.Skill(8) == (151, 225)
+L2.execute('KingMakerMinimapButton:GetScript("OnEnter")(KingMakerMinimapButton)')
+tip = [str(x) for x in L2.eval("GameTooltip.lines").values()]
+assert any(x.startswith("Skills: ") and "Tailoring 151/225" in x and "Mining 80/150" in x for x in tip), tip
+assert not KM2.errorShown, last(L2)
+print("SKILLS OK")
 
 print("market: ok")

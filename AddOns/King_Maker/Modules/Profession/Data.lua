@@ -2,16 +2,18 @@ local _, KM = ...
 local ns = KM.Module("Profession")
 
 -- The numbers behind the panel. Everything comes from the other modules' public data:
---   Market (recipes, prices, ns.Evaluate / ns.Rank: the same math as Crafting Profits), Skillup (colours, chance,
---   SkillupKing.Plan), ScannerKing (prices), EconKing (averages, trend, history, favorites), InventoryKing (counts).
--- Market and Skillup have no public global, so their module namespaces are read through KM.mods (same addon).
+--   Market (recipes, prices, ns.Evaluate / ns.Rank: the same math as Crafting Profits, MODE_LABELS, Skill),
+--   ScannerKing (prices, listings), EconKing (averages, trend, units gone a day, history, favorites), InventoryKing
+--   (counts), ProfitKing (what you paid for the materials you hold, your recent sales).
+-- Market has no public global, so its module namespace is read through KM.mods (same addon). Every call into another
+-- module is pcall'd or KM.Safe'd: a missing or broken module hides a line, never the panel.
 
 local CUT = 0.95
 ns.CUT = CUT
 local call = ns.Call
+local DAY = 86400
 
 local function market() local m = KM.mods.Market; return m and m.db and m.Evaluate and m or nil end
-local function skillup() local s = KM.mods.Skillup; return s and s.db and s.Recipes and s or nil end
 
 ---------------------------------------------------------------------------
 -- Items, professions, recipes
@@ -37,6 +39,7 @@ local function spellName(id)
     if not id then return nil end
     if C_Spell and C_Spell.GetSpellName then return call(C_Spell.GetSpellName, id) end
 end
+ns.SpellName = spellName
 
 -- "Blacksmithing" (or "Classic Blacksmithing", "Mining") -> Market's profession id.
 function ns.ProfID(name)
@@ -86,19 +89,6 @@ function ns.SpellForItem(profID, item)
             if key:match(":(%d+)$") == tostring(item) then return spell end
         end
     end
-end
-
--- Skillup's recipe for a spell (colours), or nil.
-local bySpell, bySpellList
-function ns.SkillRecipe(spell)
-    local s = skillup()
-    if not (s and spell) then return nil end
-    local list = s.Recipes()
-    if bySpellList ~= list then
-        bySpell, bySpellList = {}, list
-        for _, r in ipairs(list) do bySpell[r.spell] = r end
-    end
-    return bySpell[spell]
 end
 
 ---------------------------------------------------------------------------
@@ -158,51 +148,148 @@ function ns.Verdict(row, mode)
     return mode == "farm" and "sellraw" or "skip"
 end
 
+-- { word, colour, short word for the All crafts table }
 ns.VERDICTS = {
-    craft = { "CRAFT", "violet" }, disenchant = { "DISENCHANT", "info" }, sellraw = { "SELL RAW", "good" },
-    skip = { "SKIP", "bad" }, noprice = { "NO PRICE", "dim" },
+    craft = { "CRAFT", "violet", "CRAFT" }, disenchant = { "DISENCHANT", "info", "DE" }, sellraw = { "SELL RAW", "good", "RAW" },
+    skip = { "SKIP", "bad", "SKIP" }, noprice = { "NO PRICE", "dim", "N/A" },
 }
+
+-- Profit over what the materials cost you in that mode: Buy mats, their price; Use my mats, what they'd fetch raw
+-- plus the vendor reagents. nil when there's nothing to divide by.
+function ns.Margin(row)
+    if not (row and row.gain) then return nil end
+    local base = row.mode == "farm" and ((row.raw or 0) + (row.vendorCost or 0)) or row.cost
+    if not base or base <= 0 then return nil end
+    return row.gain / base
+end
+
+-- When the prices were last refreshed (a full or quick scan), or nil.
+function ns.PriceTime()
+    local sc = KM.mods.Scanner
+    local t = sc and sc.db and math.max(tonumber(sc.db.lastDeep) or 0, tonumber(sc.db.lastQuick) or 0) or 0
+    return t > 0 and t or nil
+end
+
+ns.STALE = 12 * 3600 -- prices older than this get a "scan at the auction house" nudge
+
+function ns.PriceAgeText()
+    local t = ns.PriceTime()
+    local age = t and ((ScannerKing and ScannerKing.PriceAge and KM.Safe(ScannerKing.PriceAge, t)) or "a while ago")
+    local stale = not t or (KM.Now() - t) > ns.STALE
+    return (t and ("Prices from " .. age .. ".") or "No price scan yet."), stale
+end
+
+---------------------------------------------------------------------------
+-- Profit & Loss (optional): what you paid, what you sold
+---------------------------------------------------------------------------
+
+function ns.Tracking()
+    if not (type(ProfitKing) == "table" and type(ProfitKing.IsTracking) == "function") then return false end
+    local ok, on = pcall(ProfitKing.IsTracking)
+    return ok and on == true
+end
+
+local function basis(id)
+    if type(ProfitKing.Basis) ~= "function" then return nil end
+    local ok, b = pcall(ProfitKing.Basis, id)
+    return ok and type(b) == "table" and b or nil
+end
+
+-- One craft's profit at what you paid: for each reagent, the units Profit & Loss says you hold count at their average
+-- cost (farmed lots are free, or worth what they were when looted, by P&L's setting), the rest at today's price.
+-- { profit (one craft), cost (the card's crafts), covered, units } or nil (not tracking, or no reagent held).
+function ns.PaidProfit(c)
+    if not (c and c.item and c.buy and ns.Tracking()) then return nil end
+    local sale = math.max(c.buy.craftSale or -math.huge, c.buy.deSale or -math.huge)
+    if sale == -math.huge then return nil end
+    local total, covered, units = 0, 0, 0
+    for _, m in ipairs(c.mats) do
+        local b = basis(m.id)
+        local held, avg = b and tonumber(b.held) or 0, b and tonumber(b.avg)
+        local use = avg and math.max(0, math.min(m.need, held)) or 0
+        local rest = m.need - use
+        if rest > 0 and not m.unit then return nil end
+        total = total + use * (avg or 0) + rest * (m.unit or 0)
+        covered, units = covered + use, units + m.need
+    end
+    if covered <= 0 then return nil end
+    return { profit = sale - total / c.crafts, cost = total, covered = covered, units = units }
+end
+
+-- Your sales of an item in the last 7 days, from Profit & Loss: { sales, q, proceeds (after the cut), each } or nil.
+-- The trade list is read at most once a minute (or when P&L says its journal changed).
+function ns.RecentSales(item)
+    if not (item and ns.Tracking() and type(ProfitKing.Trades) == "function") then return nil end
+    local now = KM.Now()
+    if not ns.tradesAt or now - ns.tradesAt > 60 or now < ns.tradesAt then
+        local ok, list = pcall(ProfitKing.Trades, now - 7 * DAY)
+        ns.trades, ns.tradesAt = (ok and type(list) == "table") and list or {}, now
+    end
+    local out = { sales = 0, q = 0, proceeds = 0 }
+    for _, s in ipairs(ns.trades) do
+        if type(s) == "table" and s.item == item and (s.t or 0) >= now - 7 * DAY then
+            out.sales, out.q, out.proceeds = out.sales + 1, out.q + (s.q or 0), out.proceeds + (s.proceeds or 0)
+        end
+    end
+    out.each = out.q > 0 and out.proceeds / out.q or nil
+    return out
+end
 
 ---------------------------------------------------------------------------
 -- The selection and its card
 ---------------------------------------------------------------------------
 
--- A selection built from the recipe data (Best now clicks), not the game's window.
+-- A selection built from the recipe data (All crafts clicks), not the game's window.
 function ns.SelectionFromSpell(spell)
     local r = ns.MarketRecipe(spell)
-    local sr = ns.SkillRecipe(spell)
-    if not r and not sr then return nil end
+    if not r then return nil end
     local a = ns.Active()
-    local sel = { key = "p:" .. spell, source = "data", spell = spell, item = (r and r.item) or (sr and sr.item ~= 0 and sr.item) or nil,
-        made = (r and r.made) or (sr and sr.made) or 1, reagents = (r and r.reagents) or sr.reagents, have = {} }
-    sel.prof = (r and r.prof) or (sr and sr.prof)
+    local sel = { key = "p:" .. spell, source = "data", spell = spell, item = r.item, made = r.made or 1,
+        reagents = r.reagents, have = {}, prof = r.prof }
     if a and a.profession then sel.profName, sel.skill, sel.maxSkill = a.profession() end
     return sel
 end
 
--- What the panel shows now: a recipe picked in Best now, else the window's selection.
+-- What the panel shows now: a recipe picked in All crafts, else the window's selection.
 function ns.Selection()
     if ns.pinned then return ns.pinned end
     local a = ns.Active()
     if a then return a:read() end
 end
 
--- Your skill in a profession: the open window's, else what Skillup saw last.
+-- Your skill in a profession: the open window's, else what Market saw last for this character.
 function ns.SkillFor(sel, profID)
     if sel and sel.skill and sel.skill > 0 then return sel.skill, sel.maxSkill end
-    local s = skillup()
-    if s and profID then
-        local cur, max = s.Skill(profID)
-        if cur and cur > 0 then return cur, max end
+    local m = KM.mods.Market
+    if m and type(m.Skill) == "function" and profID then
+        local ok, cur, max = pcall(m.Skill, profID)
+        if ok and cur and cur > 0 then return cur, max end
     end
     return nil
 end
 
+-- How many to craft to sell without flooding the auction house: a quarter of what's listed now, and no more than one
+-- day of units leaving it (gone per day counts sales, cancels and expiries, so it overstates sales). Nothing listed:
+-- 1, to test the market. Returns listed, make, gone per day (nil when the item has never been scanned).
+ns.BATCH_SHARE = 0.25
+function ns.Batch(item)
+    if not (item and ScannerKing and ScannerKing.GetPrice) then return nil end
+    local _, _, listed = ScannerKing.GetPrice(item)
+    if not listed then return nil end
+    if listed <= 0 then return 0, 1, nil end
+    local make = math.ceil(listed * ns.BATCH_SHARE)
+    local st = EconKing and EconKing.GetStats and call(EconKing.GetStats, item)
+    local gone = st and st.gonePerDay
+    if gone then make = math.min(make, math.floor(gone)) end
+    return listed, math.max(1, make), gone
+end
+
 -- Every number for one selection:
---   spell, item, name, q, icon, prof, made, crafts, skill, color, chance
+--   spell, item, name, q, icon, prof, made, crafts, skill, maxSkill, mode
 --   mats = { { id, count, need, have, alts, unit, vendor, line } }, cost (one craft), costAll (crafts), missingPrice
---   market, lowest, listed, avg30, trend7, history = { values }
---   buy, farm (Market rows), verdict = { buy, farm }, profit (one craft, after the cut), de, deSale
+--   market, lowest, listed, avg30, trend7, gone (units a day), make, history = { values }
+--   buy, farm (Market rows), verdict = { buy, farm }, profit (one craft, Buy mats, after the cut), sale, de, deSale
+--   head (profit for the mode), margin, paid (ns.PaidProfit), sales (ns.RecentSales)
 function ns.Card(sel, opts)
     if not sel then return nil end
     opts = opts or {}
@@ -213,7 +300,8 @@ function ns.Card(sel, opts)
     local profID = sel.prof or ns.ProfID(sel.profName) or (mr and mr.prof)
     local reagents = (sel.reagents and #sel.reagents > 0) and sel.reagents or (mr and mr.reagents) or {}
     local c = { spell = sel.spell, item = sel.item or (mr and mr.item), prof = profID, made = sel.made or (mr and mr.made) or 1,
-        crafts = math.max(1, ns.db and ns.db.crafts or 1), mats = {}, cost = 0, source = sel.source, key = sel.key }
+        crafts = math.max(1, ns.db and ns.db.crafts or 1), mats = {}, cost = 0, source = sel.source, key = sel.key,
+        mode = ns.Mode() }
     if c.item then
         local info = ns.ItemInfo(c.item)
         c.name, c.q, c.icon = info.name or sel.name, info.q, info.icon or sel.icon
@@ -221,6 +309,7 @@ function ns.Card(sel, opts)
         c.name, c.icon = sel.name or spellName(sel.spell), sel.icon
     end
     c.name = c.name or (sel.spell and ("Recipe " .. sel.spell)) or "?"
+    c.skill, c.maxSkill = ns.SkillFor(sel, profID)
 
     -- reagents
     for i = 1, #reagents, 2 do
@@ -236,22 +325,6 @@ function ns.Card(sel, opts)
     end
     c.costAll = c.cost * c.crafts
 
-    -- skill-up colour and chance
-    local skill = ns.SkillFor(sel, profID)
-    c.skill = skill
-    local sr = ns.SkillRecipe(sel.spell)
-    local s = skillup()
-    if sr and s and skill then
-        c.color, c.chance = s.Color(sr, skill), s.Chance(sr, skill)
-        c.grey = sr.grey
-    end
-    -- The game's own colour wins (Forever may have moved a recipe); Skillup's chance only when the colours agree.
-    if sel.difficulty and sel.difficulty ~= c.color then
-        c.color = sel.difficulty
-        c.chance = (sel.difficulty == "orange" and 1) or (sel.difficulty == "grey" and 0) or nil
-        c.grey = nil
-    end
-
     -- what it sells for
     if c.item then
         if ScannerKing and ScannerKing.GetPrice then
@@ -262,9 +335,11 @@ function ns.Card(sel, opts)
         end
         local st = EconKing and EconKing.GetStats and call(EconKing.GetStats, c.item)
         if type(st) == "table" then
-            c.avg30, c.trend7 = st.avg30, st.trend7
+            c.avg30, c.trend7, c.gone = st.avg30, st.trend7, st.gonePerDay
             c.market = c.market or st.market
         end
+        local _, make = ns.Batch(c.item)
+        c.make = make
         if not opts.noHistory and EconKing and EconKing.GetHistory then
             local h = call(EconKing.GetHistory, c.item) or {}
             local vals = {}
@@ -284,12 +359,19 @@ function ns.Card(sel, opts)
             c.profit = c.buy.craft
             c.sale = c.buy.craftSale
             c.de, c.deSale = c.buy.deEach, c.buy.deSale
+            c.head = ns.Headline(c, c.mode)
+            c.margin = ns.Margin(c.mode == "farm" and c.farm or c.buy)
+        end
+        if not opts.noPL then
+            c.paid = ns.PaidProfit(c)
+            c.sales = ns.RecentSales(c.item)
         end
     end
     return c
 end
 
--- The headline number for the chosen mode: buy = craft sale minus materials; farm = how much crafting beats selling raw.
+-- The headline number for the chosen mode: Buy mats = the better of selling or disenchanting minus the materials;
+-- Use my mats = how much that beats selling the materials raw.
 function ns.Headline(c, mode)
     if not c then return nil end
     mode = mode or ns.Mode()
@@ -330,59 +412,134 @@ function ns.AddMissing(c)
 end
 
 ---------------------------------------------------------------------------
--- Best now: top crafts for this profession, and the next skill-ups
+-- All crafts: every recipe you know in this profession, ranked by what you'd make now
 ---------------------------------------------------------------------------
 
--- How many to craft to sell without flooding the auction house: a quarter of what's listed now, and no more than one
--- day of units leaving it (gone per day counts sales, cancels and expiries, so it overstates sales). Nothing listed:
--- 1, to test the market. Returns listed, make, gone per day (nil when the item has never been scanned).
-ns.BATCH_SHARE = 0.25
-function ns.Batch(item)
-    if not (item and ScannerKing and ScannerKing.GetPrice) then return nil end
-    local _, _, listed = ScannerKing.GetPrice(item)
-    if not listed then return nil end
-    if listed <= 0 then return 0, 1, nil end
-    local make = math.ceil(listed * ns.BATCH_SHARE)
-    local st = EconKing and EconKing.GetStats and call(EconKing.GetStats, item)
-    local gone = st and st.gonePerDay
-    if gone then make = math.min(make, math.floor(gone)) end
-    return listed, math.max(1, make), gone
+ns.ALL_CAP = 200 -- rows at most (the table scrolls)
+
+-- What the open window lists, for "Can make" and for which recipes you know. Modern windows are asked per recipe
+-- (C_TradeSkillUI.GetRecipeInfo: learned, numAvailable); classic ones are walked once (GetTradeSkillInfo's and
+-- GetCraftInfo's numAvailable), keyed by recipe spell and by item. A count the client doesn't give is true.
+function ns.WindowCounts()
+    local w = { bySpell = {}, byItem = {}, any = false }
+    local a = ns.Active()
+    local key = a and a.key
+    if key == "modern" then
+        w.modern = C_TradeSkillUI and type(C_TradeSkillUI.GetRecipeInfo) == "function" or false
+        w.any = w.modern
+    elseif key == "classic" or key == "craft" then
+        local classic = key == "classic"
+        local num = classic and _G.GetNumTradeSkills or _G.GetNumCrafts
+        for i = 1, call(num) or 0 do
+            local name, kind, n, _
+            if classic then name, kind, n = call(_G.GetTradeSkillInfo, i)
+            else name, _, kind, n = call(_G.GetCraftInfo, i) end
+            if name and kind ~= "header" and kind ~= "subheader" then
+                local link = call(classic and _G.GetTradeSkillItemLink or _G.GetCraftItemLink, i)
+                local rlink = call(classic and _G.GetTradeSkillRecipeLink or _G.GetCraftRecipeLink, i)
+                local spell = ns.IDFrom(rlink, "enchant") or ns.IDFrom(link, "enchant") or ns.IDFrom(link, "spell")
+                local item = ns.IDFrom(link, "item")
+                local v = type(n) == "number" and n or true
+                if spell then w.bySpell[spell] = v end
+                if item then w.byItem[item] = v end
+                w.any = true
+            end
+        end
+    end
+    return w
 end
 
-function ns.BestCrafts(profID, limit)
+-- The window's entry for a recipe: a count, true (listed, no count), or nil (not listed / not learned).
+local function windowEntry(w, spell, item)
+    if w.modern then
+        local info = call(C_TradeSkillUI.GetRecipeInfo, spell)
+        if type(info) ~= "table" or info.learned == false then return nil end
+        return type(info.numAvailable) == "number" and info.numAvailable or true
+    end
+    local v = spell and w.bySpell[spell]
+    if v == nil and item then v = w.byItem[item] end
+    return v
+end
+
+-- How many crafts your reagents cover: the window's own count when it gives one, else your bags and bank.
+local function canMake(entry, reagents, owned)
+    if type(entry) == "number" then return math.max(0, entry) end
+    if not reagents or #reagents == 0 then return nil end
+    local n = math.huge
+    for i = 1, #reagents, 2 do
+        local id, count = reagents[i], math.max(1, reagents[i + 1] or 1)
+        if owned[id] == nil then owned[id] = (ns.Owned(id)) end
+        n = math.min(n, math.floor(owned[id] / count))
+    end
+    return n
+end
+
+-- What crafting it is worth now: CRAFT, the profit of each times how many to make (1 when there's no listing count);
+-- DISENCHANT, one craft's profit; anything else, nothing.
+local function profitNow(r)
+    if not r.gain then return nil end
+    if r.verdict == "craft" then return r.gain * (r.make or 1) end
+    if r.verdict == "disenchant" then return r.gain end
+    return nil
+end
+
+local VORDER = { craft = 5, disenchant = 4, sellraw = 3, skip = 2, noprice = 1 }
+ns.VORDER = VORDER
+
+local function byNow(a, b)
+    if (a.now ~= nil) ~= (b.now ~= nil) then return a.now ~= nil end
+    if a.now and a.now ~= b.now then return a.now > b.now end
+    if (a.gain ~= nil) ~= (b.gain ~= nil) then return a.gain ~= nil end
+    if a.gain and a.gain ~= b.gain then return a.gain > b.gain end
+    return (a.spell or 0) < (b.spell or 0)
+end
+
+-- Rows for a profession in the current mode, Profit now first:
+--   { spell, item, name, gain (profit each), margin, can, listed, make, gone, now (profit now), verdict, row }
+-- Which recipes: the ones the open window lists when it can say; Market's "mine" (trainer recipes count) otherwise.
+function ns.AllCrafts(profID)
     local m = market()
     if not (m and profID) then return {} end
     local mode = ns.Mode()
     local opts = marketOpts()
     opts.recipes = "mine"
     local ok, rows = pcall(m.Rank, profID, mode, opts)
-    local out = {}
-    for _, row in ipairs(ok and rows or {}) do
-        if row.gain then
-            local r = { spell = row.recipe.spell, item = row.item, gain = row.gain, verdict = ns.Verdict(row, mode), row = row }
-            if r.verdict == "craft" then r.listed, r.make, r.gone = ns.Batch(row.item) end
-            out[#out + 1] = r
-            if #out >= (limit or 12) then break end
+    rows = ok and type(rows) == "table" and rows or {}
+    local win = ns.WindowCounts()
+    local entries, useWin = {}, false
+    if win.any then
+        for i, row in ipairs(rows) do
+            entries[i] = windowEntry(win, row.recipe and row.recipe.spell, row.item)
+            if entries[i] ~= nil then useWin = true end
         end
     end
+    local out, owned = {}, {}
+    for i, row in ipairs(rows) do
+        if not useWin or entries[i] ~= nil then
+            local spell = row.recipe and row.recipe.spell
+            local r = { spell = spell, item = row.item, gain = row.gain, verdict = ns.Verdict(row, mode), row = row, mode = mode }
+            r.name = ns.ItemInfo(row.item).name or spellName(spell) or ""
+            r.margin = ns.Margin(row)
+            r.listed, r.make, r.gone = ns.Batch(row.item)
+            if r.verdict ~= "craft" then r.make = nil end
+            r.can = canMake(entries[i], row.recipe and row.recipe.reagents, owned)
+            r.now = profitNow(r)
+            out[#out + 1] = r
+        end
+    end
+    table.sort(out, byNow)
+    while #out > ns.ALL_CAP do table.remove(out) end
     return out
 end
 
-function ns.NextSkillups(profID, skill, maxSkill, limit)
-    if not (SkillupKing and SkillupKing.Plan and profID) then return {} end
-    local from = math.max(skill or 1, 1)
-    local to = (maxSkill and maxSkill > from) and maxSkill or 300
-    if to <= from then return {} end
-    local ok, steps = pcall(SkillupKing.Plan, profID, from, to)
+-- The rows the table shows: the "Can make now" and search filters from the saved settings.
+function ns.FilterCrafts(rows)
+    local db = ns.db or {}
+    local q = ((db.search or ""):lower()):match("^%s*(.-)%s*$")
     local out = {}
-    for _, st in ipairs(ok and steps or {}) do
-        if st.r then
-            out[#out + 1] = { from = st.from, to = st.to, spell = st.r.spell, item = st.r.item ~= 0 and st.r.item or nil,
-                crafts = st.crafts, cost = st.cost }
-        elseif st.note then
-            out[#out + 1] = { note = st.note }
-        end
-        if #out >= (limit or 8) then break end
+    for _, r in ipairs(rows or {}) do
+        local keep = (not db.canMake or (r.can or 0) > 0) and (q == "" or (r.name or ""):lower():find(q, 1, true) ~= nil)
+        if keep then out[#out + 1] = r end
     end
     return out
 end
@@ -398,7 +555,7 @@ function ns.TooltipLines(kind, id)
     local profID = ns.ProfID(profName)
     local spell
     if kind == "spell" then
-        if ns.MarketRecipe(id) or ns.SkillRecipe(id) then spell = id end
+        if ns.MarketRecipe(id) then spell = id end
     else
         local cur = ns.Selection()
         if cur and cur.item == id and cur.spell then spell = cur.spell end
@@ -409,21 +566,14 @@ function ns.TooltipLines(kind, id)
     if not sel then return nil end
     local saved = ns.db.crafts
     ns.db.crafts = 1
-    local ok, c = pcall(ns.Card, sel, { noHistory = true })
+    local ok, c = pcall(ns.Card, sel, { noHistory = true, noPL = true })
     ns.db.crafts = saved
     if not ok or not c then return nil end
-    local lines = {}
     local gold = "|cff" .. KM.COLOR
     local head, mode = ns.Headline(c)
     local parts = { "cost " .. (c.missingPrice and "?" or KM.Money(c.cost)) }
     if head then parts[#parts + 1] = (mode == "farm" and "vs raw " or "profit ") .. KM.Money(head) end
     local v = c.verdict and c.verdict[mode]
     if v and ns.VERDICTS[v] then parts[#parts + 1] = ns.VERDICTS[v][1]:lower() end
-    lines[1] = gold .. "King Maker|r " .. table.concat(parts, ", ")
-    if c.color then
-        local Sk = KM.mods.Skillup
-        local hex = (Sk and Sk.COLORS and Sk.COLORS[c.color]) or "|cffffffff"
-        lines[2] = gold .. "Skill-up|r " .. hex .. c.color .. "|r" .. (c.chance and (" " .. math.floor(c.chance * 100 + 0.5) .. "%") or "")
-    end
-    return lines
+    return { gold .. "King Maker|r " .. table.concat(parts, ", ") }
 end

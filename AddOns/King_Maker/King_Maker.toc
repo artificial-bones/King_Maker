@@ -4,7 +4,7 @@
 ## Author: BearBones
 ## X-License: GPL-3.0
 ## X-Credits: Recipe data from ForeverDB.net
-## Version: 2.8.1
+## Version: 2.9.0
 ## IconTexture: Interface\Icons\INV_Crown_01
 ## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB, ShoppingKingDB, ProfessionKingDB, CooldownKingDB, TrackerKingDB, ProfitKingDB
 ## OptionalDeps: QuestieDB, TomTom, LibDBIcon-1.0, Auctionator
@@ -46,20 +46,12 @@ Modules\Econ\Tooltip.lua
 Modules\Market\Data\Recipes.lua
 Modules\Market\Data\Patterns.lua
 Modules\Market\Data\Disenchant.lua
+Modules\Market\Data\Enchants.lua
 Modules\Market\Data\Vendor.lua
 Modules\Market\Core.lua
 Modules\Market\Profit.lua
 Modules\Market\Events.lua
 Modules\Market\UI.lua
-
-# Skillup
-Modules\Skillup\Data\Recipes.lua
-Modules\Skillup\Data\Patterns.lua
-Modules\Skillup\Data\Disenchant.lua
-Modules\Skillup\Data\Vendor.lua
-Modules\Skillup\Core.lua
-Modules\Skillup\Plan.lua
-Modules\Skillup\UI.lua
 
 # Farm
 Modules\Farm\Core.lua

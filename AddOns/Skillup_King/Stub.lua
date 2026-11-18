@@ -1,2 +1,0 @@
--- Skillup King moved into King Maker 2.0. This folder only hands your old saved data (SkillupKingDB) to King Maker,
--- which copies it in when it sees this addon load (King_Maker/Core/Boot.lua). Safe to delete after one login.

@@ -114,13 +114,14 @@ L, KM = fresh(seed=OLD)
 assert KM.PlayerName() == "Jay Stone" and KM.Char() == "Jay Stone-Forever" and KM.OldChar() == "Jay-Forever"
 assert KM.IsMe("Jay Stone-Forever") and KM.IsMe("jay stone") and not KM.IsMe("Jay") and not KM.IsMe("Jay Other")
 for path in ["InventoryKingDB.chars", "InventoryKingDB.stock", "InventoryKingDB.history[20000]", "RestedKingDB.chars",
-             "MarketKingDB.chars", "SkillupKingDB.chars"]:
+             "MarketKingDB.chars"]:
     assert L.eval(path + "['Jay-Forever']") is None and L.eval(path + "['Jay Stone-Forever']") is not None, path
 assert L.eval("InventoryKingDB.chars['Jay Stone-Forever'].gold") is not None and L.eval("InventoryKingDB.chars['Alt-Forever'].gold") == 1
 assert L.eval("InventoryKingDB.stock['Jay Stone-Forever'].bank[2589]") == 4, "old bank kept beside the fresh bag scan"
 assert L.eval("RestedKingDB.chars['Jay Stone-Forever'].name") == "Jay Stone" and L.eval("RestedKingDB.chars['Jay Stone-Forever'].perk") == 3
 assert L.eval("MarketKingDB.chars['Jay Stone-Forever'].known[3321]") is True, "recipes known survive an empty new entry"
-assert L.eval("SkillupKingDB.chars['Jay Stone-Forever'].known[100]") is True
+assert L.eval("MarketKingDB.chars['Jay Stone-Forever'].known[100]") is True, "2.9: Skill-ups' known recipes moved into Crafting Profits"
+assert L.eval("SkillupKingDB") is None, "and its old save is cleared"
 assert L.eval("MailKingDB.entries[1].c") == "Jay Stone-Forever" and L.eval("MailKingDB.entries[2].c") == "Alt-Forever"
 assert L.eval("MailKingDB.posts[1].c") == "Jay Stone-Forever"
 assert not KM.errorShown, last(L)

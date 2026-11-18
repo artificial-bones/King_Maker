@@ -2,8 +2,8 @@ local _, KM = ...
 local ns = KM.Module("Scanner")
 
 -- The crafting rows of King Maker's tooltip section (Tooltip.lua lays them out). Everything here is read from the
--- other modules through KM.mods (same addon): Market (recipes, reagent costs, disenchanting), Skillup (your
--- characters' skill and known recipes, skill ranges, patterns), Shopping (lists), Inventory (counts, names).
+-- other modules through KM.mods (same addon): Market (recipes and enchants, patterns, reagent costs, disenchanting,
+-- your characters' skills and known recipes), Shopping (lists), Inventory (counts, names).
 -- Every function returns nil when a module or the data isn't there, and the caller pcalls it.
 --
 --   ns.TipBestCrafts(id)  the 3 most valuable things made from it: { { item, value, profit }, ... }
@@ -16,7 +16,6 @@ local CUT = 0.95
 local TOP = 3
 
 local function market() local m = KM.mods.Market; return m and m.db and m.Recipes and m or nil end
-local function skillup() local s = KM.mods.Skillup; return s and s.db and s.RECIPES and s or nil end
 
 -- What one sells for: the market price, else the lowest buyout.
 local function price(id)
@@ -77,9 +76,9 @@ end
 -- Your characters
 ---------------------------------------------------------------------------
 
--- Every character Skillup or Market knows about, with its skill per profession and the recipes it knows.
+-- Every character Crafting Profits knows about, with its skill per profession and the recipes it knows.
 local function characters()
-    local s, m = skillup(), market()
+    local m = market()
     local out, seen = {}, {}
     local function add(key)
         if seen[key] then return seen[key] end
@@ -88,13 +87,9 @@ local function characters()
         out[#out + 1] = c
         return c
     end
-    for key, c in pairs(s and s.db.chars or {}) do
-        local e = add(key)
-        for prof, sk in pairs(c.skills or {}) do e.skills[prof] = sk.cur end
-        for spell in pairs(c.known or {}) do e.known[spell] = true end
-    end
     for key, c in pairs(m and m.db.chars or {}) do
         local e = add(key)
+        for prof, sk in pairs(c.skills or {}) do if type(sk) == "table" then e.skills[prof] = sk.cur end end
         for spell in pairs(c.known or {}) do e.known[spell] = true end
     end
     return out
@@ -165,7 +160,6 @@ function ns.TipMake(id)
     index(m)
     local list = madeBy[id]
     if not list or usedBy[id] then return nil end
-    local s = skillup()
     local cheapest
     for _, r in ipairs(list) do
         local c = cost(m, r)
@@ -177,7 +171,7 @@ function ns.TipMake(id)
     local who = {}
     for _, c in ipairs(characters()) do
         for _, r in ipairs(list) do
-            if canMake(c, r, s and s.PATTERNS[r.spell] ~= nil) then who[#who + 1] = charName(c.key) break end
+            if canMake(c, r, m.PATTERNS and m.PATTERNS[r.spell] ~= nil) then who[#who + 1] = charName(c.key) break end
         end
     end
     table.sort(who)
@@ -189,15 +183,16 @@ end
 
 -- A recipe item: { teaches = "Elixir of Giants", prof = "Alchemy", skill = 245, known = "Jay", can = "Alt (250)" }.
 function ns.TipPattern(id)
-    local s = skillup()
-    if not s then return nil end
-    patternIndex(s)
+    local m = market()
+    if not m then return nil end
+    patternIndex(m)
     local spells = taught[id]
     if not spells then return nil end
     local spell = spells[1]
-    local r = s.RECIPES[spell]
+    -- { item, prof, skill }: Market's recipe, or an enchant (no item)
+    local r = (m.RECIPES and m.RECIPES[spell]) or (m.ENCHANTS and m.ENCHANTS[spell] and { 0, m.ENCHANTS[spell][1], m.ENCHANTS[spell][2] })
     if not r then return nil end
-    local prof = s.PROF_BY_ID and s.PROF_BY_ID[r[2]]
+    local prof = m.PROF_BY_ID and m.PROF_BY_ID[r[2]]
     local name = r[1] and r[1] > 0 and C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(r[1])
     if not name and C_Spell and C_Spell.GetSpellName then name = C_Spell.GetSpellName(spell) end
     local out = { teaches = name or ("Recipe " .. spell), prof = prof and prof.name, skill = r[3] }

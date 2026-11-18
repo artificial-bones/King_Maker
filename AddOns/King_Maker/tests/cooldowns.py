@@ -7,7 +7,7 @@
 import os, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from km import fresh, last, outputs, open_every_page
 
-MODS = ["Scanner", "Econ", "Market", "Skillup", "Inventory", "Shopping", "Profession", "Cooldowns"]
+MODS = ["Scanner", "Econ", "Market", "Inventory", "Shopping", "Profession", "Cooldowns"]
 DAY = 86400
 
 EXTRA = """

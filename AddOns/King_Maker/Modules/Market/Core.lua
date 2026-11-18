@@ -7,9 +7,11 @@ local ns = KM.Module("Market", { title = "Market King", short = "Market", legacy
 --   * sell the raw materials,
 --   * craft the item and sell it, or
 --   * craft it, disenchant it and sell the enchanting materials.
--- Two ways to count: "Buying mats" (you buy the materials, so they're a cost:
--- flips) or "Farming mats" (you gathered them, so the question is whether
--- crafting beats just selling them).
+-- Two ways to count: "Buy mats" (you buy the materials, so they're a cost:
+-- flips) or "Use my mats" (you already have them, so the question is whether
+-- crafting beats just selling them). Saved as db.mode "buy" / "farm".
+-- It also keeps each character's profession skills (2.9: moved in from the removed Skill-ups module), which
+-- the crown's tooltip, Cooldowns, the profession panel and the item tooltip's "who can make it" read.
 --
 -- In King Maker it has no window or minimap button of its own: the ranked list is the "crafting" page
 -- (Crafting > Crafting Profits, UI.lua), opened from the crown's quick actions, /mk or /km crafting. Market
@@ -35,6 +37,9 @@ for _, p in ipairs(ns.PROFESSIONS) do
     ns.PROF_BY_NAME[p.name] = p
 end
 ns.PROF_BY_NAME["Mining"] = ns.PROF_BY_ID[7]
+
+-- What the two ways of counting are called, everywhere they show (keys stay "buy" / "farm").
+ns.MODE_LABELS = { buy = "Buy mats", farm = "Use my mats" }
 
 ---------------------------------------------------------------------------
 -- Item info (name, quality, item level, class), cached; the game loads it lazily
@@ -165,7 +170,43 @@ function ns.Char()
         c = { known = {}, owned = {} }
         ns.db.chars[key] = c
     end
+    c.skills = c.skills or {}
     return c
+end
+
+-- This character's skill in a profession and its cap (0, 0 when it doesn't have it or nothing has read it yet).
+function ns.Skill(profID)
+    local s = ns.db and ns.Char().skills[profID]
+    if s then return s.cur or 0, s.max or s.cur or 0 end
+    return 0, 0
+end
+
+local function noteSkill(name, cur, max)
+    local p = name and (ns.PROF_BY_NAME[name] or (name == "Smelting" and ns.PROF_BY_ID[7]))
+    if p and type(cur) == "number" then ns.Char().skills[p.id] = { cur = cur, max = max or cur } end
+end
+
+-- Reads every profession's skill from the character's skill list (login, skill changes, level ups).
+function ns.ReadSkills()
+    if not ns.db then return end
+    if GetProfessions and GetProfessionInfo then
+        local list = { pcall(GetProfessions) }
+        if list[1] then
+            for i = 2, 7 do
+                local idx = list[i]
+                if idx then
+                    local ok, name, _, cur, max = pcall(GetProfessionInfo, idx)
+                    if ok then noteSkill(name, cur, max) end
+                end
+            end
+        end
+    end
+    if GetNumSkillLines and GetSkillLineInfo then
+        for i = 1, GetNumSkillLines() or 0 do
+            local name, header, _, cur, _, _, max = GetSkillLineInfo(i)
+            if not header then noteSkill(name, cur, max) end
+        end
+    end
 end
 
 -- 2.3.0 keys characters by their full name: this character's entry under its first name moves over.
@@ -234,6 +275,33 @@ function ns.InitDB()
     db.ui = db.ui or {}
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     ns.db = db
+    ns.TakeSkillup()
+end
+
+-- 2.9 removed Skill-ups: its saved skills, known recipes and vendor prices move in here once, then its save is
+-- cleared (SkillupKingDB stays declared in the TOC for this release so the game still loads it to move).
+function ns.TakeSkillup()
+    local old = SkillupKingDB
+    if type(old) ~= "table" then return end
+    local db = ns.db
+    for key, c in pairs(type(old.chars) == "table" and old.chars or {}) do
+        if type(key) == "string" and type(c) == "table" then
+            local mine = db.chars[key]
+            if not mine then mine = { known = {}, owned = {} }; db.chars[key] = mine end
+            mine.known = mine.known or {}
+            mine.skills = mine.skills or {}
+            for spell, v in pairs(type(c.known) == "table" and c.known or {}) do
+                if v and mine.known[spell] == nil then mine.known[spell] = true end
+            end
+            for prof, s in pairs(type(c.skills) == "table" and c.skills or {}) do
+                if type(s) == "table" and mine.skills[prof] == nil then mine.skills[prof] = { cur = s.cur, max = s.max } end
+            end
+        end
+    end
+    for id, v in pairs(type(old.vendor) == "table" and old.vendor or {}) do
+        if type(v) == "number" and db.vendor[id] == nil then db.vendor[id] = v end
+    end
+    SkillupKingDB = nil
 end
 
 SLASH_MARKETKING1 = "/mk"
@@ -246,9 +314,10 @@ SlashCmdList.MARKETKING = function(msg)
     elseif cmd == "scan" then
         ns.OpenMarketScan()
     elseif cmd == "mode" then
+        if rest == "mine" or rest == "my" or rest == "use" then rest = "farm" end
         ns.db.mode = (rest == "farm" or rest == "buy") and rest or (ns.db.mode == "buy" and "farm" or "buy")
-        KM.Print(ns, ns.db.mode == "buy" and "Yrgna Special: counting materials as bought."
-            or "Ethical Gaming: counting materials as farmed (no material cost).")
+        KM.Print(ns, ns.db.mode == "buy" and "Buy mats: the materials are a cost (flips)."
+            or "Use my mats: crafting is compared with selling your materials raw.")
         ns.Refresh()
     elseif cmd == "recipes" then
         if rest == "reset" then
@@ -263,7 +332,7 @@ SlashCmdList.MARKETKING = function(msg)
     else
         KM.Print(ns, "/mk   open Crafting Profits (or /km crafting)")
         KM.Print(ns, "/mk scan   Scan at the auction house: prices the professions ticked on Crafting Profits")
-        KM.Print(ns, "/mk mode [buy|farm]   count materials as bought (Yrgna Special) or farmed (Ethical Gaming)")
+        KM.Print(ns, "/mk mode [buy|mine]   Buy mats (the materials are a cost) or Use my mats (you already have them)")
         KM.Print(ns, "/mk recipes [all|mine|missing]   which recipes to show; /mk recipes reset clears your marks")
     end
 end

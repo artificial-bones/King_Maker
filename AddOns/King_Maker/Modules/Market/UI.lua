@@ -5,7 +5,7 @@ local C = UI.C
 
 -- The Crafting Profits page of the King Maker window (Crafting > Crafting Profits).
 --   Top:    which professions to show and price (and All), Scan (the Scanner's one scan, at the auction house).
---   Then:   Yrgna Special (buying mats) or Ethical Gaming (farming mats), disenchanting options, and which
+--   Then:   Buy mats (the materials are a cost) or Use my mats (you already have them), disenchanting options, and which
 --           recipes to show (all, mine, patterns I lack).
 --   Tabs:   Best (every ticked profession together), then one per ticked profession.
 --   List:   most profitable first, with a red line where crafting stops beating selling the raw materials.
@@ -31,8 +31,8 @@ local RECIPES_VIEW = {
 }
 
 local MODES = {
-    buy = { label = "Yrgna Special", hint = "Buying mats. Materials are a cost: shows what's worth buying mats for (flips)." },
-    farm = { label = "Ethical Gaming", hint = "Farming mats. You gathered the materials: compares crafting with just selling them." },
+    buy = { label = ns.MODE_LABELS.buy, hint = "The materials are a cost: what's worth buying the mats for and crafting (flips)." },
+    farm = { label = ns.MODE_LABELS.farm, hint = "You already have the materials (farmed or bought earlier): is crafting worth more than selling them raw? Vendor reagents are still a cost." },
 }
 
 local function money(v) return KM.Money(v) end
@@ -450,9 +450,9 @@ KM.RegisterPage({
     title = "Crafting Profits",
     subtitle = function()
         if ns.db and ns.db.mode == "farm" then
-            return "Ethical Gaming: your own materials. Is crafting worth more than selling them raw?"
+            return "Use my mats: is crafting worth more than selling your materials raw?"
         end
-        return "Yrgna Special: materials are a cost. What's worth buying the mats for and crafting (flips)?"
+        return "Buy mats: the materials are a cost. What's worth buying the mats for and crafting (flips)?"
     end,
     build = buildPage, refresh = refresh,
 })
@@ -485,6 +485,17 @@ KM.RegisterHomeCard({ kind = "best", id = "market-craft", order = 10, get = func
             .. " Uses the professions ticked on Crafting Profits. Click for Crafting Profits." }
 end })
 
+-- Your profession skills, on one line under the crown's title (2.9: was Skill-ups').
+KM.RegisterTooltip(function(tt)
+    if not ns.db then return end
+    local parts = {}
+    for _, p in ipairs(ns.PROFESSIONS) do
+        local cur, max = ns.Skill(p.id)
+        if cur > 0 then parts[#parts + 1] = (p.id == 7 and "Mining" or p.name) .. " " .. cur .. "/" .. max end
+    end
+    if #parts > 0 then tt:AddLine("Skills: " .. table.concat(parts, ", "), 1, 1, 1, true) end
+end)
+
 KM.RegisterQuickAction({ id = "market-crafting", label = "Crafting Profits", order = 20, func = function() ns.Toggle(true) end })
 
 local function viewChoices()
@@ -495,9 +506,9 @@ end
 
 KM.RegisterSettings({ id = "market", label = "Market", order = 20, rows = {
     { type = "header", label = "Crafting Profits" },
-    { type = "choice", label = "Count materials as", options = { { "buy", "Yrgna Special", MODES.buy.hint }, { "farm", "Ethical Gaming", MODES.farm.hint } },
+    { type = "choice", label = "Count materials as", options = { { "buy", MODES.buy.label, MODES.buy.hint }, { "farm", MODES.farm.label, MODES.farm.hint } },
       get = function() return ns.db.mode end, set = function(v) ns.db.mode = v; ns.Refresh() end },
-    { type = "text", label = "Yrgna Special: you buy the materials, so they're a cost (flips). Ethical Gaming: you gathered them, so crafting is compared with selling them raw. Vendor reagents are a cost either way." },
+    { type = "text", label = "Buy mats: you buy the materials, so they're a cost (flips). Use my mats: you already have them, so crafting is compared with selling them raw. Vendor reagents are a cost either way." },
     { type = "check", label = "Include disenchanting", tip = "Count crafting, disenchanting and selling the enchanting materials as an option.",
       get = function() return ns.db.includeDE end, set = function(v) ns.db.includeDE = v; ns.Refresh() end },
     { type = "check", label = "Disenchanting only", tip = "Show only items that can be disenchanted.",
@@ -509,8 +520,8 @@ KM.RegisterSettings({ id = "market", label = "Market", order = 20, rows = {
     { type = "button", label = "Clear my have/don't-have marks", func = function() SlashCmdList.MARKETKING("recipes reset") end,
       tip = "Back to what your trade skill windows show, for this character." },
     { type = "header", label = "Recipe data" },
-    { type = "text", label = "Every WoW: Forever recipe, its reagents and skill ranges: data from ForeverDB.net (foreverdb.net, GPL-3.0)." },
+    { type = "text", label = "Every WoW: Forever recipe and its reagents: data from ForeverDB.net (foreverdb.net, GPL-3.0)." },
     { type = "header", label = "Commands" },
-    { type = "text", label = "/mk   open Crafting Profits\n/mk scan   Scan (at the auction house): prices the ticked professions\n/mk mode buy|farm   Yrgna Special or Ethical Gaming\n"
+    { type = "text", label = "/mk   open Crafting Profits\n/mk scan   Scan (at the auction house): prices the ticked professions\n/mk mode buy|mine   Buy mats or Use my mats\n"
         .. "/mk recipes all|mine|missing   which recipes to show\n/mk recipes reset   clear your have/don't-have marks" },
 } })

@@ -598,7 +598,7 @@ assert not any(l.split("|")[0] in ("Vendor", "Drops", "Used in") for l in lines)
 print("SECTION OK")
 
 # The crafting rows: best crafts, craft cost and who can craft it, recipe items, disenchant, shopping goal, Shift
-L8, KM8 = fresh(only=["Scanner", "Econ", "Farm", "Market", "Skillup", "Inventory", "Shopping"], seed="""
+L8, KM8 = fresh(only=["Scanner", "Econ", "Farm", "Market", "Inventory", "Shopping"], seed="""
 ITEM(13463, "Dreamfoil", { sell = 100, class = 7, subclass = 9 })
 ITEM(99004, "Fake Elixir", { sell = 10 }); ITEM(99006, "Fake Cloth", { sell = 10 }); ITEM(99008, "Fake Flask", { sell = 10 })
 ITEM(99002, "Fake Potion", { sell = 10 })
@@ -613,7 +613,7 @@ MarketKingDB = { learned = {
   [99003] = { 99004, 4, 280, { 13463, 1 }, 2 },            -- makes 2: 18000 a craft
   [99005] = { 99006, 8, 200, { 13463, 3 }, 1 },            -- a loss
   [99007] = { 99008, 4, 1, { 13463, 1 }, 1 } } }           -- the best
-SkillupKingDB = { chars = { ["Alt Two-Forever"] = { known = {}, skills = { [4] = { cur = 300, max = 300 } } } } }
+SkillupKingDB = { chars = { ["Alt Two-Forever"] = { known = {}, skills = { [4] = { cur = 300, max = 300 } } } } }  -- 2.9: moves into Market
 InventoryKingDB = { stock = { ["Alt Two-Forever"] = { bags = { [13463] = 12 } } },
   chars = { ["Alt Two-Forever"] = { class = "MAGE", level = 30 } } }
 """)
@@ -658,16 +658,22 @@ assert row8(hover8(99004), "Materials to craft") is None
 assert "Alt Two" in row8(lines, "You can craft it"), lines
 
 # A recipe item: what it teaches, who knows it, who can learn it
-s = KM8.mods.Skillup
+assert L8.eval("SkillupKingDB") is None and L8.eval("MarketKingDB.chars['Alt Two-Forever'].skills[4].cur") == 300
+s = KM8.mods.Market
 spell = next(sp for sp in s.PATTERNS.keys() if s.RECIPES[sp] and s.RECIPES[sp][2] == 4 and s.RECIPES[sp][3] <= 300)
 item = s.PATTERNS[spell][1]
 L8.execute("ITEM(%d, 'Recipe: Something', { class = 9 })" % item)
 lines = hover8(item)
 assert row8(lines, "Teaches") and "Alchemy" in row8(lines, "Teaches"), lines
 assert "Alt Two" in row8(lines, "Can learn it") and "(300)" in row8(lines, "Can learn it"), lines
-L8.execute("SkillupKingDB.chars['Alt Two-Forever'].known[%d] = true" % spell); KM8.mods.Scanner.ClearTooltipCache()
+L8.execute("MarketKingDB.chars['Alt Two-Forever'].known[%d] = true" % spell); KM8.mods.Scanner.ClearTooltipCache()
 lines = hover8(item)
 assert "Alt Two" in row8(lines, "Known by") and row8(lines, "Can learn it") is None, lines
+# an Enchanting formula (an enchant makes no item, so it's in Market's ENCHANTS, not RECIPES): still explained
+esp = next(sp for sp in s.ENCHANTS.keys() if s.PATTERNS[sp] and s.ENCHANTS[sp][1] == 10)
+eitem = s.PATTERNS[esp][1]
+L8.execute("ITEM(%d, 'Formula: Something', { class = 9 })" % eitem); KM8.mods.Scanner.ClearTooltipCache()
+assert row8(hover8(eitem), "Teaches") and "Enchanting" in row8(hover8(eitem), "Teaches"), hover8(eitem)
 
 # Green boots: disenchanting pays more than the auction house and the vendor
 lines = hover8(99100)

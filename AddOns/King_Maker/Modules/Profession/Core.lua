@@ -1,10 +1,12 @@
 local _, KM = ...
 local ns = KM.Module("Profession", { title = "Profession window", short = "Profession", db = "ProfessionKingDB" })
 
--- Profession window: a King Maker panel docked to the side of the game's own profession window. For the recipe
--- you have selected it shows what the materials cost (and how many you own), what the result sells for, the profit
--- after the auction cut, the disenchant value, Market's verdict in both its modes and your skill-up chance; a second
--- tab lists the best crafts right now and your next skill-up steps.
+-- Profession window: a King Maker panel docked to the side of the game's own profession window, about money. Tab
+-- "This recipe" shows, for the recipe you have selected, the profit per craft and Market's verdict in the mode you
+-- count materials in (Buy mats / Use my mats), the margin, what the materials cost and what you own, what the result
+-- sells for after the cut, the disenchant alternative, how fast it sells, how many to make, and (with Profit & Loss)
+-- the profit at what you paid and your last sales. Tab "All crafts" ranks every recipe you know in the open profession
+-- by what you'd make now, with how many your materials cover.
 --
 -- It only reads. It never crafts, never changes or re-parents a Blizzard frame, and never calls anything in
 -- C_AuctionHouse. It supports whichever window the client has, feature-detected:
@@ -19,7 +21,7 @@ local ns = KM.Module("Profession", { title = "Profession window", short = "Profe
 -- open, so a missing callback only costs a quarter of a second.
 --
 -- Files: Core.lua (saved data, window detection and hooks, tooltips, settings), Data.lua (the numbers: recipe,
--- reagents, prices, verdicts, best now), Panel.lua (the panel).
+-- reagents, prices, verdicts, all crafts, Profit & Loss lines), Panel.lua (the panel).
 
 ns.CHECK_EVERY = 0.25 -- seconds between selection checks while the panel is open
 
@@ -39,13 +41,19 @@ function ns.InitDB()
     if db.tooltip == nil then db.tooltip = true end   -- King Maker lines in recipe tooltips
     if db.mode ~= "buy" and db.mode ~= "farm" and db.mode ~= "market" then db.mode = "market" end
     db.collapsed = db.collapsed and true or false
-    if db.tab ~= "card" and db.tab ~= "best" then db.tab = "card" end
+    if db.tab == "best" then db.tab = "all" end           -- 2.9: Best now became All crafts
+    if db.tab ~= "card" and db.tab ~= "all" then db.tab = "card" end
     db.crafts = math.max(1, math.min(200, tonumber(db.crafts) or 1))
+    db.canMake = db.canMake and true or false             -- All crafts: only what your materials cover
+    if type(db.search) ~= "string" then db.search = "" end
+    if type(db.sortKey) ~= "string" then db.sortKey = "now" end
+    if db.sortDesc == nil then db.sortDesc = true end
     ns.db = db
     ns.WrapSlash()
 end
 
--- Which way to count materials: "buy" (a cost) or "farm" (yours already); "market" follows Crafting Profits.
+-- Which way to count materials: "buy" (Buy mats: a cost) or "farm" (Use my mats: yours already); the setting
+-- "market" follows Crafting Profits' switch.
 function ns.Mode()
     local mode = ns.db and ns.db.mode or "market"
     if mode == "market" then
@@ -53,6 +61,28 @@ function ns.Mode()
         return (m and m.db.mode == "farm") and "farm" or "buy"
     end
     return mode
+end
+
+-- The panel's Buy mats / Use my mats switch. While the setting follows Crafting Profits it flips Crafting Profits'
+-- own mode (so the two never disagree); set to a fixed mode, it changes only the panel's.
+function ns.SetMode(mode)
+    if mode ~= "buy" and mode ~= "farm" then return end
+    local m = market()
+    if ns.db.mode == "market" and m then
+        m.db.mode = mode
+        if m.Refresh then KM.Safe(m.Refresh) end
+    else
+        ns.db.mode = mode
+    end
+    ns.Changed()
+end
+
+local LABELS = { buy = "Buy mats", farm = "Use my mats" }
+-- "Buy mats" / "Use my mats": Market's names when it has them.
+function ns.ModeLabel(mode)
+    local m = KM.mods.Market
+    local t = m and type(m.MODE_LABELS) == "table" and m.MODE_LABELS
+    return (t and t[mode]) or LABELS[mode] or mode
 end
 
 -- "/km profession" opens this module's settings. Boot owns /km; we only pass everything else on to it.
@@ -86,12 +116,8 @@ local function idFrom(link, kind)
 end
 ns.IDFrom = idFrom
 
-local DIFFICULTY = { optimal = "orange", medium = "yellow", easy = "green", trivial = "grey",
-    [0] = "orange", [1] = "yellow", [2] = "green", [3] = "grey" }
-ns.DIFFICULTY = DIFFICULTY
-
 -- A selection: { key, source, spell, item, name, icon, made, reagents = { id, count, ... }, have = { [id] = n },
---                difficulty = "orange"..., profName, skill, maxSkill }
+--                profName, skill, maxSkill }
 local adapters = {}
 ns.adapters = adapters
 
@@ -131,7 +157,6 @@ adapters.modern = {
         local info = call(T.GetRecipeInfo, id)
         if type(info) == "table" then
             sel.name, sel.icon = info.name, info.icon
-            sel.difficulty = DIFFICULTY[info.relativeDifficulty]
         end
         local s = call(T.GetRecipeSchematic, id, false)
         if type(s) == "table" then
@@ -157,7 +182,6 @@ local function classicRead(src, p)
     local name, kind = p.info(idx)
     if not name or kind == "header" or kind == "subheader" then return nil end
     local sel = { key = src .. ":" .. idx .. ":" .. tostring(name), source = src, name = name, reagents = {}, have = {} }
-    sel.difficulty = DIFFICULTY[kind]
     local link = call(p.itemLink, idx)
     sel.spell = idFrom(call(p.recipeLink, idx), "enchant") or idFrom(link, "enchant") or idFrom(link, "spell")
     sel.item = idFrom(link, "item")
@@ -285,6 +309,10 @@ ev:SetScript("OnEvent", function(_, event, name)
         if ScannerKing and ScannerKing.RegisterCallback then
             ScannerKing.RegisterCallback("Profession_King", function(e) if e == "PRICES_UPDATED" then ns.Changed() end end)
         end
+        -- Profit & Loss's journal changed: the "your last sales" line reads it again
+        if ProfitKing and type(ProfitKing.RegisterCallback) == "function" then
+            pcall(ProfitKing.RegisterCallback, "Profession_King", function() ns.tradesAt = nil; ns.Changed() end)
+        end
     else
         if event == "TRADE_SKILL_SHOW" or event == "CRAFT_SHOW" then ns.Hook() end
         ns.Changed()
@@ -343,15 +371,15 @@ end
 
 KM.RegisterSettings({ id = "profession", label = "Profession window", order = 22, rows = {
     { type = "header", label = "Panel next to the profession window" },
-    { type = "check", label = "Show the King Maker panel", tip = "Docks a panel to the game's profession window with costs, profit, verdicts and skill-ups for the selected recipe.",
+    { type = "check", label = "Show the King Maker panel", tip = "Docks a panel to the game's profession window: what the selected recipe makes you, and every recipe you know ranked by profit.",
       get = function() return ns.db.show end,
       set = function(v) ns.db.show = v and true or false; if v then KM.Safe(ns.ShowPanel) else KM.Safe(ns.HidePanel) end end },
     { type = "choice", label = "Dock it on the", options = { { "right", "Right" }, { "left", "Left" } }, tip = "Which side of the profession window the panel sits on.",
       get = function() return ns.db.side end, set = function(v) ns.db.side = v; KM.Safe(ns.Place) end },
-    { type = "check", label = "King Maker lines in recipe tooltips", tip = "Cost, profit and skill-up chance when you hover a recipe's item in the profession window.",
+    { type = "check", label = "King Maker lines in recipe tooltips", tip = "Cost, profit and verdict when you hover a recipe's item in the profession window.",
       get = function() return ns.db.tooltip end, set = function(v) ns.db.tooltip = v and true or false end },
-    { type = "choice", label = "Count materials as", options = { { "market", "Like Crafting Profits", "Follow Crafting Profits' Yrgna Special / Ethical Gaming switch." },
-      { "buy", "Bought", "Materials are a cost: a craft has to beat zero." }, { "farm", "Farmed", "You have the materials: a craft has to beat selling them raw." } },
+    { type = "choice", label = "Count materials as", options = { { "market", "Like Crafting Profits", "Follow Crafting Profits' Buy mats / Use my mats switch." },
+      { "buy", "Buy mats", "Materials are a cost: a craft has to beat zero." }, { "farm", "Use my mats", "You have the materials: a craft has to beat selling them raw." } },
       get = function() return ns.db.mode end, set = function(v) ns.db.mode = v; ns.Changed() end },
-    { type = "text", label = "Bought: materials are a cost, so a craft has to beat zero. Farmed: you already have them, so a craft has to beat selling them raw. The recipe card always shows both verdicts; this picks the profit line, the Best now ranking and the tooltips. /km profession opens this section." },
+    { type = "text", label = "Buy mats: materials are a cost, so a craft has to beat zero. Use my mats: you already have them, so a craft has to beat selling them raw. The switch at the top of the panel changes it too: set to Like Crafting Profits, it flips Crafting Profits' mode as well; otherwise only the panel's. /km profession opens this section." },
 } })

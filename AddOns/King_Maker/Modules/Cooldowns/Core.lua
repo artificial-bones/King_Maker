@@ -241,16 +241,16 @@ function ns.Snapshot()
     return c, key
 end
 
--- Skill in a profession: the game's, else Skill-ups' saved one (this character only).
+-- Skill in a profession: the game's, else the one Crafting Profits saved (this character only).
 function ns.Skill(c, prof)
     if not prof then return nil end
     if c.profs and c.profs[prof] then return c.profs[prof] end
     if c == ns.db.chars[KM.Char()] then
         if ns.profsRead then return 0 end
-        local s = KM.mods.Skillup
-        if s and s.db and s.Char then
-            local sc = call(s.Char)
-            local v = sc and sc.skills and sc.skills[prof]
+        local m = KM.mods.Market
+        if m and m.db and m.Char then
+            local mc = call(m.Char)
+            local v = mc and mc.skills and mc.skills[prof]
             if type(v) == "table" and v.cur then return v.cur end
         end
     end
@@ -282,12 +282,10 @@ function ns.Knows(spell)
     elseif IsPlayerSpell then
         if call(IsPlayerSpell, spell) then return true, "spellbook" end
     end
-    for _, key in ipairs({ "Market", "Skillup" }) do
-        local m = KM.mods[key]
-        if m and m.db and m.Char then
-            local mc = call(m.Char)
-            if mc and mc.known and mc.known[spell] then return true, key:lower() end
-        end
+    local m = KM.mods.Market
+    if m and m.db and m.Char then
+        local mc = call(m.Char)
+        if mc and mc.known and mc.known[spell] then return true, "market" end
     end
     return false
 end

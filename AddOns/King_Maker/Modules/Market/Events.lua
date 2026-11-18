@@ -171,7 +171,7 @@ end
 -- (Item details trickling in, GET_ITEM_INFO_RECEIVED, are handled by the King Maker window: it redraws the open page.)
 local f = CreateFrame("Frame")
 KM.Register(f, "MERCHANT_SHOW", "TRADE_SKILL_LIST_UPDATE", "TRADE_SKILL_SHOW", "TRADE_SKILL_UPDATE", "CRAFT_SHOW", "CRAFT_UPDATE",
-    "NEW_RECIPE_LEARNED", "PLAYER_LOGIN")
+    "NEW_RECIPE_LEARNED", "PLAYER_LOGIN", "SKILL_LINES_CHANGED", "PLAYER_LEVEL_UP")
 f:SetScript("OnEvent", function(_, event, ...)
     if not ns.db then return end
     if event == "MERCHANT_SHOW" then
@@ -183,7 +183,10 @@ f:SetScript("OnEvent", function(_, event, ...)
         -- (spellID) when the client gives it; otherwise the next window opening catches it
         local spell = ...
         if type(spell) == "number" then markKnown(spell); ns.Refresh() end
+    elseif event == "SKILL_LINES_CHANGED" or event == "PLAYER_LEVEL_UP" then
+        pcall(ns.ReadSkills)
     elseif event == "PLAYER_LOGIN" then
+        pcall(ns.ReadSkills)
         if ScannerKing and ScannerKing.RegisterCallback then
             ScannerKing.RegisterCallback("Market_King", function(e, ...)
                 if e == "PRICES_UPDATED" then ns.Refresh() end

@@ -18,7 +18,6 @@ KM.LEGACY = {
     Scanner_King = { var = "ScannerKingDB", mod = "Scanner" },
     Econ_King = { var = "EconKingDB", mod = "Econ" },
     Market_King = { var = "MarketKingDB", mod = "Market" },
-    Skillup_King = { var = "SkillupKingDB", mod = "Skillup" },
     Farm_King = { var = "FarmKingDB", mod = "Farm" },
     gather_king = { var = "GatherKingDB", mod = "Gather" },
     Inventory_King = { var = "InventoryKingDB", mod = "Inventory" },
@@ -179,7 +178,7 @@ SlashCmdList.KINGMAKER = function(msg)
     elseif cmd == "help" or cmd == "?" then
         KM.Print("commands:")
         KM.Print("/km   open or close the window")
-        KM.Print("/km <page>   open a page (prices, history, crafting, skillups, ledger, inventory, questgold, mobs, gathering, rested)")
+        KM.Print("/km <page>   open a page (prices, history, crafting, ledger, inventory, questgold, mobs, gathering, rested)")
         KM.Print("/km settings   settings")
         KM.Print("/km button [on|off]   minimap button")
         KM.Print("/km size [percent|reset]   window zoom; reset also puts it back in the middle")

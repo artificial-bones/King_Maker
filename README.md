@@ -1,7 +1,7 @@
 # King Maker
 
 One addon for **World of Warcraft: Forever** that does the lot: auction house prices and price history, crafting
-profits, the cheapest way to level a profession, your sales ledger, profit and loss on every trade, everything you own
+profits (with a profit panel beside the profession window), your sales ledger, profit and loss on every trade, everything you own
 and your net worth, which mobs
 are worth farming, one tracker and ledger for every farming session, gathering spots, crafting cooldowns on every
 character, shopping lists, what quests are worth and rested XP. All of it in one window, one minimap button and
@@ -82,7 +82,6 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 | Auction House | Shopping | `/shop` | Lists of what to buy with your max price; deals first; buys at the auction house |
 | Auction House | Sales Ledger | `/mlk` | What you sold and bought, profit, buyers, what isn't selling |
 | Crafting | Crafting Profits | `/mk` | The most profitable crafts for your professions |
-| Crafting | Skill-ups | `/suk` | The cheapest way to level a profession |
 | Crafting | Cooldowns | `/cdk` | Transmutes, Mooncloth and salt on every character, and what they're worth |
 | Gold | Profit & Loss | `/pnl` | Every sale matched to what you paid; what you hold, at cost and at today's price |
 | Gold | Inventory | `/ik` | Everything on every character, and your net worth |
@@ -142,22 +141,23 @@ For every item your professions make: sell the raw materials, craft and sell, or
 
 - **Every WoW: Forever recipe** (over 2,200, Forever's new ones included) for nine professions, ranked most profitable
   first, after the 5% auction cut.
-- **Two ways to count materials**: *Yrgna Special* treats them as bought (finds flips), *Ethical Gaming* treats them
-  as farmed.
+- **Two ways to count materials**: *Buy mats* treats them as a cost (finds flips), *Use my mats* treats them as
+  already yours (is crafting worth more than selling them raw?).
 - **Disenchanting**, or **DE only** to hunt disenchant profits; **your recipes** or the patterns you lack.
 - A **red line** where crafting stops paying, and a hover breakdown of every material and price.
 
 [Full guide](AddOns/King_Maker/Modules/Market#readme)
 
-### Skill-ups (was Skillup King)
+### Profession window panel
 
-The cheapest way to level a profession: what to craft at every skill point, at today's prices.
+Open a profession and King Maker docks a profit panel beside it.
 
-- **A plan from your skill to the top**: what to make, how many, the cost per craft and per point, and the total,
-  counting what you get back by selling, disenchanting or vendoring.
-- **Trainer reminders**, **patterns you lack** with their price, and a **shopping list**.
+- **This recipe**: the profit per craft and its margin up front, what the mats cost and the item sells for, how fast
+  it sells, how many to make, and, with Profit & Loss on, your profit at what you actually paid for the mats.
+- **All crafts**: every recipe you know in that profession, ranked by what it can make you right now (profit per
+  craft times how many the auction house will take), with how many your bags can make.
 
-[Full guide](AddOns/King_Maker/Modules/Skillup#readme)
+[Full guide](AddOns/King_Maker/Modules/Profession#readme)
 
 ### Profit & Loss (new in 2.7)
 
@@ -289,7 +289,7 @@ every mob, spawn point and drop in the game. King Maker only reads that data; it
 doesn't include or change any of it, so install Questie and QuestieDB from their own pages and support their authors.
 
 **Recipe data from [ForeverDB.net](https://foreverdb.net)** (GPL-3.0): every Forever recipe, its reagents, skill
-ranges and where it's learned, used by Crafting Profits, Skill-ups and the item tooltips. Thank you to ForeverDB for
+ranges and where it's learned, used by Crafting Profits, the profession panel and the item tooltips. Thank you to ForeverDB for
 collecting it and sharing it.
 
 **Quest data from [CMaNGOS classic-db](https://github.com/cmangos/classic-db)** (GPL-3.0), the open Classic world
