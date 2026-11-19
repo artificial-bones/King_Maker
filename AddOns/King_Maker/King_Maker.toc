@@ -4,7 +4,7 @@
 ## Author: BearBones
 ## X-License: GPL-3.0
 ## X-Credits: Recipe data from ForeverDB.net; Supply Writs data from QuestieDB and Craftman's Helper (Emsworth)
-## Version: 2.11.1
+## Version: 2.12.0
 ## IconTexture: Interface\Icons\INV_Crown_01
 ## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB, ShoppingKingDB, ProfessionKingDB, CooldownKingDB, TrackerKingDB, ProfitKingDB, BlacklistKingDB, ReputationKingDB
 ## OptionalDeps: QuestieDB, TomTom, LibDBIcon-1.0, Auctionator

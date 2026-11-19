@@ -332,6 +332,8 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
     { type = "header", label = "Guild" },
     { type = "check", label = "Share prices with my guild", tip = "Your Trade Goods prices go to guildmates running King Maker after each scan; theirs come to you, and when you log in a guildmate online who holds a newer scan catches you up. The newest price wins.",
       get = function() return ns.db.sync.guild end, set = function(v) ns.db.sync.guild = v end },
+    { type = "check", label = "Ask the guild for prices of what you loot", tip = "When something drops that you have no price for (or only one over 6 hours old), King Maker asks your guild for it: once a session per item, half a minute of drops in one small message. Grey items, quest items and items that bind when picked up are skipped.",
+      get = function() return ns.db.sync.loot end, set = function(v) ns.db.sync.loot = v end },
     { type = "check", label = "Share my full scans (every item)", tip = "Also pass on every item of a full scan, not only Trade Goods and watched items. Off by default: a whole auction house is about 290 messages, so it takes a few minutes in the background.",
       get = function() return ns.db.sync.full end, set = function(v) ns.db.sync.full = v end },
     { type = "button", label = "Ask the guild for a newer scan", tip = "Done by itself when you log in: a guildmate online who holds a newer scan than yours sends you its prices.",
@@ -342,7 +344,7 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
     { type = "text", label = "/sk   open the Prices page\n/sk scan   Scan (at the auction house): full when the game allows it, else quick\n"
         .. "/sk deep   force a full scan (progress window)\n/sk material   force a quick scan of Trade Goods and watched items\n"
         .. "/sk market   the same plus Crafting Profits' ticked professions\n/sk tooltip on|off   prices in tooltips\n/sk sources on|off   vendor, drops and recipes in tooltips\n/sk tip crafts|make|pattern|de|goal|short   more tooltip rows\n"
-        .. "/sk sync [on|off]   share now, or turn sharing on/off\n/sk sync pull   ask for a newer scan\n/sk sync full on|off   share every item of full scans\n/sk status   how many prices and how old" },
+        .. "/sk sync [on|off]   share now, or turn sharing on/off\n/sk sync pull   ask for a newer scan\n/sk sync loot on|off   ask for prices of what you loot\n/sk sync full on|off   share every item of full scans\n/sk status   how many prices and how old" },
 } })
 
 -- Home: a row when prices are missing or more than a day old. The auction house opening or closing changes which

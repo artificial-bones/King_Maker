@@ -15,8 +15,10 @@ local API = ns.API
 --   * So a scan reaches everyone who logs in later, as long as one guildmate
 --     online has it, not only the people online when it ran.
 --   * Anything else is shared only when someone asks (ScannerKing.RequestPrices,
---     Econ King's "Ask guild" buttons). Guildmates who scanned those items
---     answer, and stay quiet about items someone already answered as fresh.
+--     Price History's "Ask guild" buttons, and what you loot: an item with no
+--     price or one over 6 hours old is asked about once a session, in batches
+--     every 30 s). Guildmates holding a price answer, theirs or passed on, and
+--     stay quiet about items someone already answered as fresh.
 -- Prices of the last two days are passed on; answers to requests go back a week.
 -- Deep Scan prices outside Trade Goods stay with you unless "Share my full scans" is on.
 --
@@ -363,13 +365,83 @@ end
 local function answer()
     answerScheduled = false
     if not enabled() then return end
-    local list = {}
+    -- yours as "Z", guildmates' you hold as "Y<name>:" (2.12: anyone with the price can answer, not only the scanner)
+    local groups = {}
     for id in pairs(pending) do
         local pr = ns.db.prices[id]
-        if pr and not pr.from then table.insert(list, entry(id, pr)) end
+        if pr and pr.p and pr.t then
+            local key = pr.from or false
+            groups[key] = groups[key] or {}
+            table.insert(groups[key], entry(id, pr))
+        end
     end
     wipe(pending)
-    for _, msg in ipairs(ns.PackPrices(list)) do enqueue(msg, "GUILD") end
+    queueGroups(groups, "GUILD")
+end
+
+---------------------------------------------------------------------------
+-- Prices for what you loot (2.12)
+---------------------------------------------------------------------------
+
+-- Drops in dungeons and farms are mostly items only a full scan prices. When you loot one you have no price for,
+-- or only an old one, King Maker asks the guild for it: collected for half a minute, then one small request.
+local LOOT_STALE = 6 * 3600 -- a price older than this is worth asking about
+local LOOT_BATCH = 30       -- seconds to collect drops before asking
+local lootAsked, lootWant, lootScheduled = {}, {}, false
+
+local function lootPattern(fmt)
+    if type(fmt) ~= "string" then return nil end
+    fmt = fmt:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
+    -- "%s" (the item link) becomes a capture, "%d" (how many) a number; the escapes above left both alone
+    fmt = fmt:gsub("%%s", "(.+)"):gsub("%%d", "%%d+")
+    return "^" .. fmt .. "$"
+end
+local LOOT_PATTERNS = {}
+for _, g in ipairs({ "LOOT_ITEM_SELF_MULTIPLE", "LOOT_ITEM_SELF" }) do
+    local pat = lootPattern(_G[g])
+    if pat then table.insert(LOOT_PATTERNS, pat) end
+end
+
+-- Worth asking the guild about: can go on the auction house, and you have no fresh price.
+local function wantsPrice(id)
+    if lootAsked[id] then return false end
+    local pr = ns.db.prices[id]
+    if pr and pr.t and ns.Now() - pr.t < LOOT_STALE then return false end
+    local quality = C_Item and C_Item.GetItemQualityByID and C_Item.GetItemQualityByID(id)
+    if quality == 0 then return false end -- grey: vendor trash
+    local inst = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    local classID = inst and select(6, inst(id))
+    if classID == 12 then return false end -- quest items
+    local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    local bind = info and select(14, info(id))
+    if bind == 1 or bind == 4 then return false end -- binds when picked up, quest
+    return true
+end
+
+local function askLoot()
+    lootScheduled = false
+    local ids = {}
+    for id in pairs(lootWant) do table.insert(ids, id) end
+    wipe(lootWant)
+    if #ids == 0 or not enabled() or not ns.db.sync.loot then return end
+    API.RequestPrices(ids)
+end
+
+function ns.OnLoot(text)
+    if not (ns.db and ns.db.sync.loot and enabled()) or type(text) ~= "string" then return end
+    local link
+    for _, pat in ipairs(LOOT_PATTERNS) do
+        link = text:match(pat)
+        if link then break end
+    end
+    local id = link and tonumber(link:match("item:(%d+)"))
+    if not id or not wantsPrice(id) then return end
+    lootAsked[id] = true -- once a session
+    lootWant[id] = true
+    if not lootScheduled then
+        lootScheduled = true
+        C_Timer.After(LOOT_BATCH, askLoot)
+    end
 end
 
 -- Catching up a guildmate who logged in ("Q"): only those holding a newer scan answer, the freshest
@@ -464,7 +536,7 @@ local function onMessage(text, sender)
         for _, d in ipairs(ns.UnpackNumbers(body) or {}) do
             id = id + d
             local pr = ns.db.prices[id]
-            if pr and not pr.from and pr.t and now - pr.t <= ANSWER_AGE then pending[id] = true end
+            if pr and pr.t and now - pr.t <= ANSWER_AGE and not (pr.from and pr.from == who) then pending[id] = true end
         end
         -- Wait a moment: if a guildmate answers first with prices as fresh, we skip those.
         if next(pending) and not answerScheduled then
@@ -486,8 +558,11 @@ end
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("CHAT_MSG_ADDON")
+f:RegisterEvent("CHAT_MSG_LOOT")
 f:SetScript("OnEvent", function(_, event, ...)
-    if event == "PLAYER_LOGIN" then
+    if event == "CHAT_MSG_LOOT" then
+        ns.OnLoot((...))
+    elseif event == "PLAYER_LOGIN" then
         if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
             C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
         end

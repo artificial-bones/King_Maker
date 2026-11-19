@@ -343,6 +343,49 @@ assert texts.index([t for t in texts if t.startswith("R")][0]) < texts.index([t 
 L.execute("NOW = SAVED_NOW")
 print("HANDOFF OK")
 
+# 2.12 what you loot: items with no fresh price are asked about, half a minute of drops in one request, once a session
+assert L.eval("ScannerKingDB.sync.loot") is True
+
+
+def requested(LL):
+    ids = []
+    for m in sent_list(LL):
+        if m.text.startswith("R"):
+            i = 0
+            for d in ns.UnpackNumbers(m.text[1:]).values():
+                i += d
+                ids.append(i)
+    return ids
+
+
+L.execute("""
+ITEMS[7777] = { name = "Green Sword", quality = 2 }
+ITEMS[7778] = { name = "Odd Ore", quality = 1 }
+ITEMS[7779] = { name = "Broken Tooth", quality = 0 }
+ITEMS[7780] = { name = "Bound Ring", quality = 3, bind = 1 }
+SENT = {}
+SELF_LOOT_LINE(7777); SELF_LOOT_LINE(7778, 5); SELF_LOOT_LINE(7779); SELF_LOOT_LINE(7780); SELF_LOOT_LINE(2589)
+FIRE("CHAT_MSG_LOOT", format(LOOT_ITEM, "Bob", LINK(7781)), "Bob")
+""")
+assert requested(L) == [], "nothing until the half minute is up"
+L.execute("RUN_TIMERS()")
+assert sorted(requested(L)) == [7777, 7778], requested(L)  # grey, bind on pickup, a fresh price and Bob's loot skipped
+assert len([m for m in sent_list(L) if m.text.startswith("R")]) == 1, "one request for the batch"
+# once a session per item
+L.execute("SENT = {}; SELF_LOOT_LINE(7777); RUN_TIMERS()"); assert requested(L) == []
+# switched off: no requests
+sk("sync loot off"); assert L.eval("ScannerKingDB.sync.loot") is False
+L.execute("SENT = {}; ITEMS[7782] = { name = 'Blue Cloak', quality = 3 }; SELF_LOOT_LINE(7782); RUN_TIMERS()"); assert requested(L) == []
+sk("sync loot on"); assert L.eval("ScannerKingDB.sync.loot") is True
+# answering: we pass on a guildmate's price we hold (Ann's), under her name; never back to the one who scanned it
+req = "R" + ns.PackNumber(5555)
+L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "%s", "GUILD", "Lou-Realm"); RUN_TIMERS()' % req)
+ys = [m.text for m in sent_list(L) if m.text.startswith("YAnn:") and m.chan == "GUILD"]
+assert ys and 5555 in [e.id for e in ns.UnpackPrices(ys[0][5:]).values()], [m.text for m in sent_list(L)]
+L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "%s", "GUILD", "Ann-Realm"); RUN_TIMERS()' % req)
+assert not sent_list(L), "Ann doesn't need her own price back"
+print("LOOT OK")
+
 # Browse never answers: give up and look items up one at a time
 L.execute("""
 ScannerKingDB.prices = {}

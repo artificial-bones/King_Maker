@@ -110,6 +110,7 @@ opening their profession windows once.
 | `/sk status` | How many prices you have, when the last full and quick scans ran, when a full scan is ready, and the newest scan you hold |
 | `/sk sync` | Send your prices to your guild now |
 | `/sk sync on` / `off` | Turn guild price sharing on or off |
+| `/sk sync loot on` / `off` | Ask the guild for prices of what you loot |
 | `/sk sync pull` | Ask the guild for a newer scan than yours (done by itself at login) |
 | `/sk sync full on` / `off` | Also pass on every item of full scans, not only Trade Goods |
 
@@ -132,9 +133,17 @@ newest price wins.
   once. A chat line says what you got: *Synced 412 newer price(s) from Bob
   (Ann's scan, 25 min ago).*
 - **Everything else is shared when someone asks.** Price History's **Ask
-  guild** buttons ask for just those items. Guildmates who scanned them in the
-  last week answer, and anyone who sees a price as fresh as theirs already sent
+  guild** buttons ask for just those items. Guildmates holding a price from the
+  last week answer (their own scan or one passed on to them, still under the
+  scanner's name), and anyone who sees a price as fresh as theirs already sent
   stays quiet. Items you scanned yourself in the last hour aren't asked for.
+- **What you loot is asked about by itself.** When something drops in a
+  dungeon or while farming that you have no price for, or only one over 6
+  hours old, King Maker asks the guild: once a session per item, half a
+  minute of drops in one small message. Grey items, quest items and items that
+  bind when picked up are skipped. The price lands in the tooltip and the Farm
+  Tracker within seconds, as long as someone online has it. Turn it off in
+  Settings > Scanner or with `/sk sync loot off`.
 - **Share my full scans** (Settings > Scanner, off by default) passes on every
   item of a full scan too, after the Trade Goods. A whole auction house is about
   290 messages, so it trickles in over a few minutes.

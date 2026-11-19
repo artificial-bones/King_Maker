@@ -171,7 +171,8 @@ function ns.InitDB()
     end
     db.sync = db.sync or {}
     if db.sync.guild == nil then db.sync.guild = true end
-    if db.sync.full == nil then db.sync.full = false end -- 2.11: pass on whole Deep Scans, not only Trade Goods
+    if db.sync.full == nil then db.sync.full = false end
+    if db.sync.loot == nil then db.sync.loot = true end -- 2.12: ask the guild for prices of what you loot -- 2.11: pass on whole Deep Scans, not only Trade Goods
     -- db.sync.stamp = { t, by }: the newest scan you hold (Sync.lua), set on the first scan or sync
     ns.db = db
     API.ready = true
@@ -223,6 +224,10 @@ SlashCmdList.SCANNERKING = function(msg)
             if arg2 == "on" then ns.db.sync.full = true elseif arg2 == "off" then ns.db.sync.full = false
             else ns.db.sync.full = not ns.db.sync.full end
             KM.Print(ns, "Sharing full scans (every item, not only Trade Goods) is " .. (ns.db.sync.full and "on." or "off."))
+        elseif arg == "loot" then
+            if arg2 == "on" then ns.db.sync.loot = true elseif arg2 == "off" then ns.db.sync.loot = false
+            else ns.db.sync.loot = not ns.db.sync.loot end
+            KM.Print(ns, "Asking the guild for prices of what you loot is " .. (ns.db.sync.loot and "on." or "off."))
         elseif arg == "pull" then
             ns.AskNewest()
             KM.Print(ns, "Asking the guild for a newer scan than yours.")
@@ -254,6 +259,7 @@ SlashCmdList.SCANNERKING = function(msg)
         KM.Print(ns, "/sk status   how many prices you have and how old")
         KM.Print(ns, "/sk sync [on|off]   share prices with your guild now, or turn sharing on/off")
         KM.Print(ns, "/sk sync pull   ask the guild for a newer scan than yours (done by itself at login)")
+        KM.Print(ns, "/sk sync loot [on|off]   ask the guild for prices of what you loot")
         KM.Print(ns, "/sk sync full [on|off]   also pass on every item of a full scan, not only Trade Goods (slower)")
     end
 end

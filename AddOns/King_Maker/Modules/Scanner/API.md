@@ -78,7 +78,8 @@ ScannerKing.OpenMarketScan()      -- kept for old callers: at the auction house 
 -- Add lines to item tooltips, under Scanner King's prices.
 ScannerKing.AddTooltipProvider("Econ_King", function(tooltip, itemID) tooltip:AddLine(...) end)
 
--- Ask guildmates for their latest prices of these items (Econ King's "Ask guild").
+-- Ask guildmates for their latest prices of these items (Econ King's "Ask guild", and since 2.12 what you loot).
+-- Since 2.12 anyone holding a price answers, passing guildmates' prices on as `Y` under the scanner's name.
 -- Returns items asked for and messages used, or nil if sharing is off / no guild.
 -- Items you scanned yourself in the last hour are skipped; at most 2000 per call.
 ScannerKing.RequestPrices({ itemID, ... })
