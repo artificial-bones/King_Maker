@@ -859,12 +859,6 @@ ns.QUESTS = {
     [9422] = { 1451, 60, 55, "H", 0, {13446,2,13444,2}, {}, 0, "", {}, 0, "Scouring the Desert" },
     [9664] = { 1423, 60, 55, "A", 9000, {}, {}, 0, "", {}, 0, "Establishing New Outposts" },
     [9665] = { 1423, 60, 55, "H", 9000, {}, {}, 0, "", {}, 0, "Bolstering Our Defenses" },
-    [94212] = { 1420, 60, 0, "", 0, {}, {}, 0, "n", {}, 0, "Craftsman's Writ: Elixir of Wisdom" },
-    [94216] = { 1431, 60, 0, "", 0, {}, {}, 0, "n", {}, 0, "Craftsman's Writ: Elixir of Lesser Agility" },
-    [94217] = { 1454, 60, 0, "", 0, {}, {}, 0, "n", {}, 0, "Craftsman's Writ: Lesser Troll's Blood Elixir" },
-    [94220] = { 1413, 60, 0, "", 0, {}, {}, 0, "n", {}, 0, "Craftsman's Writ: Pearl-Handled Dagger" },
-    [94227] = { 1453, 60, 0, "", 0, {}, {}, 0, "n", {}, 0, "Craftsman's Writ: Big Bronze Knife" },
-    [94243] = { 1456, 60, 0, "", 0, {}, {}, 0, "n", {}, 0, "Craftsman's Writ: Heavy Quiver" },
     [98247] = { 1453, 60, 0, "A", 0, {}, {}, 0, "n", {}, 0, "Shipping Label" },
     [98248] = { 1458, 60, 0, "H", 0, {}, {}, 0, "n", {}, 0, "Shipping Label" },
 }

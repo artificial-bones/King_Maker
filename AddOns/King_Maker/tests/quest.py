@@ -41,6 +41,9 @@ L, KM = fresh(only=["Scanner", "Quest"], seed=QG)
 ns = KM.mods.Quest
 qk = L.eval("SlashCmdList.QUESTKING")
 assert len(list(ns.QUESTS)) > 500, "the generated data loads"
+writs = [q for q, d in ns.QUESTS.items() if str(d[12]).startswith("Craftsman's Writ")]
+assert not writs and ns.QUESTS[94212] is None, "Supply Writs are repeatable profession dailies: not Quest Gold's (2.10)"
+assert ns.QUESTS[98247] is not None, "the one-time Shipping Label stays"
 L.globals().QNS = ns
 L.execute("""
 QNS.QUESTS = {

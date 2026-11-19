@@ -9,8 +9,8 @@ local _, KM = ...
 --   V<version>   "this is my version": sent once, 15-25 s after login
 --   R<version>   an answer to an older V: sent by one guildmate with a newer version (whoever's random 2-8 s
 --                delay ends first; the others hear the answer and stand down), at most once a minute
--- The prefix is King Maker's one prefix; this file reads only V and R (2.8.0's guild bests also sent F, A and B:
--- those are ignored).
+-- The prefix is King Maker's one prefix; this file reads only V and R. Other kinds on it: L, Q, W and E are the
+-- guild blacklist's (2.10, Modules/Blacklist/Sync.lua); F, A and B were 2.8.0's guild bests (removed, ignored).
 -- Nothing is sent outside a guild. KingMakerDB.newest keeps the newest version seen ({ v, who, t }) for /km version.
 -- Settings > General: "Tell me when a guildmate has a newer King Maker" (KingMakerDB.ui.versionNotice, default on);
 -- your own version is always announced, so the guild still hears about it.

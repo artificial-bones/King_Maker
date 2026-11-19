@@ -89,7 +89,10 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 | Farming | Farming Ledger | `/farm` | Every farming session: what it made, gold per hour, graphs |
 | Farming | Mob Farming, White Items | `/fk` | Which mobs and white items are worth farming |
 | Farming | Gathering | `/gt` | Mining, herb, fishing and treasure spots on your maps |
+| Reputation | Reputation | `/rep overview` | Every tracked faction: standing, pace, days to go, the next unlock |
+| Reputation | Supply Writs | `/rep` | Writs done today, orders to turn in, rep per gold, the cheapest rep, Favor shopping, every character |
 | Characters | Rested XP | `/rk` | Rested XP on all your characters |
+| Guild | Blacklist | `/bl` | Players your guild won't group with, shared with every guildmate running King Maker: warnings when they join or invite you, BLACKLISTED in chat |
 | | Settings | `/km settings` | Everything, module by module |
 
 ### Prices (was Scanner King)
@@ -237,7 +240,7 @@ One tracker for everything you farm, and a ledger of every session.
 Since Forever's November hotfix, most quests of level 48 and up pay gold. Quest Gold works out what each one is
 worth and where the most is left for the character you're on.
 
-- **Every 48+ quest** (853 of them, in 40 zones) for your faction and class, with the zones ranked by the gold
+- **Every 48+ quest** (847 of them, in 38 zones) for your faction and class, with the zones ranked by the gold
   you have left to earn there: quests left of total, and what they're worth.
 - **Each quest's worth**: its gold, plus the best reward item at today's prices (auction house after the cut, or
   a vendor), plus any item it always gives, minus what the items you hand in would sell for.
@@ -275,11 +278,41 @@ Mooncloth and the Salt Shaker, plus any other long cooldown your profession wind
 
 [Full guide](AddOns/King_Maker/Modules/Cooldowns#readme)
 
+### Reputation: Supply Writs (new in 2.10)
+
+A Reputation section for the factions that pay in recipes, Favor and gold. First up: your side's supply faction (the
+Azeroth Commerce Authority or Durotar Supply and Logistics) and its daily Craftsman's Writs.
+
+- **Today**: orders done, orders in your bags you can still turn in (a red count by the page and a login reminder),
+  rep today and the reset countdown, plus every character's writs and standing.
+- **What each order costs**: buy the item or craft it, whichever is cheaper, the customer and zone (click for a
+  waypoint), and the rep per gold after the coin pouch.
+- **The cheapest rep today**: sealed writs on the auction house ranked by gold per rep point, against the receipt path.
+- **Progress**: standing, your 7-day pace and the days to go, Merchant's Favor and what the next standing unlocks.
+- **Favor shopping**: the faction's recipes with Crafting Profits' profit, to spend Favor on the best ones. `/rep`.
+
+[Full guide](AddOns/King_Maker/Modules/Reputation#readme)
+
 ### Rested XP (was Rested King)
 
 How much rested XP every character has built up, when each one is full, and where they're resting.
 
 [Full guide](AddOns/King_Maker/Modules/Rested#readme)
+
+### Guild Blacklist (new in 2.10)
+
+Scammers, ninja looters and the toxic ones, on one list your whole guild shares. Anyone in the guild running King
+Maker can add, edit or remove an entry: right-click a name in chat, a portrait or a party frame and pick **Add to
+Blacklist**, Alt-click a group finder listing, or press **Add** on the page. A reason and a short note say why.
+
+- **Warned in time**: a red warning in the middle of the screen, a sound and the note when a listed player joins your
+  group or invites you, before you accept.
+- **Marked everywhere**: a big red **BLACKLISTED** before their name in chat (a setting turns it off), a line in
+  their tooltip, and marks in the group finder and the Who list.
+- **Shared, lightly**: only the list travels (names, reasons, notes, who and when), only what differs at login.
+  Not in a guild, it's your own list. Nobody is ever kicked or declined: it warns and marks. `/bl`.
+
+[Full guide](AddOns/King_Maker/Modules/Blacklist#readme)
 
 ## Credits
 
@@ -294,6 +327,11 @@ collecting it and sharing it.
 
 **Quest data from [CMaNGOS classic-db](https://github.com/cmangos/classic-db)** (GPL-3.0), the open Classic world
 database: quest levels, requirements and rewards for Quest Gold, with zones and Forever's own quests from ForeverDB.net.
+
+**Supply Writs data** from [QuestieDB](https://github.com/Questie/QuestieDB) (orders, customers, rep; GPL-3.0),
+ForeverDB.net (the faction's recipes and their Favor costs) and
+[Craftman's Helper](https://github.com/emsw0rth/craftmanshelper) by Emsworth (order counts and some customers;
+GPL-3.0, data only). Thank you.
 
 Thanks also to the authors of LibStub, CallbackHandler and HereBeDragons, which King Maker includes.
 

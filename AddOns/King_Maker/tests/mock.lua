@@ -911,3 +911,78 @@ function GetTradeTargetItemLink(i) local a = tradeSlot("get", i); return a and L
 function GetTradeTargetItemInfo(i) return tradeInfo(tradeSlot("get", i)) end
 function GetPlayerTradeMoney() return TRADE and TRADE.pm or 0 end
 function GetTargetTradeMoney() return TRADE and TRADE.tm or 0 end
+
+---------------------------------------------------------------- Blacklist (2.10)
+-- Additive. UNITS[u].surname / .guild (in your guild) / .isPlayer; GROUP_SIZE (party size incl. you) and RAID = true
+-- for a raid. Menu.ModifyMenu keeps each tag's callbacks in MENU_MODS; OPEN_MENU(tag, contextData) runs them and
+-- returns the buttons (MENU, the MenuUtil shape: { text, fn }). HOVER_UNIT(unit, guid) runs the Unit tooltip
+-- post-calls on GameTooltip. RAID_NOTICES gets every RaidNotice_AddMessage text. SENDER_FILTERS /
+-- MESSAGE_FILTERS[event] hold the chat filters; CHAT_NAME(event, sender, text) runs the sender-name filters.
+UNKNOWNOBJECT = "Unknown"
+RAID, GROUP_SIZE = false, nil
+function IsInRaid() return RAID == true end
+function GetNumGroupMembers() if not GROUP and not RAID then return 0 end return GROUP_SIZE or 5 end
+function UnitNameUnmodified(u)
+  if u == "player" then return PLAYER.name, PLAYER.surname end
+  local x = UNITS[u]; if x then return x.name, x.surname end
+end
+function UnitIsInMyGuild(u) return UNITS[u] ~= nil and UNITS[u].guild == true end
+MENU_MODS = {}
+Menu = Menu or {}
+Menu.ModifyMenu = function(tag, fn) MENU_MODS[tag] = MENU_MODS[tag] or {}; table.insert(MENU_MODS[tag], fn) end
+function OPEN_MENU(tag, cd)
+  local items = {}
+  local root = {}
+  function root:CreateTitle(text) MENU_TITLE = text return root end
+  function root:CreateDivider() return root end
+  function root:CreateButton(text, fn, data) local it = { text = text, fn = function() return fn and fn(data) end } items[#items + 1] = it return it end
+  for _, fn in ipairs(MENU_MODS[tag] or {}) do fn(nil, root, cd) end
+  MENU = items
+  return items
+end
+TT_UNIT = nil
+function GameTooltip:GetUnit() local u = TT_UNIT; return u and UNITS[u] and UNITS[u].name, u end
+function HOVER_UNIT(unit, guid)
+  GameTooltip.lines = {}; TT_UNIT = unit
+  for _, fn in ipairs(TOOLTIP_CALLS[2] or {}) do fn(GameTooltip, { type = 2, guid = guid or (unit and UnitGUID(unit)) }) end
+  return GameTooltip.lines
+end
+RaidWarningFrame = CreateFrame("Frame", "RaidWarningFrame")
+RAID_NOTICES = {}
+function RaidNotice_AddMessage(frame, text, color) RAID_NOTICES[#RAID_NOTICES + 1] = text end
+SOUNDKIT = SOUNDKIT or {}; SOUNDKIT.RAID_WARNING = 8959
+SENDER_FILTERS, MESSAGE_FILTERS = {}, {}
+ChatFrameUtil = ChatFrameUtil or {}
+ChatFrameUtil.AddSenderNameFilter = function(fn) SENDER_FILTERS[#SENDER_FILTERS + 1] = fn end
+ChatFrameUtil.AddMessageEventFilter = function(ev, fn) MESSAGE_FILTERS[ev] = MESSAGE_FILTERS[ev] or {}; table.insert(MESSAGE_FILTERS[ev], fn) end
+function CHAT_NAME(event, sender, text)
+  local name = sender
+  for _, fn in ipairs(SENDER_FILTERS) do local r = fn(event, name, text or "hi", sender) if r ~= nil then name = r end end
+  return name
+end
+
+---------------------------------------------------------------- Reputation (2.10)
+-- Additive. REP[factionID] = { name =, value = rep from Neutral, reaction = standing 1-8 (optional) } feeds
+-- C_Reputation.GetFactionDataByID (the retail table) and GetFactionInfoByID (the classic returns). RESET_IN = seconds
+-- to the daily reset (C_DateAndTime.GetSecondsUntilDailyReset and GetQuestResetTime). CURRENCY[id] = quantity for
+-- C_CurrencyInfo.GetCurrencyInfo. QUEST_ID is what GetQuestID returns (the open quest window). TURN_IN(questID, flag)
+-- sets the completed flag (unless flag == false: the flag lags) and fires QUEST_TURNED_IN.
+REP, RESET_IN, CURRENCY, QUEST_ID = {}, 6 * 3600, {}, nil
+local REP_STARTS = { -42000, -6000, -3000, 0, 3000, 9000, 21000, 42000 }
+local function repReaction(v) local s = 1 for i = 8, 1, -1 do if v >= REP_STARTS[i] then s = i break end end return s end
+C_Reputation = { GetFactionDataByID = function(id)
+  local r = REP[id]; if not r then return nil end
+  local s = r.reaction or repReaction(r.value)
+  return { factionID = id, name = r.name, reaction = s, currentReactionThreshold = REP_STARTS[s],
+    nextReactionThreshold = REP_STARTS[s + 1] or 43000, currentStanding = r.value }
+end }
+function GetFactionInfoByID(id)
+  local r = REP[id]; if not r then return nil end
+  local s = r.reaction or repReaction(r.value)
+  return r.name, "", s, REP_STARTS[s], REP_STARTS[s + 1] or 43000, r.value, false, false, false, false, false, false, false, id
+end
+C_DateAndTime = { GetSecondsUntilDailyReset = function() return RESET_IN end }
+function GetQuestResetTime() return RESET_IN end
+C_CurrencyInfo = { GetCurrencyInfo = function(id) local q = CURRENCY[id]; if q == nil then return nil end return { currencyID = id, name = "Currency " .. id, quantity = q } end }
+function GetQuestID() return QUEST_ID end
+function TURN_IN(q, flag) if flag ~= false then COMPLETED[q] = true end FIRE("QUEST_TURNED_IN", q, 0, 0) end

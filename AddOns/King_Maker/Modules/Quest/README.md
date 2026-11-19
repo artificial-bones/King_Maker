@@ -1,7 +1,7 @@
 # Quest Gold (was Quest King)
 
-Since Forever's November hotfix, most quests of level 48 and up pay gold. Quest Gold lists every one of them (853,
-in 40 zones) and works out what each is worth and where the most is left for the character you're on.
+Since Forever's November hotfix, most quests of level 48 and up pay gold. Quest Gold lists every one of them (847,
+in 38 zones) and works out what each is worth and where the most is left for the character you're on.
 
 Quest Gold is the **Gold > Quest Gold** page of the King Maker window. It replaced the Dungeon Quests page in 2.4.0.
 The bag cleanup (red X on quest items, the "safe to delete" tooltip line, the `/qk` list) was taken out in 2.5.3.
