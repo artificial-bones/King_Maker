@@ -77,7 +77,7 @@ L.execute("MarketKingDB.profs = { [2] = true, [1] = true }")
 assert L.eval("MarketKingDB.profs[2]") and L.eval("MarketKingDB.profs[1]") and not L.eval("MarketKingDB.profs[9]")
 L.execute('FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()')
 tb = KM.mods.Scanner.TitleButtons()
-assert tb.scan.label.text == "Scan" and tb.market is None and tb.mat is None
+assert tb.scan.label.text == "Quick scan" and tb.market is None and tb.mat is None
 L.execute("GameTooltip.lines = {}"); tb.scan.RunScript(tb.scan, "OnEnter")
 tip = [str(x) for x in L.eval("GameTooltip.lines").values()]
 assert any("for the 2 profession(s) ticked on Crafting Profits" in x for x in tip), tip

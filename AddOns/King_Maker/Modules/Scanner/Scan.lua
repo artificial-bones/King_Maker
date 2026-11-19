@@ -74,7 +74,11 @@ end
 ---------------------------------------------------------------------------
 
 local function resetButton()
-    if scanButton then scanButton:SetEnabled2(true); scanButton:SetLabel(scanButton.caption or "Scan") end
+    if scanButton then
+        scanButton:SetEnabled2(true)
+        scanButton.caption = ns.ScanCaption()
+        scanButton:SetLabel(scanButton.caption)
+    end
     scanButton = nil
 end
 
@@ -324,6 +328,28 @@ function ns.ScanMode()
     return "quick"
 end
 
+-- The resting label of the Scan buttons: what a click does right now.
+function ns.ScanCaption()
+    local mode = ns.ScanMode()
+    if mode == "full" then return "Full scan" end
+    local wait = ns.FullScanWait and ns.FullScanWait()
+    if mode == "quick" and wait and wait > 0 and modernAH() then
+        return "Quick (full in " .. math.max(1, math.ceil(wait / 60)) .. "m)"
+    end
+    return mode and "Quick scan" or "Scan"
+end
+
+-- Why a click does a quick scan instead of a full one, said once in chat when it starts.
+local function sayWhyQuick()
+    local wait = ns.FullScanWait and ns.FullScanWait()
+    if not (wait and wait > 0 and modernAH()) then return end
+    local mins = math.max(1, math.ceil(wait / 60))
+    local by = ns.db.lastReplicateBy
+    local where = (by and not KM.IsMe(by)) and (" (the last one ran on " .. by .. "; the wait is shared by your characters)") or ""
+    KM.Print(ns, "Quick scan: the game allows one full scan every 15 minutes" .. where .. ". Next full scan in "
+        .. mins .. " min; the Scan button turns into Full scan when it's ready.")
+end
+
 -- The merged scan (the Scan button, /sk scan, the crown's Scan, Crafting Profits' Scan).
 function API.SmartScan()
     if not ns.db then return end
@@ -336,6 +362,7 @@ function API.SmartScan()
         return
     end
     if ns.ScanMode() == "full" then return API.DeepScan() end
+    sayWhyQuick()
     return API.QuickScan()
 end
 
@@ -393,8 +420,22 @@ local function createButton()
         return false
     end
     if not buttons[parent] then
-        local b = UI.Button(parent, "Scan", 130, 22, function(self) scanButton = self; API.SmartScan() end, "primary")
+        local b = UI.Button(parent, "Scan", 150, 22, function(self) scanButton = self; API.SmartScan() end, "primary")
         b.caption = "Scan"
+        -- Keep the label saying what a click does (Full scan / Quick (full in 9m)), and say so when a full
+        -- scan becomes ready while the auction house is open.
+        local acc, wasFull = 1, nil
+        b:HookScript("OnUpdate", function(self, elapsed)
+            acc = acc + (elapsed or 0)
+            if acc < 1 then return end
+            acc = 0
+            ns.RefreshScanCaption(self)
+            local full = ns.ScanMode() == "full"
+            if full and wasFull == false and not API.IsScanning() then
+                KM.Print(ns, "A full scan is ready: click Full scan on the auction house.")
+            end
+            wasFull = full
+        end)
         b:SetFrameStrata("HIGH")
         b:SetPoint("TOPRIGHT", parent, "TOPRIGHT", x, y)
         b:HookScript("OnEnter", function(self)
@@ -409,6 +450,13 @@ local function createButton()
     return true
 end
 ns.SetScanButton = function(b) scanButton = b end
+
+-- Sets a Scan button's resting label; while a scan runs the label shows its progress instead.
+function ns.RefreshScanCaption(b)
+    if not b then return end
+    b.caption = ns.ScanCaption()
+    if not API.IsScanning() then b:SetLabel(b.caption) end
+end
 -- The title-bar Scan button of the open auction house (nil until one has opened).
 ns.ScanButton = function() return ns.ahParent and buttons[ns.ahParent] and buttons[ns.ahParent].scan end
 ns.DeepButton = ns.ScanButton -- a full scan shows its progress on the same button
@@ -418,7 +466,7 @@ local hinted = false
 local function onShow()
     local ok, made = pcall(createButton)
     if ok and made then
-        -- buttons are ready
+        ns.RefreshScanCaption(ns.ScanButton())
     elseif not hinted then
         hinted = true
         KM.Print(ns, "Type /sk scan to scan prices.")

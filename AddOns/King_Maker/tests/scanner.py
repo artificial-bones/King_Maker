@@ -73,7 +73,7 @@ ScannerKing.RegisterCallback("test", function(e, res, kind) EVENTS[#EVENTS+1] = 
 SK.Watch("gather_king", L.eval("function() return { 2770, 268415, 999 } end"))  # ore (in Trade Goods), seeds (not), unlisted
 L.execute('FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()')
 tb = ns.TitleButtons()
-assert tb and tb.scan.label.text == "Scan", "one Scan button in the title bar"
+assert tb and tb.scan.label.text == "Quick scan", "one Scan button in the title bar"
 for old in ("Material Scan", "Market Scan", "Deep Scan"):
     assert len(L.eval("BTNS('%s')" % old)) == 0, old + " button is gone"
 L.globals().SKNS = ns
@@ -93,7 +93,7 @@ assert price(2589) == 120 and price(248823) == 12345 and price(268415) == 777 an
 assert L.eval("ScannerKingDB.prices[2589].q") == 20
 p, t, q = SK.GetPrice(10940); assert p == 900 and t and q == 20
 assert L.eval("ScannerKingDB.lastScan") and L.eval("ScannerKingDB.lastQuick") and L.eval("KIND") == "material"
-assert tb.scan.label.text == "Scan" and tb.scan.enabled2, "button back to rest after the scan"
+assert tb.scan.label.text == "Quick scan" and tb.scan.enabled2, "button back to rest after the scan"
 assert any("Last quick scan: just now" in x for x in hover(L, tb.scan))
 ev = [L.eval("EVENTS")[i] for i in range(1, len(L.eval("EVENTS")) + 1)]
 assert ev[0] == "SCAN_STARTED" and "SCAN_FINISHED" in ev and ev[-1] == "PRICES_UPDATED", ev
@@ -203,7 +203,7 @@ assert [e.name for e in ns.PriceList().values()] == ["Copper Ore", "Copper Bar"]
 c.search.SetText(c.search, ""); c.search.RunScript(c.search, "OnTextChanged", True)
 assert len(ns.PriceList()) == 6
 # the toolbar has one Scan: it works at the auction house, and its tooltip says what a click does
-assert c.scan.enabled2 and c.scan.label.text == "Scan" and c.mat is None and c.deep is None and c.market is None
+assert c.scan.enabled2 and c.scan.label.text == "Quick scan" and c.mat is None and c.deep is None and c.market is None
 assert any("quick scan of Trade Goods" in x for x in hover(L, c.scan))
 sk("show"); assert not KM.IsShown(), "/sk toggles the page closed"
 SK.ToggleBrowser(True); assert KM.IsShown("prices")
@@ -418,6 +418,7 @@ ScannerKing.RegisterCallback("t", function(e, res, kind, method) if e == "SCAN_R
 L4.execute('FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()')
 scanb = ns4.TitleButtons().scan
 assert scanb, "Scan button"
+assert scanb.label.text == "Full scan", "the button says what a click does"
 # the full dump is available: the tooltip says so, and a click runs the Deep Scan (no dialog), progress on the button
 tip = hover(L4, scanb)
 assert any("Full scan ready" in x for x in tip) and L4.eval("REPLICATED") == 0, tip
@@ -428,7 +429,7 @@ assert scanb.label.text == "Downloading every auction...", scanb.label.text
 assert L4.eval("ScannerKingDeepScan") is None, "a click doesn't open the Deep Scan dialog"
 L4.execute("RUN_TIMERS()")
 assert any("Deep Scan done: 10 items priced." in str(o) for o in outputs(L4))
-assert scanb.label.text == "Scan" and scanb.enabled2, "the title button is back to rest"
+assert scanb.label.text == "Quick (full in 15m)" and scanb.enabled2, "back to rest, saying the next click is quick and why"
 assert L4.eval("GOT.kind") == "deep" and L4.eval("GOT.method") == "replicate"
 # now on cooldown: the tooltip says when the next full scan is possible, and a click does a quick scan
 assert SK4.FullScanReadyIn() == 900
@@ -436,9 +437,19 @@ tip = hover(L4, scanb)
 assert any("Full scan ready in 15 min; a click now does a quick scan of Trade Goods plus 0 items." in x for x in tip), tip
 L4.execute("NOW = NOW + 9 * 60")
 assert any("Full scan ready in 6 min" in x for x in hover(L4, scanb))
+# the label counts down by itself, and chat says when the full scan is ready again
+scanb.RunScript(scanb, "OnUpdate", 1.5); assert scanb.label.text == "Quick (full in 6m)", scanb.label.text
+L4.execute("NOW = NOW + 6 * 60"); scanb.RunScript(scanb, "OnUpdate", 1.5)
+assert scanb.label.text == "Full scan" and "A full scan is ready" in last(L4), last(L4)
+L4.execute("NOW = NOW - 6 * 60"); scanb.RunScript(scanb, "OnUpdate", 1.5)
 L4.execute("NOW = NOW - 9 * 60; DEEPGOT = GOT; GOT = {}")
-scanb.Click(scanb); L4.execute("RUN_TIMERS()")
+L4.execute("OUTPUT = {}"); scanb.Click(scanb); L4.execute("RUN_TIMERS()")
 assert L4.eval("REPLICATED") == 1 and L4.eval("GOT.kind") == "material", "quick scan while the dump is on cooldown"
+why = [str(o) for o in outputs(L4) if "Quick scan:" in str(o)]
+assert why and "one full scan every 15 minutes" in why[0] and "Next full scan in 15 min" in why[0], outputs(L4)
+# the 15 minutes are the account's: a full scan on an alt explains a quick scan here
+L4.execute("ScannerKingDB.lastReplicateBy = 'Altie'; OUTPUT = {}"); scanb.Click(scanb); L4.execute("RUN_TIMERS()")
+assert any("the last one ran on Altie" in str(o) for o in outputs(L4)), outputs(L4)
 pr = L4.eval("ScannerKingDB.prices")
 # Linen: 1300/10 = 130 each is the cheapest; the 1000-each stack of 50 is an outlier
 assert pr[2589].p == 100 and pr[2589].q == 100 and pr[2589].n == 4, (pr[2589].p, pr[2589].q)

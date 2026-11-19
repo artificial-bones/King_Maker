@@ -96,7 +96,11 @@ end
 
 local function resetButton()
     local b = button()
-    if b then b:SetEnabled2(true); b:SetLabel(b.caption or "Scan") end
+    if b then
+        b:SetEnabled2(true)
+        if ns.ScanCaption then b.caption = ns.ScanCaption() end
+        b:SetLabel(b.caption or "Scan")
+    end
 end
 
 local function isShared(id, watched)
@@ -322,6 +326,7 @@ function API.DeepScan()
         method = "replicate"
         run = run + 1
         ns.db.lastReplicate = ns.Now()
+        ns.db.lastReplicateBy = KM.PlayerName() -- the game's 15 minutes are shared by the account's characters
         KM.Print(ns, "Deep Scan: downloading every auction. This can take a minute; keep the auction house open.")
         show("Downloading every auction...", nil)
         if not pcall(C_AuctionHouse.ReplicateItems) then return startBrowse() end

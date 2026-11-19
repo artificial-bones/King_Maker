@@ -23,7 +23,8 @@ its own. Your Scanner King 1.x prices and settings move in by themselves.
 King Maker has **one Scan**: a gold button in the auction house title bar (and
 on the Prices page, on Crafting Profits, in the crown's right-click menu while
 the auction house is open, and `/sk scan`). What a click does depends on what
-the game allows right now, and the button's tooltip says which one you'll get:
+the game allows right now, and the button says which one you'll get: **Full
+scan**, or **Quick (full in 9m)** while the game's wait runs:
 
 - **Full scan** (the Deep Scan) when the game lets King Maker download every
   auction at once, which it allows once every 15 minutes. It prices every item
@@ -34,9 +35,11 @@ the game allows right now, and the button's tooltip says which one you'll get:
 - **Quick scan** the rest of the time: every Trade Goods item, plus everything
   the rest of King Maker watches (Price History favorites, Gathering, Shopping
   lists...), plus everything the professions ticked on **Crafting Profits**
-  make and use. Lowest prices only. The tooltip says how long until the next
-  full scan, for example "Full scan ready in 9 min; a click now does a quick
-  scan of Trade Goods plus 1,240 items".
+  make and use. Lowest prices only. Chat says why it's a quick scan and how
+  long until the next full one; the button counts down, turns back into **Full
+  scan** when the wait is over, and chat tells you so if the auction house is
+  open. The 15 minutes are shared by all your characters, so a full scan on an
+  alt means a quick scan here for a while (chat names the alt).
 
 There is no profession picker any more: the ticks on Crafting Profits are the
 choice. The scan in progress shows on the button, and hovering it shows what

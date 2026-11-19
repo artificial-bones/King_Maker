@@ -185,6 +185,7 @@ local function refresh(c)
     c.table:SetRows(list, fillRow)
     local at = ns.AHOpen and ns.AHOpen()
     c.scan:SetEnabled2(at and not API.IsScanning())
+    ns.RefreshScanCaption(c.scan)
 end
 
 local function buildPage(c)
@@ -206,7 +207,7 @@ local function buildPage(c)
         if c.table then c.table.offset = 0; refresh(c) end
     end)
     c.search:SetPoint("TOPLEFT", 0, -(TILE_H + 12))
-    c.scan = UI.Button(c, "Scan", 120, 24, function() API.SmartScan(); refresh(c) end, "primary")
+    c.scan = UI.Button(c, "Scan", 150, 24, function() API.SmartScan(); refresh(c) end, "primary")
     c.scan:SetPoint("TOPRIGHT", 0, -(TILE_H + 12))
     UI.Tip(c.scan, function(tt) ns.ScanTooltip(tt) end)
 
