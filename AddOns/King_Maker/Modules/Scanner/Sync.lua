@@ -2,22 +2,34 @@ local _, KM = ...
 local ns = KM.Module("Scanner")
 local API = ns.API
 
--- Guild price sharing: everyone in your guild running Scanner King shares the
+-- Guild price sharing: everyone in your guild running King Maker shares the
 -- prices they scanned, and the newest price for each item wins.
---   * After a scan, your Trade Goods prices (and the raw materials Gather King
---     watches) go to the guild.
---   * When you log in you say hello; guildmates online whisper you theirs.
+--   * After a scan, your Trade Goods prices (and the items other modules watch)
+--     go to the guild.
+--   * Everyone remembers the newest scan they hold, theirs or a guildmate's (the
+--     scan stamp). At login you ask "Q": guildmates holding a newer scan answer,
+--     the freshest first; the first claims you ("C") and the rest stand down. It
+--     whispers you every price newer than your stamp, guildmates' too, in the
+--     background, then "S" with its stamp. If your scan is the newest, guildmates
+--     tell you ("N") and you send it to the guild once.
+--   * So a scan reaches everyone who logs in later, as long as one guildmate
+--     online has it, not only the people online when it ran.
 --   * Anything else is shared only when someone asks (ScannerKing.RequestPrices,
 --     Econ King's "Ask guild" buttons). Guildmates who scanned those items
 --     answer, and stay quiet about items someone already answered as fresh.
--- Only prices you scanned yourself are sent: the last two days when sharing,
--- the last week when answering. Guildmates' prices are never passed on.
+-- Prices of the last two days are passed on; answers to requests go back a week.
+-- Deep Scan prices outside Trade Goods stay with you unless "Share my full scans" is on.
 --
 -- Messages (prefix ScannerKing1), at most 250 characters each:
---   "H"            hello
---   "Z" + packed   prices
---   "R" + packed   a request for these item IDs
---   "P" id:copper:time;...   the old price format, still read
+--   "Q" + packed time         who has a scan newer than this?
+--   "C" + packed time + name  I'm catching this guildmate up (my scan is from this time)
+--   "N" + packed time         your scan is newer than mine (this time): send it
+--   "S" + packed time + name  the prices sent before this complete that guildmate's scan
+--   "Z" + packed              prices you scanned
+--   "Y" + name + ":" + packed prices that guildmate scanned, passed on
+--   "R" + packed              a request for these item IDs
+--   "H"                       hello from an older version (answered with "Z")
+--   "P" id:copper:time;...    the old price format, still read
 --
 -- Packing: numbers are written in base 32 and mark their own end: every digit
 -- but the last comes from DIGITS, the last one from LAST, so no separators.
@@ -29,15 +41,10 @@ local API = ns.API
 local PREFIX = "ScannerKing1"
 local MAX_LEN = 250
 local SEND_INTERVAL = 1 -- the game allows a short burst, then about one addon message per second
-local SHARE_AGE = 2 * 24 * 3600
+local SHARE_AGE = 2 * 24 * 3600 -- prices older than this aren't passed on
 local ANSWER_AGE = 7 * 24 * 3600
 local FRESH = 3600       -- don't ask for items you scanned yourself in the last hour
 local MAX_REQUEST = 2000 -- items per request
-
-local queue, sending = {}, false
-local repliedTo = {}
-local received, receivedFrom, summaryPending = {}, {}, false
-local pending, answerScheduled = {}, false -- items we'll answer a request for, unless someone beats us to it
 
 local function enabled()
     return ns.db and ns.db.sync.guild and IsInGuild and IsInGuild()
@@ -91,13 +98,13 @@ function ns.UnpackNumbers(s)
     return nums
 end
 
--- entries: { { id =, p =, t =, m =, q = }, ... } -> list of "Z" messages.
-function ns.PackPrices(entries)
+-- entries: { { id =, p =, t =, m =, q = }, ... } -> list of "Z" messages (or messages starting with kind).
+function ns.PackPrices(entries, kind)
     table.sort(entries, function(a, b) return a.id < b.id end)
     local base = 0
     for _, e in ipairs(entries) do base = math.max(base, e.t) end
     local msgs, i = {}, 1
-    local head = "Z" .. ns.PackNumber(base)
+    local head = (kind or "Z") .. ns.PackNumber(base)
     while i <= #entries do
         local parts, len, prev = { head }, #head, 0
         while i <= #entries do
@@ -144,9 +151,13 @@ local function packIDs(ids)
     return msgs
 end
 
+
 ---------------------------------------------------------------------------
 -- Sending, one message a second
 ---------------------------------------------------------------------------
+
+-- Two queues: answers and requests go first, bulk handoffs (catching a guildmate up) trickle behind them.
+local queue, bulk, sending = {}, {}, false
 
 -- Returns false if the game throttled the message, so it can be retried.
 local function send(text, channel, target)
@@ -160,21 +171,22 @@ local function send(text, channel, target)
 end
 
 local function pump()
-    local item = table.remove(queue, 1)
+    local q = queue[1] and queue or bulk
+    local item = table.remove(q, 1)
     if not item then
         sending = false
         return
     end
     if not send(item[1], item[2], item[3]) then
-        table.insert(queue, 1, item)
+        table.insert(q, 1, item)
         C_Timer.After(SEND_INTERVAL * 2, pump)
         return
     end
     C_Timer.After(SEND_INTERVAL, pump)
 end
 
-local function enqueue(text, channel, target)
-    table.insert(queue, { text, channel, target })
+local function enqueue(text, channel, target, background)
+    table.insert(background and bulk or queue, { text, channel, target })
     if not sending then
         sending = true
         pump()
@@ -185,24 +197,85 @@ local function entry(id, pr)
     return { id = id, p = pr.p, t = pr.t, m = pr.m, q = pr.q }
 end
 
--- Your own recent Trade Goods and watched prices (Deep Scan prices for other items stay with you).
-local function sendPrices(channel, target)
-    local now, list = ns.Now(), {}
-    for id, pr in pairs(ns.db.prices) do
-        if not pr.from and not pr.d and pr.t and now - pr.t <= SHARE_AGE then table.insert(list, entry(id, pr)) end
+---------------------------------------------------------------------------
+-- The scan stamp: the newest scan you hold, yours or a guildmate's
+---------------------------------------------------------------------------
+
+-- db.sync.stamp = { t = when that scan ran (server time), by = who scanned it }
+function ns.Stamp()
+    local s = ns.db.sync.stamp
+    if not s and ns.db.lastScan then
+        s = { t = ns.db.lastScan, by = KM.PlayerName() }
+        ns.db.sync.stamp = s
     end
-    for _, msg in ipairs(ns.PackPrices(list)) do enqueue(msg, channel, target) end
-    return #list
+    return s or { t = 0 }
+end
+API.GuildStamp = function() local s = ns.Stamp() return s.t > 0 and s.t or nil, s.by end
+
+local function setStamp(t, by)
+    if t and t > ns.Stamp().t then ns.db.sync.stamp = { t = t, by = by } end
 end
 
+---------------------------------------------------------------------------
+-- What goes out
+---------------------------------------------------------------------------
+
+-- Every price newer than `since` that you may pass on: your own and guildmates' (each keeps who scanned it).
+-- Deep Scan prices outside Trade Goods only when "Share my full scans" is on, and then after the rest.
+-- Returns { [origin or false] = { entries } } for the shared set and the same for the rest of a full scan.
+local function collect(since, ownOnly)
+    local now, full = ns.Now(), ns.db.sync.full
+    local main, rest, n = {}, {}, 0
+    since = math.max(since or 0, now - SHARE_AGE)
+    for id, pr in pairs(ns.db.prices) do
+        if pr.t and pr.t > since and pr.p and pr.p > 0 and not (ownOnly and pr.from) and (full or not pr.d) then
+            local into = pr.d and rest or main
+            local key = pr.from or false
+            into[key] = into[key] or {}
+            table.insert(into[key], entry(id, pr))
+            n = n + 1
+        end
+    end
+    return main, rest, n
+end
+
+local function queueGroups(groups, channel, target, background)
+    -- your own first ("Z"), then each guildmate's ("Y<name>:")
+    if groups[false] then
+        for _, msg in ipairs(ns.PackPrices(groups[false])) do enqueue(msg, channel, target, background) end
+    end
+    for origin, list in pairs(groups) do
+        if origin then
+            for _, msg in ipairs(ns.PackPrices(list, "Y" .. origin .. ":")) do enqueue(msg, channel, target, background) end
+        end
+    end
+end
+
+-- Sends everything newer than `since`, then the "S" stamp that says the batch is complete.
+local function sendSince(since, channel, target, background, ownOnly)
+    local main, rest, n = collect(since, ownOnly)
+    if n == 0 then return 0 end
+    queueGroups(main, channel, target, background)
+    queueGroups(rest, channel, target, true)
+    local s = ns.Stamp()
+    if s.t > 0 then enqueue("S" .. ns.PackNumber(s.t) .. (s.by or ""), channel, target, true) end
+    return n
+end
+
+-- After your own scan: the prices from it go to the guild.
 function ns.SharePrices(verbose)
     if not enabled() then
         if verbose then KM.Print(ns, "Guild sharing is off or you're not in a guild.") end
         return
     end
-    local n = sendPrices("GUILD")
+    local n = sendSince(0, "GUILD", nil, false, true)
     if verbose then KM.Print(ns, "Sending " .. n .. " prices to the guild.") end
 end
+
+-- Your scans move your stamp; the share itself is called by the scan.
+API.RegisterCallback("ScannerSync", function(event, found)
+    if event == "SCAN_FINISHED" and (found or 0) > 0 and ns.db then setStamp(ns.Now(), KM.PlayerName()) end
+end)
 
 -- Asks the guild for these items. Returns how many were asked for (items you
 -- scanned yourself in the last hour are skipped) and how many messages that
@@ -241,10 +314,20 @@ end
 -- Receiving
 ---------------------------------------------------------------------------
 
+local received, receivedFrom, summaryPending = {}, {}, false
+local pending, answerScheduled = {}, false -- items we'll answer a request for, unless someone beats us to it
+local stamps = {} -- sender -> { t, by } from their "S", for the summary line
+
 local function flushSummary()
     summaryPending = false
     for who, n in pairs(receivedFrom) do
-        KM.Print(ns, "Got " .. n .. " newer price(s) from " .. who .. ".")
+        local s = stamps[who]
+        if s and s.by and s.by ~= "" and not KM.IsMe(s.by) then
+            local whose = (s.by == who) and "their scan" or (s.by .. "'s scan")
+            KM.Print(ns, "Synced " .. n .. " newer price(s) from " .. who .. " (" .. whose .. ", " .. API.PriceAge(s.t) .. ").")
+        else
+            KM.Print(ns, "Got " .. n .. " newer price(s) from " .. who .. ".")
+        end
     end
     local batch = received
     received, receivedFrom = {}, {}
@@ -252,27 +335,29 @@ local function flushSummary()
     ns.Fire("PRICES_UPDATED")
 end
 
-local function noteReceived(who, id)
+local function noteReceived(sender, id)
     local pr = ns.db.prices[id]
-    received[id] = { p = pr.p, m = pr.m, q = pr.q, t = pr.t, from = who }
-    receivedFrom[who] = (receivedFrom[who] or 0) + 1
+    received[id] = { p = pr.p, m = pr.m, q = pr.q, t = pr.t, from = pr.from }
+    receivedFrom[sender] = (receivedFrom[sender] or 0) + 1
     if not summaryPending then
         summaryPending = true
         C_Timer.After(5, flushSummary)
     end
 end
 
--- Keeps a guildmate's price if it's newer than ours.
-local function merge(who, e)
+-- Keeps a guildmate's price if it's newer than ours. origin = who scanned it, sender = who sent it.
+local function merge(origin, e, sender)
     if not (e.id and e.p and e.p > 0 and e.t) then return end
+    if e.t > ns.Now() + 300 then return end -- a clock from the future would win forever
     -- Someone answered a request with a price at least as fresh as ours: no need to send it too.
     local mine = ns.db.prices[e.id]
     if pending[e.id] and mine and e.t >= mine.t - 60 then pending[e.id] = nil end
     if mine and e.t <= mine.t then return end
+    if KM.IsMe(origin) then return end -- our own old price coming back
     local inst = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
-    ns.db.prices[e.id] = { p = e.p, m = e.m, q = e.q, t = e.t, from = who,
+    ns.db.prices[e.id] = { p = e.p, m = e.m, q = e.q, t = e.t, from = origin,
                            d = (inst and select(6, inst(e.id)) ~= 7) or nil }
-    noteReceived(who, e.id)
+    noteReceived(sender or origin, e.id)
 end
 
 local function answer()
@@ -287,16 +372,93 @@ local function answer()
     for _, msg in ipairs(ns.PackPrices(list)) do enqueue(msg, "GUILD") end
 end
 
+-- Catching up a guildmate who logged in ("Q"): only those holding a newer scan answer, the freshest
+-- first, and the first to answer claims it ("C") so the rest stand down.
+local serving = {}   -- asker -> { sender =, since = } waiting to answer
+local repliedTo = {} -- old-version hello: asker -> when we last answered
+local behind = { since = nil, scheduled = false } -- guildmates who told us they're behind our scan
+
+local function serve(asker)
+    local job = serving[asker]
+    serving[asker] = nil
+    if not job or not enabled() then return end
+    enqueue("C" .. ns.PackNumber(ns.Stamp().t) .. asker, "GUILD")
+    sendSince(job.since, "WHISPER", job.sender, true)
+end
+
+local function broadcastNewer()
+    behind.scheduled = false
+    local since = behind.since
+    behind.since = nil
+    if since and enabled() then sendSince(since, "GUILD", nil, true) end
+end
+
+local function onQuery(who, sender, theirs)
+    local mine = ns.Stamp().t
+    if mine > theirs + 60 then
+        if serving[who] then return end
+        serving[who] = { sender = sender, since = theirs }
+        -- fresher scans answer sooner: 1 s for a scan from the last hour, up to 5 s for older ones
+        local age = math.min(4, (ns.Now() - mine) / 3600)
+        C_Timer.After(1 + age + math.random(), function() serve(who) end)
+    elseif theirs > mine + 60 then
+        -- they hold a newer scan than ours: tell them, and they send it to the guild once
+        C_Timer.After(1 + math.random() * 3, function()
+            if enabled() then enqueue("N" .. ns.PackNumber(mine), "WHISPER", sender) end
+        end)
+    end
+end
+
 local function onMessage(text, sender)
     local who = shortName(sender)
     if KM.IsMe(who) then return end -- your own message back (full name: Forever has surnames)
     local kind, body = text:sub(1, 1), text:sub(2)
-    if kind == "H" then
-        if repliedTo[who] then return end
-        repliedTo[who] = true
-        C_Timer.After(2 + math.random() * 6, function() sendPrices("WHISPER", sender) end)
+    if kind == "Q" then
+        local nums = ns.UnpackNumbers(body)
+        if nums and nums[1] then onQuery(who, sender, nums[1]) end
+    elseif kind == "C" then
+        -- someone claimed this asker; stand down unless our scan is clearly newer than theirs
+        local t = body:match("^[0-9a-v]*[w-zA-Z+/]")
+        local asker = t and body:sub(#t + 1)
+        local claimed = t and ns.UnpackNumbers(t)
+        if asker and serving[asker] and claimed and claimed[1] + 300 >= ns.Stamp().t then serving[asker] = nil end
+    elseif kind == "N" then
+        local nums = ns.UnpackNumbers(body)
+        if nums and nums[1] then
+            behind.since = math.min(behind.since or nums[1], nums[1])
+            if not behind.scheduled then
+                behind.scheduled = true
+                C_Timer.After(6, broadcastNewer) -- one broadcast for everyone who answered
+            end
+        end
+    elseif kind == "S" then
+        local t = body:match("^[0-9a-v]*[w-zA-Z+/]")
+        local nums = t and ns.UnpackNumbers(t)
+        if nums and nums[1] and nums[1] <= ns.Now() + 300 then
+            local by = body:sub(#t + 1)
+            if by == "" then by = who end
+            stamps[who] = { t = nums[1], by = by }
+            setStamp(nums[1], by)
+        end
+    elseif kind == "H" then
+        -- a guildmate on an older version logging in: whisper what we have, once a minute at most
+        if repliedTo[who] and ns.Now() - repliedTo[who] < 60 then return end
+        repliedTo[who] = ns.Now()
+        C_Timer.After(2 + math.random() * 6, function()
+            if enabled() then
+                local main = collect(0)
+                local all = {}
+                for _, list in pairs(main) do for _, e in ipairs(list) do table.insert(all, e) end end
+                for _, msg in ipairs(ns.PackPrices(all)) do enqueue(msg, "WHISPER", sender, true) end
+            end
+        end)
     elseif kind == "Z" then
-        for _, e in ipairs(ns.UnpackPrices(body)) do merge(who, e) end
+        for _, e in ipairs(ns.UnpackPrices(body)) do merge(who, e, who) end
+    elseif kind == "Y" then
+        local origin, packed = body:match("^([^:]+):(.*)$")
+        if origin then
+            for _, e in ipairs(ns.UnpackPrices(packed)) do merge(origin, e, who) end
+        end
     elseif kind == "R" then
         local now, id = ns.Now(), 0
         for _, d in ipairs(ns.UnpackNumbers(body) or {}) do
@@ -311,9 +473,14 @@ local function onMessage(text, sender)
         end
     elseif kind == "P" then
         for id, p, t in body:gmatch("(%d+):(%d+):(%d+)") do
-            merge(who, { id = tonumber(id), p = tonumber(p), t = tonumber(t) })
+            merge(who, { id = tonumber(id), p = tonumber(p), t = tonumber(t) }, who)
         end
     end
+end
+
+-- Asks who holds a newer scan than ours (at login, and with /sk sync pull).
+function ns.AskNewest()
+    if enabled() then enqueue("Q" .. ns.PackNumber(ns.Stamp().t), "GUILD") end
 end
 
 local f = CreateFrame("Frame")
@@ -324,9 +491,7 @@ f:SetScript("OnEvent", function(_, event, ...)
         if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
             C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
         end
-        C_Timer.After(10, function()
-            if enabled() then enqueue("H", "GUILD") end
-        end)
+        C_Timer.After(10, ns.AskNewest)
     else
         local prefix, text, channel, sender = ...
         if prefix == PREFIX and sender and ns.db and ns.db.sync.guild then

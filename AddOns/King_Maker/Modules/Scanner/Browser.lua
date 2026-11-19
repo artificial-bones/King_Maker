@@ -116,7 +116,7 @@ function ns.PricesKnownTip(tt)
     tt:AddLine("Every item you have an auction price for, from your own scans and your guildmates'. Yellow on Home when the last full scan is over a day old.", 1, 1, 1, true)
     tt:AddDoubleLine("With a market price", KM.Commas(market), 0.8, 0.8, 0.8, 1, 1, 1)
     tt:AddDoubleLine("Lowest buyout only", KM.Commas(n - market), 0.8, 0.8, 0.8, 1, 1, 1)
-    tt:AddDoubleLine("Last sent by a guildmate", KM.Commas(guild), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Scanned by a guildmate", KM.Commas(guild), 0.8, 0.8, 0.8, 1, 1, 1)
 end
 
 local function refreshTiles(c)
@@ -130,8 +130,11 @@ local function refreshTiles(c)
     local market = 0
     for _, pr in pairs(ns.db.prices) do if pr.m then market = market + 1 end end
     c.tiles[3]:Set("Market prices", KM.Commas(market), "from full scans")
-    c.tiles[4]:Set("Guild sharing", ns.db.sync.guild and "On" or "Off",
-        (IsInGuild and IsInGuild()) and "newest price wins" or "not in a guild", ns.db.sync.guild and C.text or C.dim)
+    local s = ns.Stamp()
+    local sub = not (IsInGuild and IsInGuild()) and "not in a guild"
+        or (s.t > 0 and ("newest scan: " .. (KM.IsMe(s.by) and "yours" or (s.by or "?")) .. ", " .. API.PriceAge(s.t)))
+        or "newest price wins"
+    c.tiles[4]:Set("Guild sharing", ns.db.sync.guild and "On" or "Off", sub, ns.db.sync.guild and C.text or C.dim)
 end
 
 local function refreshCategories(c)
@@ -326,15 +329,19 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
     { type = "check", label = "Short tooltip: details with Shift", tip = "Only the verdict, the price and how many you own; hold Shift for everything else.",
       get = function() return ns.db.ui.tip.short end, set = function(v) ns.db.ui.tip.short = v end },
     { type = "header", label = "Guild" },
-    { type = "check", label = "Share prices with my guild", tip = "Your Trade Goods prices go to guildmates running King Maker (or Scanner King) after each scan; theirs come to you. The newest price wins.",
+    { type = "check", label = "Share prices with my guild", tip = "Your Trade Goods prices go to guildmates running King Maker after each scan; theirs come to you, and when you log in a guildmate online who holds a newer scan catches you up. The newest price wins.",
       get = function() return ns.db.sync.guild end, set = function(v) ns.db.sync.guild = v end },
+    { type = "check", label = "Share my full scans (every item)", tip = "Also pass on every item of a full scan, not only Trade Goods and watched items. Off by default: a whole auction house is about 290 messages, so it takes a few minutes in the background.",
+      get = function() return ns.db.sync.full end, set = function(v) ns.db.sync.full = v end },
+    { type = "button", label = "Ask the guild for a newer scan", tip = "Done by itself when you log in: a guildmate online who holds a newer scan than yours sends you its prices.",
+      func = function() ns.AskNewest(); KM.Print(ns, "Asking the guild for a newer scan than yours.") end },
     { type = "button", label = "Send my prices to the guild now", tip = "Sends the Trade Goods and watched-item prices you scanned yourself recently to guildmates now, instead of after your next scan.",
       func = function() ns.SharePrices(true) end },
     { type = "header", label = "Commands" },
     { type = "text", label = "/sk   open the Prices page\n/sk scan   Scan (at the auction house): full when the game allows it, else quick\n"
         .. "/sk deep   force a full scan (progress window)\n/sk material   force a quick scan of Trade Goods and watched items\n"
         .. "/sk market   the same plus Crafting Profits' ticked professions\n/sk tooltip on|off   prices in tooltips\n/sk sources on|off   vendor, drops and recipes in tooltips\n/sk tip crafts|make|pattern|de|goal|short   more tooltip rows\n"
-        .. "/sk sync [on|off]   share now, or turn sharing on/off\n/sk status   how many prices and how old" },
+        .. "/sk sync [on|off]   share now, or turn sharing on/off\n/sk sync pull   ask for a newer scan\n/sk sync full on|off   share every item of full scans\n/sk status   how many prices and how old" },
 } })
 
 -- Home: a row when prices are missing or more than a day old. The auction house opening or closing changes which

@@ -256,7 +256,10 @@ def sent_prices(LL, nsx):
 got = sent_prices(L, ns)
 assert got[2589].p == 120 and got[2589].q == 20 and got[2589].m is None
 # the old format is still read (a guildmate who hasn't updated yet)
-L.execute('FIRE("CHAT_MSG_ADDON", "ScannerKing1", "P2589:5:1;4338:333:999999999", "GUILD", "Bob-Realm"); RUN_TIMERS()')
+L.execute('FIRE("CHAT_MSG_ADDON", "ScannerKing1", "P2589:5:1;4338:333:" .. (NOW - 60), "GUILD", "Bob-Realm"); RUN_TIMERS()')
+# a price from the future (a guildmate's clock far ahead) would win forever: dropped
+L.execute('FIRE("CHAT_MSG_ADDON", "ScannerKing1", "P4339:333:999999999", "GUILD", "Bob-Realm"); RUN_TIMERS()')
+assert L.eval("ScannerKingDB.prices[4339]") is None
 assert price(2589) == 120 and price(4338) == 333 and L.eval("ScannerKingDB.prices[4338].from") == "Bob"
 assert "newer price" in last(L), last(L)
 # Bob's prices aren't re-shared by us
@@ -270,6 +273,75 @@ L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "H", "GUILD", "Amy-
 sk("sync off"); assert L.eval("ScannerKingDB.sync.guild") is False
 sk("sync on"); assert L.eval("ScannerKingDB.sync.guild") is True
 print("SYNC OK")
+
+# 2.11 catching up at login: the newest scan in the guild reaches whoever logs in, passed on by anyone online
+def sent_list(LL):
+    s = LL.eval("SENT")
+    return [s[i] for i in range(1, len(s) + 1) if s[i].prefix == "ScannerKing1"]
+
+
+me = KM.PlayerName()
+stamp = L.eval("ScannerKingDB.sync.stamp")
+assert stamp and stamp.t > 0 and stamp.by == me, "our own scan is the newest we hold"
+ours = stamp.t
+P = ns.PackNumber
+# Trade Goods from guildmates (unknown items count as Deep Scan ones and stay put)
+L.execute('ScannerKingDB.prices[4338].d = nil; INFO[5555] = { "Trade Goods", "Cloth" }')
+# Amy logs in with nothing: we claim her on GUILD, then whisper ours (Z), Bob's passed on (Y), then our stamp (S)
+L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "Q%s", "GUILD", "Amy-Realm"); RUN_TIMERS()' % P(0))
+out = sent_list(L)
+assert out[0].text == "C" + P(ours) + "Amy" and out[0].chan == "GUILD", [m.text for m in out]
+wh = [m for m in out if m.chan == "WHISPER" and m.target == "Amy-Realm"]
+assert wh and any(m.text.startswith("Z") for m in wh) and any(m.text.startswith("YBob:") for m in wh)
+ybob = [m.text for m in wh if m.text.startswith("YBob:")][0]
+assert 4338 in [e.id for e in ns.UnpackPrices(ybob[5:]).values()], "Bob's price passed on under his name"
+assert wh[-1].text == "S" + P(ours) + me, "the stamp comes last: the batch is complete"
+# Cat logs in, but Dan (as fresh as us) claims her first: we stand down
+L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "Q%s", "GUILD", "Cat-Realm")' % P(0))
+L.execute('FIRE("CHAT_MSG_ADDON", "ScannerKing1", "C%sCat", "GUILD", "Dan-Realm"); RUN_TIMERS()' % P(ours))
+assert not [m for m in sent_list(L) if m.target == "Cat-Realm" or m.text.startswith("C")], [m.text for m in sent_list(L)]
+# someone as fresh as us asking: nothing to send
+L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "Q%s", "GUILD", "Fay-Realm"); RUN_TIMERS()' % P(ours))
+assert not sent_list(L)
+# Eve holds a newer scan than ours: we tell her, and she'd send it to the guild
+L.execute("SAVED_NOW = NOW; NOW = NOW + 7200")
+newer = L.eval("NOW") - 60
+L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "Q%s", "GUILD", "Eve-Realm"); RUN_TIMERS()' % P(newer))
+out = sent_list(L)
+assert len(out) == 1 and out[0].text == "N" + P(ours) and out[0].target == "Eve-Realm"
+# Gus catches us up with Ann's scan: kept under Ann's name, our stamp moves, one summary line
+ann = L.eval("{ { id = 5555, p = 4242, t = %d, q = 7 } }" % newer)
+y = list(ns.PackPrices(ann, "YAnn:").values())[0]
+L.execute('FIRE("CHAT_MSG_ADDON", "ScannerKing1", "%s", "WHISPER", "Gus-Realm")' % y)
+L.execute('FIRE("CHAT_MSG_ADDON", "ScannerKing1", "S%sAnn", "WHISPER", "Gus-Realm"); RUN_TIMERS()' % P(newer))
+assert price(5555) == 4242 and L.eval("ScannerKingDB.prices[5555].from") == "Ann"
+assert L.eval("ScannerKingDB.sync.stamp.t") == newer and L.eval("ScannerKingDB.sync.stamp.by") == "Ann"
+assert any("Synced 1 newer price(s) from Gus (Ann's scan" in o for o in outputs(L)), outputs(L)[-3:]
+# our own price never comes back to us as someone else's
+mine = L.eval("{ { id = 2589, p = 1, t = %d } }" % (newer + 1))
+L.execute('FIRE("CHAT_MSG_ADDON", "ScannerKing1", "%s", "WHISPER", "Gus-Realm"); RUN_TIMERS()' % list(ns.PackPrices(mine, "Y" + me + ":").values())[0])
+assert price(2589) == 120
+# now Hal logs in behind: we pass on Ann's scan; and our own login question carries the new stamp
+L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "Q%s", "GUILD", "Hal-Realm"); RUN_TIMERS()' % P(ours))
+wh = [m.text for m in sent_list(L) if m.target == "Hal-Realm"]
+assert any(t.startswith("YAnn:") for t in wh) and wh[-1] == "S" + P(newer) + "Ann", wh
+assert not any(t.startswith("Z") for t in wh), "only what's newer than Hal's scan"
+L.execute("SENT = {}"); sk("sync pull"); L.execute("RUN_TIMERS()")
+assert sent_list(L)[0].text == "Q" + P(newer)
+# guildmates behind us (N): one broadcast to the guild, however many say so
+L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "N%s", "WHISPER", "Ivy-Realm")' % P(ours))
+L.execute('FIRE("CHAT_MSG_ADDON", "ScannerKing1", "N%s", "WHISPER", "Jon-Realm"); RUN_TIMERS()' % P(ours))
+g = [m.text for m in sent_list(L) if m.chan == "GUILD"]
+assert len([t for t in g if t.startswith("S")]) == 1 and any(t.startswith("YAnn:") for t in g), g
+# a request jumps ahead of a handoff still trickling out
+L.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "Q%s", "GUILD", "Kim-Realm")' % P(0))
+L.execute("local n = 0 while #SENT == 0 and #TIMERS > 0 and n < 100 do table.remove(TIMERS, 1)() n = n + 1 end")
+assert L.eval("SENT[1].text").startswith("C")
+SK.RequestPrices(L.eval("{ 9999 }")); L.execute("RUN_TIMERS()")
+texts = [m.text for m in sent_list(L)]
+assert texts.index([t for t in texts if t.startswith("R")][0]) < texts.index([t for t in texts if t.startswith("S")][0]), texts
+L.execute("NOW = SAVED_NOW")
+print("HANDOFF OK")
 
 # Browse never answers: give up and look items up one at a time
 L.execute("""
@@ -393,6 +465,11 @@ L4.eval("SlashCmdList.SCANNERKING")("sync"); L4.execute("RUN_TIMERS()")
 got = sent_prices(L4, ns4)
 assert 2589 in got and 6000 not in got and 8001 not in got, list(got)
 assert got[2589].m == L4.eval("ScannerKingDB.prices[2589].m") and got[2589].q == 100  # market and listed travel too
+# "Share my full scans": every item of a Deep Scan travels too, after the Trade Goods
+L4.eval("SlashCmdList.SCANNERKING")("sync full on"); assert L4.eval("ScannerKingDB.sync.full") is True
+L4.execute('SENT = {}; FIRE("CHAT_MSG_ADDON", "ScannerKing1", "Q' + ns4.PackNumber(0) + '", "GUILD", "Amy-Realm"); RUN_TIMERS()')
+got = sent_prices(L4, ns4); assert 2589 in got and 6000 in got, list(got)
+L4.eval("SlashCmdList.SCANNERKING")("sync full off"); assert L4.eval("ScannerKingDB.sync.full") is False
 print("DEEP SYNC OK")
 
 # Packing: numbers mark their own end, so no separators

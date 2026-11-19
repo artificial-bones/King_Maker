@@ -110,7 +110,8 @@ The price engine every other page reads from.
   and who can learn it, your shopping-list goal, and how many you own. Each part can be switched off, or held back
   until you press Shift (the 3 most valuable crafts from a material are there too, off by default).
 - **The price list**, grouped like the auction house, with search and sortable columns.
-- **Guild sharing**: Trade Goods prices go to guildmates running King Maker after every scan.
+- **Guild sharing**: Trade Goods prices go to guildmates running King Maker after every scan, and when you log in
+  whoever online holds the newest scan catches you up, even if it was scanned by someone who has since logged off.
 
 [Full guide](AddOns/King_Maker/Modules/Scanner#readme)
 

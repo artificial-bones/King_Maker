@@ -171,6 +171,8 @@ function ns.InitDB()
     end
     db.sync = db.sync or {}
     if db.sync.guild == nil then db.sync.guild = true end
+    if db.sync.full == nil then db.sync.full = false end -- 2.11: pass on whole Deep Scans, not only Trade Goods
+    -- db.sync.stamp = { t, by }: the newest scan you hold (Sync.lua), set on the first scan or sync
     ns.db = db
     API.ready = true
 end
@@ -213,9 +215,17 @@ SlashCmdList.SCANNERKING = function(msg)
         KM.Print(ns, "Vendor, drops and recipes in item tooltips " .. (ns.db.ui.sources and "on." or "off."))
     elseif cmd == "sync" then
         local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
+        local arg2 = (msg or ""):lower():match("^%s*%S+%s+%S+%s+(%S+)")
         if arg == "on" or arg == "off" then
             ns.db.sync.guild = arg == "on"
             KM.Print(ns, "Guild price sharing is " .. arg .. ".")
+        elseif arg == "full" then
+            if arg2 == "on" then ns.db.sync.full = true elseif arg2 == "off" then ns.db.sync.full = false
+            else ns.db.sync.full = not ns.db.sync.full end
+            KM.Print(ns, "Sharing full scans (every item, not only Trade Goods) is " .. (ns.db.sync.full and "on." or "off."))
+        elseif arg == "pull" then
+            ns.AskNewest()
+            KM.Print(ns, "Asking the guild for a newer scan than yours.")
         else
             ns.SharePrices(true)
         end
@@ -227,9 +237,11 @@ SlashCmdList.SCANNERKING = function(msg)
         local n = 0
         for _ in pairs(ns.db.prices) do n = n + 1 end
         local wait = ns.FullScanWait and ns.FullScanWait()
+        local s = ns.Stamp and ns.Stamp()
         KM.Print(ns, n .. " prices stored. Last full scan: " .. (ns.db.lastDeep and API.PriceAge(ns.db.lastDeep) or "never")
             .. ". Last quick scan: " .. (ns.db.lastQuick and API.PriceAge(ns.db.lastQuick) or "never") .. "."
-            .. (wait and (wait == 0 and " Full scan ready." or (" Full scan ready in " .. math.ceil(wait / 60) .. " min.")) or ""))
+            .. (wait and (wait == 0 and " Full scan ready." or (" Full scan ready in " .. math.ceil(wait / 60) .. " min.")) or "")
+            .. ((s and s.t > 0) and (" Newest scan you hold: " .. (s.by or "?") .. ", " .. API.PriceAge(s.t) .. ".") or ""))
     else
         KM.Print(ns, "/sk show   open the Prices page (or /km prices)")
         KM.Print(ns, "/sk scan   Scan (at the auction house): a full scan when the game allows one (every 15 min), else a quick scan")
@@ -241,5 +253,7 @@ SlashCmdList.SCANNERKING = function(msg)
         KM.Print(ns, "/sk tip crafts|make|pattern|de|goal|short [on|off]   more tooltip rows; short = details with Shift")
         KM.Print(ns, "/sk status   how many prices you have and how old")
         KM.Print(ns, "/sk sync [on|off]   share prices with your guild now, or turn sharing on/off")
+        KM.Print(ns, "/sk sync pull   ask the guild for a newer scan than yours (done by itself at login)")
+        KM.Print(ns, "/sk sync full [on|off]   also pass on every item of a full scan, not only Trade Goods (slower)")
     end
 end

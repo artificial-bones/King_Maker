@@ -104,31 +104,44 @@ opening their profession windows once.
 | `/sk tooltip on` / `off` | Prices in item tooltips |
 | `/sk sources on` / `off` | Vendor price, drops and recipes in item tooltips |
 | `/sk tip crafts\|make\|pattern\|de\|goal\|short` `on` / `off` | Best crafts, craft cost, recipe items, disenchant value, shopping goal; short = details with Shift |
-| `/sk status` | How many prices you have, when the last full and quick scans ran, and when a full scan is ready |
+| `/sk status` | How many prices you have, when the last full and quick scans ran, when a full scan is ready, and the newest scan you hold |
 | `/sk sync` | Send your prices to your guild now |
 | `/sk sync on` / `off` | Turn guild price sharing on or off |
+| `/sk sync pull` | Ask the guild for a newer scan than yours (done by itself at login) |
+| `/sk sync full on` / `off` | Also pass on every item of full scans, not only Trade Goods |
 
 `/sk button` now points you to the King Maker crown (`/km button`).
 
 ## Guild sharing
 
-Everyone in your guild running King Maker (or Scanner King 1.x) shares
-prices. For each item the newest price wins.
+Everyone in your guild running King Maker shares prices. For each item the
+newest price wins.
 
-- **Trade Goods and Gathering's raw materials are shared automatically.**
-  After a scan your prices go to the guild, and when you log in, guildmates who
-  are online send you theirs. Only prices you scanned yourself in the last two
-  days are sent, so old prices don't keep circling the guild.
+- **Trade Goods and the items other parts of King Maker watch are shared
+  automatically.** After a scan your prices go to the guild right away.
+- **Logging in catches you up.** King Maker remembers the newest scan you hold,
+  yours or a guildmate's. When you log in it asks the guild who has a newer one;
+  the guildmate online with the freshest scan answers (only one does) and sends
+  you every price newer than yours in the background, including prices it got
+  from someone else. Each price keeps the name of whoever scanned it. So a
+  morning scan reaches people who log in at night, as long as anyone online has
+  it. If your scan is the newest, guildmates tell you and it goes to the guild
+  once. A chat line says what you got: *Synced 412 newer price(s) from Bob
+  (Ann's scan, 25 min ago).*
 - **Everything else is shared when someone asks.** Price History's **Ask
   guild** buttons ask for just those items. Guildmates who scanned them in the
   last week answer, and anyone who sees a price as fresh as theirs already sent
   stays quiet. Items you scanned yourself in the last hour aren't asked for.
+- **Share my full scans** (Settings > Scanner, off by default) passes on every
+  item of a full scan too, after the Trade Goods. A whole auction house is about
+  290 messages, so it trickles in over a few minutes.
 
-Prices are packed tightly: about 25 to a message, with market price and number
-listed included. The game allows about one addon message a second, so sharing
-700 Trade Goods takes about 25 seconds. A whole Deep Scan of 3,000 items would
-take about 2 minutes after every full scan and again for everyone who logs in,
-which is why it isn't sent unasked.
+Prices older than two days aren't passed on, so old prices don't keep circling
+the guild. Prices are packed tightly: about 25 to a message, with market price
+and number listed included. The game allows about one addon message a second,
+so the Trade Goods (about 400) take around 20 seconds. Requests and answers
+always go before a catch-up that's still sending. The **Prices** page's Guild
+sharing tile shows the newest scan you hold and whose it is.
 
 ## For addon authors
 

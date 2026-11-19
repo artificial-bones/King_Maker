@@ -56,6 +56,7 @@ ScannerKing.Watch("gather_king", function() return { 268415, 268416 } end)
 --                                l = { { copper each, count }, ... } } }        (Deep Scan, full list only)
 --   "GUILD_PRICES" (batch) when guildmates' newer prices arrived:
 --       batch = { [itemID] = { p = lowest, m = market or nil, q = listed or nil, t = their scan time, from = name } }
+--       (from = who scanned it; since 2.11 a guildmate may pass on someone else's scan)
 --       method (Deep Scan) = "replicate" (every auction, all fields), "browse" (p and q only)
 --                            or "partial" (browse that stopped answering: some items are missing)
 ScannerKing.RegisterCallback("gather_king", fn)
@@ -86,6 +87,7 @@ ScannerKing.MergePrice(itemID, copper, time, from)  -- keep a price if it's newe
 ScannerKing.FormatMoney(copper)   -- "1g 23s 45c" with colors
 ScannerKing.PriceAge(time)        -- "5 min ago", "3 h ago", ...
 ScannerKing.Now()                 -- server time, the same clock for every guildmate
+ScannerKing.GuildStamp()          -- (2.11) time, name of the newest scan you hold (yours or a guildmate's), or nil
 ```
 
 `API_VERSION` goes up only if one of these changes in a way that breaks callers.
@@ -121,8 +123,13 @@ traffic: `GatherKing1` (markers and loot stats) and `ScannerKing1` (prices).
 
 | Starts with | Means |
 |---|---|
-| `H` | Hello: guildmates online whisper back their shared prices |
-| `Z` | Packed prices (below) |
+| `Q` | Login (2.11): packed time of the newest scan I hold; guildmates with a newer one answer |
+| `C` | Claim: packed time of my scan, then the asker's name; the others stand down |
+| `N` | Packed time of my scan, whispered to an asker whose scan is newer: send it to the guild |
+| `S` | Packed scan time, then who scanned it: the prices sent before this complete that scan |
+| `Z` | Packed prices (below) you scanned yourself |
+| `Y` | A guildmate's name, `:`, then packed prices they scanned, passed on |
+| `H` | Hello from a version before 2.11: answered with `Z` |
 | `R` | A request: packed item IDs |
 | `P` | The old `id:copper:time;...` format, still read but no longer sent |
 
