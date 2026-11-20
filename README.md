@@ -89,6 +89,7 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 | Farming | Farming Ledger | `/farm` | Every farming session: what it made, gold per hour, graphs |
 | Farming | Mob Farming, White Items | `/fk` | Which mobs and white items are worth farming |
 | Farming | Gathering | `/gt` | Mining, herb, fishing and treasure spots on your maps |
+| Farming | Reals | `/reals` | Which level 55+ dungeon bosses still have today's Tarnished Undermine Real for you, and a reminder to loot it |
 | Reputation | Reputation | `/rep overview` | Every tracked faction: standing, pace, days to go, the next unlock |
 | Reputation | Supply Writs | `/rep` | Writs done today, orders to turn in, rep per gold, the cheapest rep, Favor shopping, every character |
 | Characters | Rested XP | `/rk` | Rested XP on all your characters |
@@ -293,6 +294,22 @@ Azeroth Commerce Authority or Durotar Supply and Logistics) and its daily Crafts
 - **Favor shopping**: the faction's recipes with Crafting Profits' profit, to spend Favor on the best ones. `/rep`.
 
 [Full guide](AddOns/King_Maker/Modules/Reputation#readme)
+
+### Reals (new in 2.13)
+
+Tarnished Undermine Reals drop once a day from each level 55+ dungeon boss, per character, and it's easy to lose
+track of which bosses you've already had today.
+
+- **The dungeons** in green while a boss still has today's Real for you, red once you've looted them all. Click one
+  for its bosses: green waiting, red looted (with the time).
+- **Exact**: each Real is credited to the corpse it came from, when you take it.
+- **Don't forget to loot it**: a pop-up when a boss with a Real for you goes down, a warning if you close its loot
+  with the Real still in it, and a reminder naming the bosses when you leave the dungeon. A switch on the page and
+  in Settings turns the pop-up off.
+- Reals held and the cap, the time to the reset, and every character. The boss list corrects itself as you play.
+  `/reals`.
+
+[Full guide](AddOns/King_Maker/Modules/Reals#readme)
 
 ### Rested XP (was Rested King)
 

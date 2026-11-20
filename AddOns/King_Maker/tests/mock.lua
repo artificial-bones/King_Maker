@@ -986,3 +986,17 @@ function GetQuestResetTime() return RESET_IN end
 C_CurrencyInfo = { GetCurrencyInfo = function(id) local q = CURRENCY[id]; if q == nil then return nil end return { currencyID = id, name = "Currency " .. id, quantity = q } end }
 function GetQuestID() return QUEST_ID end
 function TURN_IN(q, flag) if flag ~= false then COMPLETED[q] = true end FIRE("QUEST_TURNED_IN", q, 0, 0) end
+
+---------------------------------------------------------------- Reals (King Maker 2.13.0)
+-- Additive. INSTANCE_NAME for GetInstanceInfo (with INSTANCE = true). CURRENCY_LIST = { { name, currencyID, quantity } }
+-- for the currency tab (C_CurrencyInfo.GetCurrencyListSize / GetCurrencyListInfo / GetCurrencyListLink); CURRENCY_MAX[id]
+-- is the cap GetCurrencyInfo reports as maxQuantity.
+INSTANCE_NAME, CURRENCY_LIST, CURRENCY_MAX = nil, {}, {}
+function GetInstanceInfo() if INSTANCE then return INSTANCE_NAME or "Some Dungeon", "party", 1 end return "Azeroth", "none", 0 end
+C_CurrencyInfo.GetCurrencyListSize = function() return #CURRENCY_LIST end
+C_CurrencyInfo.GetCurrencyListInfo = function(i) local e = CURRENCY_LIST[i]; if e then return { name = e.name, quantity = e.quantity } end end
+C_CurrencyInfo.GetCurrencyListLink = function(i) local e = CURRENCY_LIST[i]; if e then return "|cff1eff00|Hcurrency:" .. e.currencyID .. ":0|h[" .. e.name .. "]|h|r" end end
+do
+  local get = C_CurrencyInfo.GetCurrencyInfo
+  C_CurrencyInfo.GetCurrencyInfo = function(id) local r = get(id); if r then r.maxQuantity = CURRENCY_MAX[id] or 0 end return r end
+end
