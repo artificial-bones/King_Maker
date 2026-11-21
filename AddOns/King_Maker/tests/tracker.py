@@ -1018,4 +1018,94 @@ assert not any("guild" in o.lower() for o in outputs(L)[-15:]), "/farm guild is 
 assert not KM.errorShown, last(L)
 print("NO GUILD OK")
 
+# --- the Zones tab (2.15.0): every session in a zone or dungeon added together, and one place's details -----------
+L, KM, ns = load(seed="NOW = 10 * 86400 + 43200")
+L.execute("TrackerKingDB.settings.idlePause = 0")
+L.globals().TRK = ns
+farm = L.eval("SlashCmdList.KINGMAKERFARM")
+L.execute("MAPS[1414] = 'Kalimdor'; MAP_TYPES[1414] = 2; MAPS[317] = 'Stratholme'; MAP_TYPES[317] = 4")
+z1 = coin_session(6000, 1200)                      # Elwynn Forest
+z2 = coin_session(12000, 1200)                     # Elwynn Forest
+L.execute("INSTANCE = true; INSTANCE_NAME = 'Stratholme'")
+z3 = coin_session(30000, 1200, zone=1414)          # inside: the game says Kalimdor (or nothing), the instance says Stratholme
+L.execute("INSTANCE = false")
+assert z3.zi.Stratholme >= 1200 and z3.zk.Stratholme == "party", "the instance is recorded"
+assert tuple(ns.Place(z3)) == ("i:Stratholme", "Stratholme", "dungeon"), tuple(ns.Place(z3))
+assert tuple(ns.Place(z1)) == ("m:1429", "Elwynn Forest", "zone")
+assert ns.SessionTitle(z3) == "Stratholme" and ns.FarmKey(z3)[0] == "i:Stratholme:Mobs"
+# a session saved before 2.15.0 with no map: placed by the mobs it looted (Farm's zone for them)
+L.execute("""
+local Farm = TRK.KM.mods.Farm
+TRK.oldMobInfo = Farm.MobInfo
+Farm.MobInfo = function(id) if id == 10418 then return { name = 'Crimson Guardsman', map = 317 } end return TRK.oldMobInfo(id) end
+local s = TRK.NewSession('Jay-Forever', NOW - 4000); s.act = 1800; s.value = 18000; s.coin = 18000; s.t1 = NOW - 2000
+s.tl = nil; s.mobs = { [10418] = { k = 6, c = 18000 } }; s.src = { mob = { n = 6, c = 18000 } }; s.kills = 6
+TRK.SaveRecord(s)
+""")
+old = L.eval("TrackerKingDB.sessions[#TrackerKingDB.sessions]")
+assert old.map is None and tuple(ns.Place(old)) == ("i:Stratholme", "Stratholme", "dungeon"), tuple(ns.Place(old))
+# a continent with no mobs known stays the continent
+L.execute("local s = TRK.NewSession('Jay-Forever', NOW - 900); s.act = 500; s.value = 700; s.coin = 700; s.t1 = NOW - 100; "
+          "s.tl = nil; s.z = { [1414] = 700 }; s.src = { mob = { n = 1, c = 700 } }; TRK.SaveRecord(s)")
+kal = L.eval("TrackerKingDB.sessions[#TrackerKingDB.sessions]")
+assert tuple(ns.Place(kal)) == ("m:1414", "Kalimdor", "zone"), tuple(ns.Place(kal))
+# inside, the game gives no map: an old session with a few outdoor minutes and an hour unmapped is the dungeon its
+# mobs are in, under the name GetInstanceInfo uses (Scholomance's floor 306 has no map type here)
+L.execute("""
+local Farm = TRK.KM.mods.Farm
+local prev = Farm.MobInfo
+Farm.MobInfo = function(id) if id == 10477 then return { name = 'Scholomance Necromancer', map = 306 } end return prev(id) end
+local s = TRK.NewSession('Jay-Forever', NOW - 5000); s.act = 3600; s.value = 9000; s.coin = 9000; s.t1 = NOW - 1000
+s.tl = nil; s.z = { [1429] = 100 }; s.mobs = { [10477] = { k = 40, c = 9000 } }; s.src = { mob = { n = 40, c = 9000 } }
+TRK.SaveRecord(s)
+""")
+scholo = L.eval("TrackerKingDB.sessions[#TrackerKingDB.sessions]")
+assert tuple(ns.Place(scholo)) == ("i:Scholomance", "Scholomance", "dungeon"), tuple(ns.Place(scholo))
+L.execute("table.remove(TrackerKingDB.sessions)")
+
+places = list(ns.Places(ns.SessionsSince(None, None)).values())
+by = {p.key: p for p in places}
+strat, elwynn = by["i:Stratholme"], by["m:1429"]
+assert strat.n == 2 and strat.act == z3.act + 1800 and strat.value == 48000 and strat.kind == "dungeon", (strat.n, strat.act, strat.value)
+assert abs(strat.gph - 48000 / strat.act * 3600) < 1e-6 and abs(strat.best - 90000) < 1e-6, "time-weighted; best session"
+assert strat.mph and list(strat.acts.values()) == ["Mobs"]
+assert elwynn.n == 2 and elwynn.value == 18000 and places[0].key == "i:Stratholme", [p.key for p in places]
+assert by["m:1414"].gph is None, "under 10 active minutes: no rate"
+
+# the tab: tiles, the filter, a place, a session from it and back
+L.eval("SlashCmdList.KINGMAKER")("farming")
+P, Zf = ns.P, ns.Z
+L.execute("TRK.P.tabs.buttons.zones:Click()")
+assert L.eval("TrackerKingDB.ui.tab") == "zones" and P.zones.shown and Zf.listView.shown and not Zf.placeView.shown, last(L)
+t = texts(L)
+for label in ("PLACES", "BEST ZONE", "BEST DUNGEON", "MOST FARMED", "MOST TIME", "LAST FARMED"):
+    assert label in t, label
+assert Zf.tiles[3].value.text == "Stratholme" and Zf.tiles[2].value.text == "Elwynn Forest", (Zf.tiles[3].value.text, Zf.tiles[2].value.text)
+assert len(list(Zf.table.data.values())) == 3
+L.execute("TRK.Z.filter.buttons.dungeon:Click()")
+assert [p.key for p in Zf.table.data.values()] == ["i:Stratholme"] and L.eval("TrackerKingDB.ui.zoneFilter") == "dungeon"
+row = [r for r in Zf.table.rows.values() if r.data and r.data.key == "i:Stratholme"][0]
+row.Click(row, "LeftButton")
+assert P.place == "i:Stratholme" and Zf.placeView.shown and not Zf.listView.shown and "Stratholme" in Zf.title.text
+assert len(list(Zf.sessions.data.values())) == 2 and Zf.chart.bars.used >= 2
+assert Zf.ptiles[4].value.text == "2" and "Mobs 2x" in Zf.what.text, (Zf.ptiles[4].value.text, Zf.what.text)
+assert any("BEST|r" in x for x in texts(L)), "the best session here"
+srow = [r for r in Zf.sessions.rows.values() if r.data and r.data.id == z3.id][0]
+srow.Click(srow, "LeftButton")
+assert P.view == "detail" and P.detail.shown and not P.zones.shown
+L.execute("TRK.D.back:Click()")
+assert P.view == "list" and P.zones.shown and Zf.placeView.shown and L.eval("TrackerKingDB.ui.tab") == "zones", "Back returns to the place"
+L.execute("TRK.Z.back:Click()")
+assert P.place is None and Zf.listView.shown
+row = [r for r in Zf.table.rows.values() if r.data and r.data.key == "i:Stratholme"][0]
+row.Click(row, "LeftButton")
+L.execute("TRK.P.tabs.buttons.zones:Click()")
+assert P.place is None and Zf.listView.shown, "the tab opens the list of places"
+L.execute("TRK.P.tabs.buttons.trends:Click()")
+assert any("Stratholme" in x for x in texts(L)), "Best farms names the dungeon too"
+ns.ShowList()
+assert L.eval("TrackerKingDB.ui.tab") == "sessions", "Back from the list goes to Sessions as before"
+assert not KM.errorShown, last(L)
+print("ZONES OK")
+
 print("tracker: ok")

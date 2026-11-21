@@ -78,8 +78,27 @@ local function curMap()
     return m
 end
 
+-- The dungeon or raid you're in (its name and "party" / "raid"), or nil outside one. Recorded per session (s.zi,
+-- since 2.15.0) because the game gives some dungeons no map, or the whole continent's.
+local function curInstance()
+    if not (IsInInstance and GetInstanceInfo) then return nil end
+    local inside, kind = IsInInstance()
+    inside, kind = KM.Plain(inside), KM.Plain(kind)
+    if not inside or (kind ~= "party" and kind ~= "raid") then return nil end
+    local name = KM.Plain((GetInstanceInfo()))
+    if type(name) ~= "string" or name == "" then return nil end
+    return name, kind
+end
+
 local function addZone(s, sec)
     if not sec or sec <= 0 then return end
+    local inst, kind = curInstance()
+    if inst then
+        s.zi = s.zi or {}
+        s.zi[inst] = round((s.zi[inst] or 0) + sec)
+        s.zk = s.zk or {}
+        s.zk[inst] = kind
+    end
     local m = curMap()
     if not m then return end
     s.z = s.z or {}
@@ -328,6 +347,10 @@ function ns.Pause(why)
             local m = curMap()
             if m and s.z[m] then s.z[m] = math.max(0, round(s.z[m] - (zoneAt - stop))) end
         end
+        local inst = curInstance()
+        if zoneAt and stop < zoneAt and inst and s.zi and s.zi[inst] then
+            s.zi[inst] = math.max(0, round(s.zi[inst] - (zoneAt - stop)))
+        end
     end
     since, bank, zoneAt = nil, nil, nil
     s.state, s.why, s.pausedAt, s.tick = "paused", why or "manual", KM.Now(), KM.Now()
@@ -373,6 +396,7 @@ local function finish(s)
     if s.nodes and next(s.nodes) == nil then s.nodes = nil end
     if s.cash and next(s.cash) == nil then s.cash = nil end
     if s.z and next(s.z) == nil then s.z = nil end
+    if s.zi and next(s.zi) == nil then s.zi, s.zk = nil, nil end
 end
 
 -- Appends a finished session to the history (oldest first) and prunes.
@@ -654,6 +678,112 @@ function ns.MainZone(s)
     return best or (s == ns.Live() and curMap() or nil)
 end
 
+-- Where a session was farmed (the Zones tab, Best farms, a session's title): the dungeon or raid it spent at least
+-- half its time in (s.zi, recorded since 2.15.0), else its main zone. One saved before then whose map is a dungeon,
+-- a continent or unknown (the game gives some dungeons no map) is placed by the mobs it looted (Farm's zone for each).
+-- key ("i:Stratholme", "m:1423", "m:0"), name, kind ("dungeon", "raid", "zone").
+local MAP_ZONE, MAP_DUNGEON = 3, 4      -- Enum.UIMapType
+local function mapInfo(map)
+    return map and C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(map) or nil
+end
+
+-- The dungeon and raid maps QuestieDB places their mobs on (every floor), named as GetInstanceInfo names them so a
+-- session placed by its mobs joins the ones that recorded the instance.
+local INSTANCES, RAIDS = {
+    ["Ragefire Chasm"] = { 213 }, ["Zul'Farrak"] = { 219 }, ["The Temple of Atal'Hakkar"] = { 220 },
+    ["Blackfathom Deeps"] = { 221, 222, 223 }, ["The Stockade"] = { 225 }, ["Gnomeregan"] = { 226, 227, 228, 229 },
+    ["Uldaman"] = { 230, 231 }, ["Dire Maul"] = { 234, 235, 236, 237, 238, 239, 240 },
+    ["Blackrock Depths"] = { 242, 243 }, ["Blackrock Spire"] = { 250, 251, 252, 253, 254, 255, 256 },
+    ["Wailing Caverns"] = { 279 }, ["Maraudon"] = { 280, 281 }, ["The Deadmines"] = { 291, 292 },
+    ["Razorfen Downs"] = { 300 }, ["Razorfen Kraul"] = { 301 }, ["Scarlet Monastery"] = { 302, 303, 304, 305 },
+    ["Scholomance"] = { 306, 307, 308, 309 }, ["Shadowfang Keep"] = { 310, 311, 312, 313, 314, 315, 316 },
+    ["Stratholme"] = { 317, 318 },
+    ["Naxxramas"] = { 162, 163, 164, 165, 166, 167 }, ["Molten Core"] = { 232 }, ["Zul'Gurub"] = { 233 },
+    ["Ruins of Ahn'Qiraj"] = { 247 }, ["Onyxia's Lair"] = { 248 }, ["Blackwing Lair"] = { 287, 288, 289, 290 },
+    ["Temple of Ahn'Qiraj"] = { 319, 320, 321 },
+}, { ["Naxxramas"] = true, ["Molten Core"] = true, ["Zul'Gurub"] = true, ["Ruins of Ahn'Qiraj"] = true,
+     ["Onyxia's Lair"] = true, ["Blackwing Lair"] = true, ["Temple of Ahn'Qiraj"] = true }
+local INSTANCE_MAP = {}
+for name, maps in pairs(INSTANCES) do
+    for _, m in ipairs(maps) do INSTANCE_MAP[m] = name end
+end
+
+-- name, "dungeon" / "raid" when map is inside an instance
+local function instanceOf(map, info)
+    local name = map and INSTANCE_MAP[map]
+    if name then return name, RAIDS[name] and "raid" or "dungeon" end
+    info = info or mapInfo(map)
+    if info and info.mapType == MAP_DUNGEON and info.name then return info.name, "dungeon" end
+end
+
+local function mobsMap(s)
+    local Farm = KM.mods.Farm
+    if not (Farm and Farm.MobInfo and s.mobs) then return nil end
+    local by, best, bn = {}, nil, 0
+    for npc, m in pairs(s.mobs) do
+        if npc ~= 0 then
+            local info = KM.Safe(Farm.MobInfo, npc)
+            local map = info and info.map
+            if map then
+                by[map] = (by[map] or 0) + math.max(m.k or 0, m.c or 0, 1)
+                if by[map] > bn then best, bn = map, by[map] end
+            end
+        end
+    end
+    return best
+end
+
+-- QuestieDB's zones aren't loaded yet, so mobs have no zone: a place worked out now is a guess
+local function mobsPending()
+    local Farm = KM.mods.Farm
+    if not (Farm and Farm.QuestieAvailable and Farm.QuestieZones) then return false end
+    return KM.Safe(Farm.QuestieAvailable) and not KM.Safe(Farm.QuestieZones) or false
+end
+
+local function place(s)
+    if s.zi then
+        local best, bt, total = nil, 0, 0
+        for name, t in pairs(s.zi) do if t > bt then best, bt = name, t end end
+        for _, t in pairs(s.z or {}) do total = total + t end
+        if best and bt * 2 >= total then
+            return "i:" .. best, best, (s.zk and s.zk[best] == "raid") and "raid" or "dungeon"
+        end
+    end
+    local map = ns.MainZone(s)
+    local info = mapInfo(map)
+    local iname, ikind = instanceOf(map, info)
+    if iname then return "i:" .. iname, iname, ikind end
+    -- The game gives no map inside most dungeons, so a session that spent most of its time with none (or one on a
+    -- continent) was in one: its mobs say which.
+    local mapped = 0
+    for _, t in pairs(s.z or {}) do mapped = mapped + t end
+    local unmapped = mapped * 2 < (s.act or 0)
+    if unmapped or not info or (info.mapType or MAP_ZONE) < MAP_ZONE then
+        local m2 = mobsMap(s)
+        local i2 = mapInfo(m2)
+        iname, ikind = instanceOf(m2, i2)
+        if iname then return "i:" .. iname, iname, ikind end
+        if not info or (info.mapType or MAP_ZONE) < MAP_ZONE then
+            if i2 and i2.name and (i2.mapType or MAP_ZONE) == MAP_ZONE then return "m:" .. m2, i2.name, "zone" end
+            if not map then return "m:0", "Unknown zone", "zone", mobsPending() end
+            return "m:" .. map, ns.ZoneName(map), "zone", mobsPending()
+        end
+        if not m2 then return "m:" .. map, ns.ZoneName(map), "zone", mobsPending() end
+    end
+    return "m:" .. map, ns.ZoneName(map), "zone"
+end
+
+local placeCache = setmetatable({}, { __mode = "k" })
+function ns.Place(s)
+    local c = placeCache[s]
+    if c then return c[1], c[2], c[3] end
+    local key, name, kind, unsure = place(s)
+    -- a guess (no mob zones known yet: QuestieDB still loading) is worked out again next time
+    if not unsure and s ~= ns.Live() then placeCache[s] = { key, name, kind } end
+    return key, name, kind
+end
+function ns.PlaceName(s) return (select(2, ns.Place(s))) end
+
 -- mobs / gathering / mixed, and a label for the top kind.
 function ns.Classify(s)
     local per, m, g, total = {}, 0, 0, 0
@@ -741,7 +871,7 @@ function ns.SessionLine(s)
     local t = ns.Totals(s)
     local when = ns.Date("%d %b", s.t1)
     when = when and (" " .. when) or ""
-    return (s.name or ns.ZoneName(ns.MainZone(s))) .. "," .. when .. "  " .. ns.Clock(t.act) .. "  " .. KM.Money(t.value)
+    return (s.name or ns.PlaceName(s)) .. "," .. when .. "  " .. ns.Clock(t.act) .. "  " .. KM.Money(t.value)
         .. (t.gph and ("  " .. KM.Money(t.gph) .. "/hr") or "")
 end
 
@@ -761,7 +891,7 @@ function ns.FarmKey(s)
     local activity, label = ns.Classify(s)
     if activity == "none" then return nil end
     local what = activity == "gathering" and label or (activity == "mobs" and "Mobs" or "Mixed")
-    return tostring(ns.MainZone(s) or 0) .. ":" .. what, what
+    return ns.Place(s) .. ":" .. what, what
 end
 
 local function rate(s)
@@ -798,7 +928,7 @@ function ns.CheckRecord(s)
         if og and ns.FarmKey(o) == key and (not before or og > before) then before = og end
     end
     if not before or g <= before then return nil end
-    local line = "new best gold per hour here: " .. ns.ZoneName(ns.MainZone(s)) .. " (" .. what .. "), "
+    local line = "new best gold per hour here: " .. ns.PlaceName(s) .. " (" .. what .. "), "
         .. KM.Money(g) .. "/hr, beating " .. KM.Money(before) .. "/hr."
     KM.Print(ns, line)
     return line

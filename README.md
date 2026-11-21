@@ -10,6 +10,14 @@ one set of auction house prices.
 **[Download the latest release](https://github.com/artificial-bones/King_Maker/releases/latest)** (`King_Maker.zip`),
 or install **King Maker** from CurseForge.
 
+## New in 2.15
+
+- **Zones in the Farming Ledger.** A new tab adds up every session in each zone, dungeon and raid, so you can see
+  where you farm best: gold per hour, your best run, mobs per hour, time and when you were last there. Click one for
+  its sessions, its top items and gold per hour of each run.
+- Farming sessions now know which **dungeon** you were in, even where the game gives it no map (Stratholme showed as
+  "Unknown zone", some dungeons as the whole continent). Older sessions are placed by the mobs they looted.
+
 ## New in 2.14
 
 - **Shopping is gone.** Buying tools will live in their own addons. What stays is the quick part: your **favorites

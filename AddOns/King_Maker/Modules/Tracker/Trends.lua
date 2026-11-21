@@ -88,7 +88,8 @@ function ns.Days(list, from)
 end
 
 -- Best farms: one row per zone and activity, gold per hour over all their active time (time-weighted), best first.
--- { key, map, label, n, act, value, gph (nil under 10 minutes), corpses, kills, best }
+-- { key, map, where (the place's name: a zone, dungeon or raid), kind, label, n, act, value, gph (nil under 10 minutes),
+--   corpses, kills, best }
 function ns.Farms(list)
     local by, out = {}, {}
     for _, s in ipairs(counted(list)) do
@@ -96,7 +97,8 @@ function ns.Farms(list)
         if key then
             local f = by[key]
             if not f then
-                f = { key = key, map = ns.MainZone(s), label = label, n = 0, act = 0, value = 0, corpses = 0, kills = 0 }
+                local _, where, kind = ns.Place(s)
+                f = { key = key, map = ns.MainZone(s), where = where, kind = kind, label = label, n = 0, act = 0, value = 0, corpses = 0, kills = 0 }
                 by[key] = f
                 out[#out + 1] = f
             end
@@ -149,7 +151,7 @@ end
 ---------------------------------------------------------------------------
 
 local FARM_COLS = {
-    { key = "zone", label = "Zone", w = 150, sort = function(e) return ns.ZoneName(e.map):lower() end, desc = false },
+    { key = "zone", label = "Zone", w = 150, sort = function(e) return (e.where or ""):lower() end, desc = false },
     { key = "what", label = "Activity", w = 96, sort = function(e) return e.label end, desc = false },
     { key = "n", label = "Sess", tip = "Sessions at this farm.", w = 44, justify = "RIGHT", sort = function(e) return e.n end },
     { key = "act", label = "Time", tip = "Active time farmed there, all sessions together.", w = 64, justify = "RIGHT", sort = function(e) return e.act end },
@@ -164,13 +166,13 @@ local ITEM_COLS = {
 }
 
 local function fillFarm(r, f, cells)
-    cells.zone:SetText(ns.ZoneName(f.map))
+    cells.zone:SetText(f.where)
     cells.what:SetText(UI.Hex(C.muted) .. f.label .. "|r")
     cells.n:SetText(f.n)
     cells.act:SetText(ns.Dur(f.act))
     cells.gph:SetText(f.gph and KM.Money(f.gph) or DASH)
     r.tip = function(tt)
-        tt:AddLine(ns.ZoneName(f.map) .. ", " .. f.label, 1, 1, 1)
+        tt:AddLine(f.where .. ", " .. f.label, 1, 1, 1)
         tt:AddDoubleLine("Farmed", KM.Money(f.value), 0.8, 0.8, 0.8, 1, 1, 1)
         tt:AddDoubleLine("Active time", ns.Dur(f.act), 0.8, 0.8, 0.8, 1, 1, 1)
         if f.best then tt:AddDoubleLine("Best session", KM.Money(f.best) .. "/hr", 0.8, 0.8, 0.8, 1, 1, 1) end
@@ -227,7 +229,7 @@ function ns.BuildTrends(c)
     T.farmHead:SetPoint("TOPLEFT", 0, -236)
     T.farms = UI.Table(v, FARM_COLS, 20, {
         onClick = function(f)
-            P.farm = { key = f.key, label = ns.ZoneName(f.map) .. ", " .. f.label }
+            P.farm = { key = f.key, label = f.where .. ", " .. f.label }
             U().tab = "sessions"
             KM.Refresh("farming")
         end,
@@ -285,7 +287,7 @@ function ns.RefreshTrends(c)
     TT[2]:Set("Avg gold/hr", a.gph and KM.Money(a.gph) or "-",
         prevA and prevA.gph and a.gph and ns.Delta(pct(a.gph, prevA.gph), "vs the " .. u.period .. " days before") or "time-weighted")
     TT[3]:Set("Time farmed", ns.Dur(a.act), a.n .. " session" .. (a.n == 1 and "" or "s"))
-    TT[4]:Set("Best zone", best and ns.ZoneName(best.map) or "-", best and (KM.Money(best.gph, true) .. "/hr  " .. best.label) or "10+ active minutes")
+    TT[4]:Set("Best zone", best and best.where or "-", best and (KM.Money(best.gph, true) .. "/hr  " .. best.label) or "10+ active minutes")
     local top = items[1]
     TT[5]:Set("Top item", top and (KM.Item(top.id).name or ("Item " .. top.id)) or "-", top and (KM.Money(top.v, true) .. " from " .. KM.Commas(top.q)) or "")
     TT[6]:Set("This week", KM.Money(T.week), T.lastWeek > 0 and ns.Delta(pct(T.week, T.lastWeek), "vs last week") or "nothing the week before")
@@ -472,7 +474,7 @@ function ns.ExportText(list)
         for _, n in pairs(s.opened or {}) do opened = opened + n end
         lines[#lines + 1] = table.concat({
             csv(ns.Date("%Y-%m-%d %H:%M", s.t0)), csv(ns.Date("%Y-%m-%d %H:%M", s.t1)), csv(s.c), s.lvl or "",
-            csv(ns.ZoneName(ns.MainZone(s))), csv(s.name), csv(activity == "none" and "" or label),
+            csv(ns.PlaceName(s)), csv(s.name), csv(activity == "none" and "" or label),
             math.floor(s.act or 0), math.floor(s.idle or 0), math.floor(s.paused or 0),
             math.floor(s.value or 0), math.floor(s.coin or 0), math.floor(s.iv or 0),
             t.gph and math.floor(t.gph + 0.5) or "", s.kills or 0, (s.src and s.src.mob and s.src.mob.n) or 0,

@@ -261,7 +261,7 @@ local function status()
         return
     end
     local t = ns.Totals(s)
-    KM.Print(ns, (ns.State() == "paused" and "paused" or "farming") .. ": " .. ns.ZoneName(ns.MainZone(s)) .. ", "
+    KM.Print(ns, (ns.State() == "paused" and "paused" or "farming") .. ": " .. ns.PlaceName(s) .. ", "
         .. ns.Clock(ns.Active(s)) .. ", " .. KM.Money(t.value) .. " (" .. (t.gph and (KM.Money(t.gph) .. "/hr") or "under a minute") .. ").")
 end
 

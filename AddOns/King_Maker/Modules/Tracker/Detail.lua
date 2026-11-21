@@ -435,9 +435,9 @@ end
 
 function zoneAverage(s)
     local list = {}
-    local map = ns.MainZone(s)
+    local map = ns.Place(s)
     for _, o in ipairs(ns.db.sessions) do
-        if o ~= s and not o.legacy and ns.MainZone(o) == map then list[#list + 1] = o end
+        if o ~= s and not o.legacy and ns.Place(o) == map then list[#list + 1] = o end
     end
     return ns.Aggregate(list).gph
 end

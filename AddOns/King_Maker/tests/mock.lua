@@ -388,11 +388,12 @@ function GetMoney() return MONEY end
 MAPS = { [1423] = "Eastern Plaguelands", [1429] = "Elwynn Forest", [1436] = "Westfall", [1440] = "Ashenvale", [1451] = "Silithus",
   [1453] = "Stormwind City", [1454] = "Orgrimmar", [1458] = "Undercity", [1420] = "Tirisfal Glades", [1413] = "The Barrens" }
 MAP_CHILDREN = {}   -- MAP_CHILDREN[rootMapID] = { { mapID=, name= }, ... }
+MAP_TYPES = {}      -- MAP_TYPES[mapID] = Enum.UIMapType (2 continent, 3 zone, 4 dungeon); zone when unset
 WAYPOINT, TRACKED = nil, nil
 C_Map = {
   GetBestMapForUnit = function() return PLAYER.map end,
   GetPlayerMapPosition = function() if not PLAYER.x then return nil end return { GetXY = function() return PLAYER.x, PLAYER.y end, x = PLAYER.x, y = PLAYER.y } end,
-  GetMapInfo = function(id) return { mapID = id, name = MAPS[id] or ("Map " .. tostring(id)), mapType = 3, parentMapID = 0 } end,
+  GetMapInfo = function(id) return { mapID = id, name = MAPS[id] or ("Map " .. tostring(id)), mapType = MAP_TYPES[id] or 3, parentMapID = 0 } end,
   GetMapChildrenInfo = function(root) return MAP_CHILDREN[root] or {} end,
   CanSetUserWaypointOnMap = function() return true end,
   SetUserWaypoint = function(p) WAYPOINT = p end,

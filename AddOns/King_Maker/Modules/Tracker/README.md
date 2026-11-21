@@ -97,8 +97,8 @@ makes the whole box bigger or smaller (70 to 140%).
 
 ## The Farming Ledger
 
-Three tabs share the top bar with **Export**, **All characters / This character** and the period (7 days, 30 days,
-All): **Sessions**, **Trends** and **Mat Prices**.
+Four tabs share the top bar with **Export**, **All characters / This character** and the period (7 days, 30 days,
+All): **Sessions**, **Trends**, **Zones** and **Mat Prices**.
 
 **Sessions.** Six tiles for the period you pick (7 days, 30 days, All): farmed,
 gold per hour (and how it compares with the period before), time, sessions,
@@ -117,6 +117,18 @@ the day's total, time, gold per hour and sessions), **Best farms** (each zone an
 activity with its sessions, time and gold per hour over all of it; click one to see
 only its sessions on the Sessions tab, click the name at the bottom to show all
 again) and **Top items farmed**. Carried-over sessions never count here.
+
+**Zones.** Every zone, dungeon and raid you farmed, with all its sessions added
+together: six tiles (how many places, your best zone and best dungeon by gold per
+hour, where you farmed the most, where you spent the most time, where you were
+last), **All / Zones / Dungeons**, and one row per place: sessions, time, farmed,
+gold per hour over all of it, your best session there, mobs per hour and when you
+were last there. Click a column to sort. Click a place for its own page: what you
+did there, six tiles (gold per hour against your farming everywhere), gold per
+hour of each session there, its sessions (click one for its details; **Back**
+comes back here) and its top items. A session counts for the dungeon or raid it
+spent most of its time in, else its main zone. Sessions from before 2.15 that the
+game gave no map, or only the continent's, are placed by the mobs they looted.
 
 **Mat Prices.** Mining, Herbs, Skins, Cloth and Ench: what one sells for (after the
 5% cut, or the vendor price), how many are listed, the price against its 30-day
