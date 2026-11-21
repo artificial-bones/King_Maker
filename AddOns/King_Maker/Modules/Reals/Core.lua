@@ -179,16 +179,12 @@ function ns.Shown()
 end
 
 ---------------------------------------------------------------------------
--- The daily reset (from the game, never hard-coded)
+-- The daily reset: 10 a.m. New York time (KM.SecondsToDailyReset, Core.lua)
 ---------------------------------------------------------------------------
 
+-- Second value: true when guessed (never, since 2.14.0; kept for callers).
 function ns.SecondsToReset()
-    for _, fn in ipairs({ C_DateAndTime and C_DateAndTime.GetSecondsUntilDailyReset, GetQuestResetTime }) do
-        local s = plain(call(fn))
-        if type(s) == "number" and s > 0 then return s, false end
-    end
-    local now = ns.Now()
-    return (math.floor(now / DAY) + 1) * DAY - now, true   -- no API: the next UTC midnight, a guess
+    return KM.SecondsToDailyReset(ns.Now()), false
 end
 
 function ns.IsToday(c) return c and c.dayEnd and c.dayEnd > ns.Now() or false end

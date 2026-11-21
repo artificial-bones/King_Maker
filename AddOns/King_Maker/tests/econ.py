@@ -556,4 +556,57 @@ Lr.execute('ITEM(77001, "Zesty Thing", { quality = 3, class = 7, subclass = 5 })
 assert nsr.Info(77001).name == "Zesty Thing" and Lr.eval("EconKingDB.info[77001]") == "3:Zesty Thing"
 print("ENCODING OK")
 
+# --- 2.14.0: the Favorites panel beside the auction house ------------------------------------------------------------
+LP, KMP = fresh(only=["Scanner", "Econ"], extra=EXTRA + """
+AuctionHouseFrame.SearchBar = CreateFrame("Frame")
+AuctionHouseFrame.SearchBar.SearchBox = CreateFrame("EditBox")
+AH_SEARCHED = {}
+function AuctionHouseFrame.SearchBar:StartSearch() table.insert(AH_SEARCHED, self.SearchBox:GetText()) end
+""", seed="NOW = 5000; ScannerKingDB = { prices = { [2589] = { p = 110, t = 4000, q = 150 }, [6000] = { p = 45000, t = 4000, q = 2 } } }")
+nsp = KMP.mods.Econ
+click = lambda f: f.RunScript(f, "OnClick", "LeftButton")
+assert LP.eval("EconKingDB.ui.ahPanel") is True, "on by default"
+LP.execute('FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()')
+panel = LP.eval("KingMakerFavoritesPanel")
+assert panel.IsShown(panel) and LP.eval("KingMakerFavoritesPanel.points[1][2] == AuctionHouseFrame and KingMakerFavoritesPanel.points[1][3] == 'TOPRIGHT'"), "docked to the AH's right edge"
+add = panel.add
+assert "Open an item" in add.label.text and not add.enabled, add.label.text
+assert "No favorites yet" in panel.empty.text
+# the auction house shows an item: the button favorites it, then takes it off
+LP.execute('FIRE("COMMODITY_SEARCH_RESULTS_UPDATED", 2589)')
+assert "Add" in add.label.text and "Linen Cloth" in add.label.text, add.label.text
+click(add)
+assert LP.eval("EconKingDB.fav[2589]") is True and "added to favorites" in last(LP)
+assert "Remove" in add.label.text
+r1 = nsp.panelRows[1]
+assert r1.data.id == 2589 and r1.shown is not False and "Linen Cloth" in r1.name.text and r1.price.text != ""
+click(add)
+assert LP.eval("EconKingDB.fav[2589]") is None and "removed from favorites" in last(LP) and r1.data is None
+# a non-commodity item counts too; rows are A to Z
+LP.execute('FIRE("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 6000 })'); click(add)
+LP.execute('FIRE("COMMODITY_SEARCH_RESULTS_UPDATED", 2589)'); click(add)
+assert [nsp.panelRows[i].data.id for i in (1, 2)] == [6000, 2589], "Big Sword before Linen Cloth"
+# click a row: the auction house's own search bar searches it
+click(nsp.panelRows[2])
+assert LP.eval("AH_SEARCHED[#AH_SEARCHED]") == "Linen Cloth"
+# Graph: its Price History page
+click(nsp.panelRows[2].graph)
+assert KMP.IsShown("history")
+# x on a row removes it
+click(nsp.panelRows[1].remove)
+assert LP.eval("EconKingDB.fav[6000]") is None and nsp.panelRows[1].data.id == 2589
+# the close button hides it until the Favorites button brings it back, across visits
+click(panel.close)
+assert not panel.IsShown(panel) and nsp.toggle.IsShown(nsp.toggle) and LP.eval("EconKingDB.ui.ahPanel") is False
+LP.execute('FIRE("AUCTION_HOUSE_CLOSED"); AH_OPEN = true; FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()')
+assert not panel.IsShown(panel) and nsp.toggle.IsShown(nsp.toggle)
+click(nsp.toggle)
+assert panel.IsShown(panel) and LP.eval("EconKingDB.ui.ahPanel") is True
+assert "Open an item" in add.label.text, "what the AH showed is forgotten when it closes"
+LP.eval("SlashCmdList.ECONKING")("panel"); assert not panel.IsShown(panel)
+LP.execute('FIRE("AUCTION_HOUSE_CLOSED")'); assert not nsp.toggle.IsShown(nsp.toggle)
+LP.eval("SlashCmdList.ECONKING")("panel"); assert "open the auction house first" in last(LP)
+assert not KMP.errorShown, last(LP)
+print("FAVORITES PANEL OK")
+
 print("econ: ok")

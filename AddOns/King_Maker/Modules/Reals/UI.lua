@@ -125,7 +125,7 @@ local function build(c)
     P.tiles[1]:SetTip("Reals this character looted since the daily reset. Each boss gives each character one a day.")
     P.tiles[2]:SetTip("Bosses whose Real for today this character hasn't looted yet (optional bosses and bosses that never showed one aren't counted).")
     P.tiles[3]:SetTip("Tarnished Undermine Reals this character holds, and the cap: what's over the cap is lost. Spend them at Pix Xizzix in Booty Bay.")
-    P.tiles[4]:SetTip("Time to the daily reset, from the game. Then every boss has a Real again.")
+    P.tiles[4]:SetTip("Time to the daily reset (10 a.m. Eastern). Then every boss has a Real again.")
 
     local y = -(TILE_H + 12)
     P.charBtn = UI.MenuButton(c, 170, charLabel, function(_, root)

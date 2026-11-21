@@ -149,7 +149,23 @@ function ns.GuildKey()
     local ok, name = pcall(GetGuildInfo, "player")
     name = ok and KM.Plain(name) or nil
     if type(name) ~= "string" or name == "" then return nil end
-    return name .. "-" .. ((GetRealmName and GetRealmName()) or "")
+    return name .. "-" .. (KM.Realm() or "")
+end
+
+-- KM.RenameChar: this character's entry moves to its new key. Lists saved while the realm came back empty (the
+-- November 2026 hotfix made "Kings-") fold into the guild's real list once the realm is known.
+function ns.RenameChar(old, new)
+    KM.MoveKey(ns.db.chars, old, new)
+    local realm = KM.Realm()
+    if not realm then return end
+    local strays = {}
+    for key in pairs(ns.db.lists) do
+        if type(key) == "string" and key ~= "personal" and key:sub(-1) == "-" then strays[#strays + 1] = key end
+    end
+    for _, key in ipairs(strays) do KM.MoveKey(ns.db.lists, key, key .. realm) end
+    for who, key in pairs(ns.db.chars) do
+        if type(key) == "string" and key ~= "personal" and key:sub(-1) == "-" then ns.db.chars[who] = key .. realm end
+    end
 end
 
 -- Which list this character uses now: the guild's, "personal" without a guild, or (in a guild whose name hasn't

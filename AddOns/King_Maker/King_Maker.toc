@@ -4,7 +4,7 @@
 ## Author: BearBones
 ## X-License: GPL-3.0
 ## X-Credits: Recipe data from ForeverDB.net; Supply Writs data from QuestieDB and Craftman's Helper (Emsworth); dungeon bosses from DungeonJournal (Exehn)
-## Version: 2.13.0
+## Version: 2.14.0
 ## IconTexture: Interface\Icons\INV_Crown_01
 ## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB, ShoppingKingDB, ProfessionKingDB, CooldownKingDB, TrackerKingDB, ProfitKingDB, BlacklistKingDB, ReputationKingDB, RealsKingDB
 ## OptionalDeps: QuestieDB, TomTom, LibDBIcon-1.0, Auctionator
@@ -41,6 +41,7 @@ Modules\Econ\Graph.lua
 Modules\Econ\Item.lua
 Modules\Econ\UI.lua
 Modules\Econ\Tooltip.lua
+Modules\Econ\Panel.lua
 
 # Market
 Modules\Market\Data\Recipes.lua
@@ -111,13 +112,6 @@ Modules\Rested\UI.lua
 
 # Minimap
 Modules\Minimap\Minimap_King.lua
-
-# Shopping
-Modules\Shopping\Core.lua
-Modules\Shopping\Lists.lua
-Modules\Shopping\Buy.lua
-Modules\Shopping\Panel.lua
-Modules\Shopping\Page.lua
 
 # Profession
 Modules\Profession\Core.lua

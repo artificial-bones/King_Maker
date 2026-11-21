@@ -324,7 +324,7 @@ function ns.AutoAsk()
     if InCombatLockdown and InCombatLockdown() then autoPending = true return 0 end
     local map = currentZone()
     if not map then return 0 end
-    local key = (UnitName("player") or "?") .. "-" .. (GetRealmName and GetRealmName() or "")
+    local key = (UnitName("player") or "?") .. "-" .. (KM.Realm() or "")
     local asked = ns.db.asked[key] or {}
     ns.db.asked[key] = asked
     if asked[map] == KM.version then return 0 end

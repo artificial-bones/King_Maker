@@ -1,7 +1,7 @@
 local _, KM = ...
 local ns = KM.Module("Cooldowns")
 
--- Cooldowns: what each cooldown is worth, and the hooks into the Scanner, Shopping and Inventory.
+-- Cooldowns: what each cooldown is worth, and the hooks into the Scanner and Inventory.
 --
 -- Same rules as Crafting Profits and the Profession panel (Market.Evaluate, disenchanting off): materials at the
 -- cheaper of the lowest auction and a vendor, the product at the lowest auction, 5% auction cut. The headline
@@ -10,7 +10,6 @@ local ns = KM.Module("Cooldowns")
 -- members by profit per day of cooldown, because Arcanite's two days block two days of essences.
 
 local WEEK, DAY = 7 * 86400, 86400
-ns.SHOP_LIST = "Cooldown mats"
 
 local function market()
     local m = KM.mods.Market
@@ -198,7 +197,7 @@ function ns.Summary()
 end
 
 ---------------------------------------------------------------------------
--- The Scanner, Shopping and Inventory
+-- The Scanner and Inventory
 ---------------------------------------------------------------------------
 
 -- Every product and material of every member any character knows (and the salt's downstream items): the Scanner
@@ -226,110 +225,6 @@ function ns.WatchedItems()
     return out
 end
 
-local function owned(id)
-    if InventoryKing and InventoryKing.GetCount then
-        local total = ns.Call(InventoryKing.GetCount, id)
-        if type(total) == "number" then
-            local mine = C_Item and C_Item.GetItemCount and ns.Call(C_Item.GetItemCount, id, true)
-            return math.max(total, type(mine) == "number" and mine or 0)
-        end
-    end
-    if C_Item and C_Item.GetItemCount then return ns.Call(C_Item.GetItemCount, id, true) or 0 end
-    return 0
-end
-
--- How many crafts a cooldown allows in the next `days`: one now if ready, then one per length.
-function ns.CraftsAhead(e, dur, days, now)
-    local horizon = days * DAY
-    local wait = (e and e.ready) and math.max(0, e.ready - now) or 0
-    if wait > horizon then return 0 end
-    return 1 + math.floor((horizon - wait) / dur)
-end
-
--- The Shopping list "Cooldown mats": what your characters (this realm and faction, or just you) need for the next
--- N days of cooldowns, minus what you own anywhere (you can mail it). Vendor materials are left out.
-function ns.ShoppingItems()
-    if not ns.db then return {} end
-    local now, set = ns.Now(), ns.db.settings
-    local me = KM.Char()
-    local mine = ns.db.chars[me]
-    local realm, faction = mine and mine.realm, mine and mine.faction
-    local need, why = {}, {}
-    for key, c in pairs(ns.db.chars) do
-        local inScope
-        if set.shopScope == "me" then inScope = key == me
-        else inScope = (not realm or c.realm == nil or c.realm == realm) and (not faction or c.faction == nil or c.faction == faction) end
-        if inScope then
-            for gk, e in pairs(c.cds or {}) do
-                local g = ns.Group(gk)
-                if g and not c.hide[gk] then
-                    local spell, v = ns.Pick(key, gk)
-                    local r = spell and v and v.profit and ns.Recipe(spell)
-                    if r then
-                        local crafts = ns.CraftsAhead(e, ns.Dur(spell), set.days, now)
-                        if crafts > 0 then
-                            for i = 1, #(r.reagents or {}), 2 do
-                                local id, n = r.reagents[i], r.reagents[i + 1] or 1
-                                if not isVendor(id) then
-                                    need[id] = (need[id] or 0) + n * crafts
-                                    why[id] = why[id] or {}
-                                    why[id][g.label] = (why[id][g.label] or 0) + crafts
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    local m = market()
-    local out = {}
-    for id, n in pairs(need) do
-        local qty = n - (owned(id) or 0)
-        if qty > 0 then
-            local unit = m and ns.Call(m.BuyCost, id)
-            local parts = {}
-            for label, k in pairs(why[id]) do parts[#parts + 1] = label .. " x" .. k end
-            table.sort(parts)
-            out[#out + 1] = { itemID = id, qty = qty, max = unit and math.ceil(unit) or nil, note = table.concat(parts, ", ") }
-        end
-    end
-    table.sort(out, function(a, b) return a.itemID < b.itemID end)
-    return out
-end
-
-local shopPending = false
-function ns.ShoppingChanged()
-    if shopPending or not (ShoppingKing and ShoppingKing.RefreshLists) then return end
-    shopPending = true
-    C_Timer.After(1, function() shopPending = false; pcall(ShoppingKing.RefreshLists) end)
-end
-
-function ns.ShoppingAvailable()
-    return type(ShoppingKing) == "table" and type(ShoppingKing.RegisterListProvider) == "function"
-end
-
--- Adds one cooldown's next N days of materials to the saved Shopping list "Crafting" (like the Profession panel's
--- "Add missing to Shopping"). Returns how many items were added.
-function ns.AddToShopping(key, gk)
-    if not (ShoppingKing and ShoppingKing.Add) then return 0 end
-    local spell = ns.Pick(key, gk)
-    local r = spell and ns.Recipe(spell)
-    local c = ns.db.chars[key]
-    if not (r and c) then return 0 end
-    local crafts = ns.CraftsAhead(c.cds[gk], ns.Dur(spell), ns.db.settings.days, ns.Now())
-    local m, added = market(), 0
-    for i = 1, #(r.reagents or {}), 2 do
-        local id, n = r.reagents[i], r.reagents[i + 1] or 1
-        local qty = n * crafts - (owned(id) or 0)
-        if qty > 0 and not isVendor(id) then
-            local unit = m and ns.Call(m.BuyCost, id)
-            if pcall(ShoppingKing.Add, id, qty, unit and math.ceil(unit) or nil, "Crafting") then added = added + 1 end
-        end
-    end
-    return added
-end
-
 local registered = false
 function ns.RegisterIntegrations()
     if registered then return end
@@ -342,16 +237,8 @@ function ns.RegisterIntegrations()
             if e == "PRICES_UPDATED" and KM.IsShown("cooldowns") then KM.Refresh("cooldowns") end
         end)
     end
-    if ns.ShoppingAvailable() then
-        pcall(ShoppingKing.RegisterListProvider, ns.SHOP_LIST, {
-            items = function() return ns.ShoppingItems() end,
-            bought = function() ns.ShoppingChanged() end,
-            owner = "Cooldowns", note = "Materials for your crafting cooldowns over the next days, less what you own.",
-        })
-    end
     if InventoryKing and InventoryKing.RegisterCallback then
         pcall(InventoryKing.RegisterCallback, "STOCK", function()
-            ns.ShoppingChanged()
             if KM.IsShown("cooldowns") then KM.Refresh("cooldowns") end
         end, "Cooldowns")
     end

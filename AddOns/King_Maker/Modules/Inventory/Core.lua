@@ -70,7 +70,7 @@ function ns.Short(who)
     if not who then return "?" end
     local name, realm = who:match("^(.-)%-(.+)$")
     if not name then return who end
-    local mine = GetRealmName and GetRealmName() or ""
+    local mine = KM.Realm() or ""
     return realm == mine and name or who
 end
 
@@ -257,7 +257,7 @@ SlashCmdList.INVENTORYKING = function(msg)
         if ns.Refresh then ns.Refresh() end
     elseif cmd == "forget" and rest ~= "" then
         local who = rest
-        if not who:find("-") and GetRealmName then who = who .. "-" .. GetRealmName() end
+        if not who:find("-") and KM.Realm() then who = who .. "-" .. KM.Realm() end
         KM.Print(ns, ns.Forget(who) and ("forgot " .. who .. ".") or ("no character called " .. who .. "."))
     elseif cmd == "export" then
         ns.Export()

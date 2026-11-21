@@ -18,7 +18,7 @@ It's the **Gold > Profit & Loss** page of the King Maker window, first in the Go
 | The page | King Maker window, **Gold > Profit & Loss** (`/pnl` or `/km profit`) |
 | P&L for the last 7 days | The **P&L, 7 days** tile on Home, or hover the crown |
 | Each sale's P&L | The **P&L** column on the Sales Ledger's Sales tab |
-| What you paid for what you hold | **Your cost** in item tooltips, and in Shopping's tooltips and detail pane |
+| What you paid for what you hold | **Your cost** in item tooltips |
 | Cost and "if sold" for everything you own | **Avg cost** and **If sold** on Inventory's Items tab |
 | Settings | King Maker **Settings > Profit & Loss** |
 
@@ -114,7 +114,7 @@ and Holdings, **Search items** by name.
 Then realized per day (green up, red down; a week per bar on All), **where it came from** (auction buys, farmed,
 crafted, opening stock, vendors and trades, deposits lost; click one for those trades) and every item you sold or
 hold. Click an item for
-its lots; right-click for Price History or to add it to a shopping list. Hover any tile for exactly how it's made.
+its lots; right-click for Price History. Hover any tile for exactly how it's made.
 
 **Trades.** **By sale**: every sale (and trade), the lots it used (hover it), its P&L, ROI and how long you held the
 units. **By buy**: every lot (**AH**, **Farmed**, **Quest**, **Crafted**, **DE**, **Trade**, **Vendor**, **Opening**),
@@ -124,8 +124,8 @@ sold** (stock that left without a sale: pending with the days left, used or gone
 
 **Holdings.** What you hold: average cost, cost, worth now, if sold, ROI and age. Underwater items have a red edge and
 **UNDER**; hover one for the price that breaks even, how many are on the auction house and what you listed them at
-("listed at 3g 10s: +38% if they sell", from auctions posted through the auction house's own Post buttons). **List**
-shows only one Shopping list (Oracle's lists too, so a strategy's position at cost is one click). The footer says how
+("listed at 3g 10s: +38% if they sell", from auctions posted through the auction house's own Post buttons). **Show**
+picks all items or only your Price History favorites. The footer says how
 much is untraced, with **Count them as opening stock**.
 
 ## Elsewhere
@@ -134,7 +134,6 @@ much is untraced, with **Count them as opening stock**.
   than the detail Profit & Loss keeps), a **Realized P&L** line on the Summary, and **Still holding** / **Net if sold
   now** worked out from your lots. Its own **Net cash** is cash, not profit: buying stock lowers it, holding it doesn't.
 - **Mailbox**: the line when you close it says what the sales made: "3 sold for 4g 10s (P&L +1g 50s)".
-- **Shopping**: "You hold 7 at 3g 02s each; 2g 85s now after the cut" in the item's tooltip, and your cost in its facts.
 - **Inventory**: **Avg cost** and **If sold** columns on the Items tab.
 - **Home**: **P&L, 7 days** takes the profit tile's place; a note when what you hold is underwater by more than 1g.
 
@@ -217,5 +216,4 @@ Every table returned is a copy. The saved data (`ProfitKingDB`) is described for
 
 ## Tests
 
-`python tests/run.py profit` from `AddOns/King_Maker` runs Profit & Loss with the Scanner, Inventory, the Sales Ledger
-and Shopping against a stand-in for the game (needs `pip install lupa`).
+`python tests/run.py profit` from `AddOns/King_Maker` runs Profit & Loss with the Scanner, Inventory, and the Sales Ledger against a stand-in for the game (needs `pip install lupa`).

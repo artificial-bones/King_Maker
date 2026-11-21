@@ -281,27 +281,6 @@ assert rows[1].key == "Bob Stone-Forever" and rows[1].ready, "ready first"
 assert all(r.key == "Jay-Forever" for r in ns.Entries("here").values())
 print("CROSS OK")
 
-# --- 15. Shopping "Cooldown mats" -----------------------------------------------------------------------------------
-L.execute("for _, e in pairs(CooldownKingDB.chars['Jay-Forever'].cds) do e.ready = NOW - 10 end")
-assert "Cooldown mats" in list(L.eval("ShoppingKing.Lists()").values())
-SH = KM.mods.Shopping
-assert SH.ProviderInfo("Cooldown mats")[0] == "Cooldowns" and SH.IsVirtual("Cooldown mats") and not SH.IsEditable("Cooldown mats"),     "Shopping shows it as a read-only live list from Cooldowns"
-items = {x.itemID: x for x in L.eval("ShoppingKing.Items('Cooldown mats')").values()}
-assert items[14256].qty == 2 * 2 - 1, "Felcloth: 2 a craft, 2 crafts in 7 days, 1 owned"
-assert "Mooncloth x2" in items[14256].note and items[14256].max == 5000
-assert items[12359].qty == 8 and items[12363].qty == 8, ("Arcanite: Jay 1+3 crafts, Bob 1+3", items[12359].qty)
-M.VENDOR_ITEMS[12359] = True
-items = {x.itemID: x for x in L.eval("ShoppingKing.Items('Cooldown mats')").values()}
-assert 12359 not in items, "vendor materials left out"
-M.VENDOR_ITEMS[12359] = None
-db().settings.shopScope = "me"
-items = {x.itemID: x for x in L.eval("ShoppingKing.Items('Cooldown mats')").values()}
-assert items[12363].qty == 4, ("this character only", items[12363].qty)
-db().settings.shopScope = "realm"
-assert ns.CraftsAhead(L.eval("{ ready = NOW + 86400 }"), 4 * DAY, 7, NOW()) == 2
-assert ns.CraftsAhead(L.eval("{ ready = NOW + 8 * 86400 }"), 4 * DAY, 7, NOW()) == 0
-print("SHOPPING OK")
-
 # --- 16. the Scanner watches products and materials ------------------------------------------------------------------
 watched = list(KM.mods.Scanner.WatchedItems().values())
 assert 14342 in watched and 14256 in watched and 12360 in watched and 251290 in watched

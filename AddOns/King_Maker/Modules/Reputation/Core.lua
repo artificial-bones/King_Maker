@@ -320,18 +320,10 @@ function ns.CharName(c, key) return (c and c.name) or (key and key:match("^(.-)%
 -- The daily reset
 ---------------------------------------------------------------------------
 
--- Seconds until the daily quest reset, from the game (never hard-coded). Second value: true when guessed.
+-- Seconds until the daily reset: 10 a.m. New York time (KM.SecondsToDailyReset, Core.lua). Second value: true when
+-- guessed (never, since 2.14.0; kept for callers).
 function ns.SecondsToReset()
-    if C_DateAndTime and C_DateAndTime.GetSecondsUntilDailyReset then
-        local s = call(C_DateAndTime.GetSecondsUntilDailyReset)
-        if type(s) == "number" and s > 0 and not secret(s) then return s, false end
-    end
-    if GetQuestResetTime then
-        local s = call(GetQuestResetTime)
-        if type(s) == "number" and s > 0 and not secret(s) then return s, false end
-    end
-    local now = ns.Now()
-    return (math.floor(now / DAY) + 1) * DAY - now, true   -- no API: the next UTC midnight, a guess
+    return KM.SecondsToDailyReset(ns.Now()), false
 end
 
 function ns.DayEnd()
@@ -443,7 +435,7 @@ function ns.Snapshot()
     if not ns.db then return end
     local c, key = ns.Me()
     c.name = KM.PlayerName()
-    c.realm = (GetRealmName and GetRealmName()) or c.realm or ""
+    c.realm = KM.Realm() or (c.realm ~= "" and c.realm) or ""
     if UnitClass then
         local _, class = UnitClass("player")
         c.class = class or c.class

@@ -47,7 +47,7 @@ end
 
 -- Every other character that can be mailed from this one: { key, name, class, level, gold }.
 function ns.Alts()
-    local mine, realm = ns.Char(), GetRealmName and GetRealmName() or ""
+    local mine, realm = ns.Char(), KM.Realm() or ""
     local faction = UnitFactionGroup and UnitFactionGroup("player")
     local seen, out = {}, {}
     local function add(key, c)

@@ -593,4 +593,63 @@ L.execute("ScannerKing = { GetMarketPrice = function(id) if id == 2318 then retu
 assert KM.ItemValue(2318) == (95, "ah"), "the AH after its 5% cut, when that beats the vendor"
 print("CHARTS OK")
 
+# --- 2.14.0: the realm hotfix (GetRealmName comes back empty) -----------------------------------------------------
+# Saved before the hotfix under "Jay Smith-Forever"; one session since then saved under "Jay Smith" (no realm), with
+# a stray P&L pool "-Alliance" whose opening stock duplicates what the real pool holds, and a guild list "Kings-".
+SEED_R = """
+PLAYER.surname = "Smith"; PLAYER.realm = ""
+NOW = 1795200000
+InventoryKingDB = { chars = { ["Jay Smith-Forever"] = { gold = 500, faction = "Alliance" }, ["Bob Stone-Forever"] = { gold = 1, faction = "Alliance" },
+                              ["Jay Smith"] = { gold = 700, faction = "Alliance" } },
+                    stock = { ["Jay Smith-Forever"] = { [2589] = 5 }, ["Jay Smith"] = { [2770] = 3 } }, history = {} }
+RestedKingDB = { chars = { ["Jay Smith-Forever"] = { level = 42 }, ["Jay Smith"] = { level = 43 } } }
+ProfitKingDB = { version = 2, home = "Forever-Alliance", pools = {
+  ["Forever-Alliance"] = { chars = { "Jay Smith-Forever", "Bob Stone-Forever" }, items = { [2589] = { e = { "10:1795000000:b:5:500" } } }, seen = {}, months = {} },
+  ["-Alliance"] = { chars = { "Jay Smith" }, items = {
+     [2589] = { e = { "20:1795100000:o:5:500:500::bags", "21:1795100100:y:2:::1:to/Bob Stone", "22:1795100200:s:1:150::1" } } }, seen = { ["Jay Smith"] = {} }, months = {} } } }
+BlacklistKingDB = { lists = { ["Kings-Forever"] = { entries = { ["evil"] = { n = "Evil" } } }, ["Kings-"] = { entries = { ["bad"] = { n = "Bad" } } } },
+                    chars = { ["Jay Smith"] = "Kings-" } }
+"""
+LR, KMR = fresh(seed=SEED_R, only=["Scanner", "Inventory", "Rested", "Profit", "Blacklist"])
+assert KMR.Realm() == "Forever" and KMR.Char() == "Jay Smith-Forever", KMR.Char()
+assert LR.eval("KingMakerDB.realm") == "Forever", "read back from the saved keys, then kept"
+assert LR.eval("InventoryKingDB.chars['Jay Smith']") is None and LR.eval("InventoryKingDB.chars['Jay Smith-Forever'] ~= nil")
+assert LR.eval("InventoryKingDB.stock['Jay Smith-Forever'][2770]") == 3, "what only the stray entry had is kept"
+assert LR.eval("RestedKingDB.chars['Jay Smith']") is None
+pools = LR.eval("ProfitKingDB.pools")
+assert pools["-Alliance"] is None and LR.eval("ProfitKingDB.home") == "Forever-Alliance"
+ev = list(LR.eval("ProfitKingDB.pools['Forever-Alliance'].items[2589].e").values())
+assert ev[0] == "10:1795000000:b:5:500" and not any(":o:" in e for e in ev), ev
+assert any(":y:2:::" in e and "alt/Bob Stone-Forever" in e for e in ev), ("mail to an alt is an alt move", ev)
+assert any(e.startswith("22:1795100200:s:1:150::1") for e in ev), ev
+assert LR.eval("BlacklistKingDB.lists['Kings-']") is None and LR.eval("BlacklistKingDB.lists['Kings-Forever'].entries.bad.n") == "Bad"
+assert LR.eval("BlacklistKingDB.chars['Jay Smith-Forever']") == "Kings-Forever"
+# the realm comes back: it's kept, and wins
+LR.execute('PLAYER.realm = "Forever"'); assert KMR.Realm() == "Forever"
+# a fresh install after the hotfix: no realm anywhere, keys have none (and stay stable)
+LN, KMN = fresh(seed='PLAYER.surname = "Smith"; PLAYER.realm = ""', only=["Inventory"])
+assert KMN.Realm() is None and KMN.Char() == "Jay Smith"
+assert not KMR.errorShown and not KMN.errorShown
+print("REALM HOTFIX OK")
+
+# --- the daily reset: 10 a.m. New York time, daylight saving included ------------------------------------------------
+from datetime import datetime, timezone
+def utc(*a): return int(datetime(*a, tzinfo=timezone.utc).timestamp())
+for now, want in [
+    (utc(2026, 11, 21, 12), utc(2026, 11, 21, 15)),   # 7 a.m. EST: today at 10
+    (utc(2026, 11, 21, 15), utc(2026, 11, 22, 15)),   # right at the reset: tomorrow's
+    (utc(2026, 11, 21, 16), utc(2026, 11, 22, 15)),
+    (utc(2026, 7, 4, 13), utc(2026, 7, 4, 14)),       # summer: 10 a.m. EDT is 14:00 UTC
+    (utc(2026, 3, 7, 16), utc(2026, 3, 8, 14)),       # Saturday 11 a.m. EST -> Sunday 10 a.m., now EDT
+    (utc(2026, 3, 8, 6), utc(2026, 3, 8, 14)),        # 1 a.m. EST on the change day
+    (utc(2026, 10, 31, 15), utc(2026, 11, 1, 15)),    # Saturday 11 a.m. EDT -> Sunday 10 a.m., now EST
+    (utc(2027, 3, 13, 16), utc(2027, 3, 14, 14)),     # 2027's change: March 14
+    (utc(2028, 3, 11, 16), utc(2028, 3, 12, 14)),     # leap year: March 12
+    (utc(2028, 12, 31, 20), utc(2029, 1, 1, 15)),     # over the new year
+]:
+    got = KM.NextDailyReset(now)
+    assert got == want, (now, got, want, datetime.fromtimestamp(got, timezone.utc))
+    assert KM.SecondsToDailyReset(now) == want - now
+print("DAILY RESET OK")
+
 print("core: ok")

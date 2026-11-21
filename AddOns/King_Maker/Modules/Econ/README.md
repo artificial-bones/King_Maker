@@ -17,7 +17,8 @@ King 1.x history, favorites and settings move in by themselves.
 |---|---|
 | The list and every item's page | King Maker window, **Auction House > Price History** (`/ek` or `/km history`) |
 | Open it from the minimap | Right-click the King Maker crown: **Price History** |
-| Tooltip and history settings | King Maker **Settings > Price History** |
+| Your favorites at the auction house | A panel beside it while it's open (**Favorites** brings it back after x) |
+| Tooltip, history and panel settings | King Maker **Settings > Price History** |
 
 ## Getting data in
 
@@ -128,6 +129,24 @@ house loads quickly at login and `/reload`. History from older versions
 converts itself the first time you log in with 2.6.1, a few items a frame; if
 you log out halfway it carries on next time.
 
+## At the auction house: your favorites
+
+While the auction house is open, your favorites sit in a small panel beside it, A to Z, each with its lowest price
+and 7-day trend.
+
+| Do | What happens |
+|---|---|
+| The button on top | **Add** the item the auction house is showing (the one you searched or clicked) to your favorites, or **Remove** it |
+| Click an item | Its name goes into the auction house's search, so it comes up there to buy |
+| **Graph** | Its Price History page: the graph, averages, lows and highs |
+| **x** | Take it off your favorites |
+| Hover | The item's tooltip with its prices, average and trend |
+| Shift-click | Link it in chat |
+
+They're the same favorites as the stars on the Price History page. Close the panel with x; the **Favorites** button
+beside the auction house brings it back. **Settings > Price History** or `/ek panel` turns it on or off. It never buys
+anything.
+
 ## Tooltips
 
 Item tooltips show the Scanner's prices, and under them the 30-day average,
@@ -139,6 +158,7 @@ hides these lines; `/sk tooltip off` hides the Scanner's.
 | `/ek` | Open or close Price History |
 | `/ek item [link]` | Open an item's page |
 | `/ek fav [link]` | Add or remove a favorite |
+| `/ek panel` | Show or hide the Favorites panel at the auction house |
 | `/ek status` | How much history you have and about how much space it takes |
 | `/ek compact` | Sum up old history and forget long-gone items now |
 | `/ek tooltip on` / `off` | Price History's lines in item tooltips |

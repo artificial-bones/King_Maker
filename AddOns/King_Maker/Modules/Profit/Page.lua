@@ -155,7 +155,7 @@ local function col(key, label, w, justify, sort, tip, desc)
 end
 local function byName(r) return nameOf(r.item):lower() end
 
--- A faint red tint and a red left edge on an underwater row (Shopping's deal-row treatment, in red).
+-- A faint red tint and a red left edge on an underwater row.
 local function tint(r, on)
     if not r.pnlTint then
         r.pnlTint = UI.Fill(r, { C.bad[1], C.bad[2], C.bad[3], 0.07 }, "BACKGROUND", 1)
@@ -297,9 +297,6 @@ local function itemMenu(owner, id)
                 if econ.Toggle then KM.Safe(econ.Toggle, true) end
                 KM.Safe(econ.ShowItem, id)
             end)
-        end
-        if ShoppingKing and ShoppingKing.Add then
-            root:CreateButton("Add to the shopping list", function() KM.Safe(ShoppingKing.Add, id) end)
         end
         root:CreateButton("Print its lots in chat", function() for _, l in ipairs(ns.ItemReport(id)) do KM.Print(ns, l) end end)
     end)
@@ -805,12 +802,26 @@ local function holdEnter(r)
     GameTooltip:Show()
 end
 
+-- Price History's favorites as a set { [itemID] = true }, or nil without Price History.
+local function favorites()
+    local e = KM.mods.Econ
+    local fav = e and e.db and e.db.fav
+    if type(fav) ~= "table" then return nil end
+    local out = {}
+    for id, on in pairs(fav) do if on then out[id] = true end end
+    return out
+end
+
+-- The holdings filter: nil (all items) or "Favorites". Older saves may hold a Shopping list's name: all items.
+local function listFilter()
+    return U().list == "Favorites" and favorites() and "Favorites" or nil
+end
+
 local function listMenu(_, root)
     root:CreateTitle("Show")
-    root:CreateRadio("All items", function() return U().list == nil end, function() U().list = nil; KM.Refresh("profit") end)
-    local lists = ShoppingKing and ShoppingKing.Lists and KM.Safe(ShoppingKing.Lists) or {}
-    for _, name in ipairs(lists) do
-        root:CreateRadio("List: " .. name, function() return U().list == name end, function() U().list = name; KM.Refresh("profit") end)
+    root:CreateRadio("All items", function() return listFilter() == nil end, function() U().list = nil; KM.Refresh("profit") end)
+    if favorites() then
+        root:CreateRadio("Favorites", function() return U().list == "Favorites" end, function() U().list = "Favorites"; KM.Refresh("profit") end)
     end
 end
 
@@ -851,11 +862,11 @@ local function buildHoldings(c)
         dl(tt, "7 to 30 days", KM.Commas(a[2]))
         dl(tt, "Over 30 days", KM.Commas(a[3]))
     end)
-    P.listBtn = UI.MenuButton(v, 150, function() return U().list and ("List: " .. U().list) or "List: All items" end, listMenu)
+    P.listBtn = UI.MenuButton(v, 150, function() return listFilter() and "Show: Favorites" or "Show: All items" end, listMenu)
     P.listBtn:SetPoint("TOPRIGHT", 0, 0)
     UI.Tip(P.listBtn, function(tt)
         tt:AddLine("Which items")
-        tt:AddLine("Everything, or only the items on one Shopping list (Oracle's live lists too: a strategy's position at cost).", 1, 1, 1, true)
+        tt:AddLine("Everything, or only your Price History favorites.", 1, 1, 1, true)
     end)
     P.holdTable = makeTable(v, "hold", HOLD_COLS, 20, { "ifSold", true }, fillHold, holdEnter,
         function(h, which, r) if which == "RightButton" then itemMenu(r, h.item) else ns.ShowItemLots(h.item) end end)
@@ -871,11 +882,7 @@ end
 
 local function refreshHoldings()
     local mine = charKey()
-    local only
-    if U().list and ShoppingKing and ShoppingKing.Items then
-        only = {}
-        for _, it in ipairs(KM.Safe(ShoppingKing.Items, U().list) or {}) do if it.itemID then only[it.itemID] = true end end
-    end
+    local only = listFilter() and favorites() or nil
     local rows = {}
     for _, h in ipairs(ns.Holdings(nil, mine, only)) do if matches(h.item) then rows[#rows + 1] = h end end
     local S = { held = 0, cost = 0, worth = 0, ifSold = 0, under = 0, underLoss = 0, untraced = 0, untracedWorth = 0, noPrice = 0, ages = { 0, 0, 0 } }
@@ -898,7 +905,7 @@ local function refreshHoldings()
     local a = C.accent
     P.ageBar:Set({ { S.ages[1] / total, { a[1], a[2], a[3], 1 } }, { S.ages[2] / total, { a[1], a[2], a[3], 0.6 } }, { S.ages[3] / total, { a[1], a[2], a[3], 0.3 } } })
     P.listBtn:Refresh()
-    P.holdTable.emptyText = (P.search and "Nothing you hold matches the search.") or (U().list and "You hold nothing on this list.")
+    P.holdTable.emptyText = (P.search and "Nothing you hold matches the search.") or (listFilter() and "You hold none of your favorites.")
         or "You hold nothing with a lot yet. Purchases, loot and opening stock land here."
     P.holdTable:SetRows(rows)
     local inv = hasInventory()

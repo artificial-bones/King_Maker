@@ -147,17 +147,17 @@ run("REP[2586].value = 4400; FIRE('UPDATE_FACTION')")
 assert me().rep[ACA].v == 4400 and ns.RepToday(me()) == 400, "the bar moved more (a receipt too)"
 assert len(list(me().snaps[ACA].values())) == 1 and me().snaps[ACA][1].v == 4400, "one snapshot a day"
 end1 = me().dayEnd
-assert end1 == 1000 + 6 * 3600
-L.execute("COMPLETED = {}; NOW = NOW + 7 * 3600; RESET_IN = 23 * 3600; REP[2586].value = 5400")
+assert end1 == 54000, end1   # NOW 1000 is 7:16 p.m. EST on Dec 31 1969: the next reset is 10 a.m., 15:00 UTC
+L.execute("COMPLETED = {}; NOW = 54000 + 60; REP[2586].value = 5400")
 ns.Tick()
 c = me()
-assert len(list(c.done.keys())) == 0 and c.dayEnd == NOW() + 23 * 3600 and ns.IsToday(c), "rolled over"
+assert len(list(c.done.keys())) == 0 and c.dayEnd == 54000 + 86400 and ns.IsToday(c), "rolled over"
 assert c.dayStart[ACA] == 5400 and ns.RepToday(c) == 0
 assert len(list(c.snaps[ACA].values())) == 2
 pace, span = ns.Pace(c, ACA)
 assert pace == 1000 and span == 1, (pace, span)          # 1,000 rep in 7 hours: a day at the least, never stretched
 b = ns.Badge(); assert b.count == 3, "after the reset every held order counts again"
-L.execute("NOW = NOW + 23 * 3600 + 60; RESET_IN = 24 * 3600 - 60; REP[2586].value = 6400"); ns.Tick()
+L.execute("NOW = NOW + 86400; REP[2586].value = 6400"); ns.Tick()
 L.execute("NOW = NOW + 2 * 86400; REP[2586].value = 8400"); ns.Tick()
 pace, span = ns.Pace(me(), ACA)
 assert pace and 700 < pace < 1500 and span >= 2.9, (pace, span)
@@ -303,7 +303,7 @@ C_QuestLog.IsQuestFlaggedCompleted = nil; GetQuestID = nil
 L4, KM4 = fresh(only=MODS, extra=BARE)
 n4 = KM4.mods.Reputation
 secs, guessed = n4.SecondsToReset()
-assert guessed and 0 < secs <= DAY
+assert not guessed and 0 < secs <= DAY
 c4 = L4.eval("ReputationKingDB.chars['Jay-Forever']")
 assert c4.favor is None and n4.CharStanding(c4) is None and c4.dayEnd
 L4.execute("TURN_IN(94004, false); FIRE('QUEST_COMPLETE'); FIRE('UPDATE_FACTION'); RUN_TIMERS()")

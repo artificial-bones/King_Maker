@@ -728,12 +728,13 @@ lines = [L7.eval("TT.lines")[i] for i in range(1, len(L7.eval("TT.lines")) + 1)]
 assert not any(l.split("|")[0] in ("Vendor", "Drops", "Used in") for l in lines) and row("Auction house"), lines
 print("SECTION OK")
 
-# The crafting rows: best crafts, craft cost and who can craft it, recipe items, disenchant, shopping goal, Shift
-L8, KM8 = fresh(only=["Scanner", "Econ", "Farm", "Market", "Inventory", "Shopping"], seed="""
+# The crafting rows: best crafts, craft cost and who can craft it, recipe items, disenchant, Shift
+L8, KM8 = fresh(only=["Scanner", "Econ", "Farm", "Market", "Inventory"], seed="""
 ITEM(13463, "Dreamfoil", { sell = 100, class = 7, subclass = 9 })
 ITEM(99004, "Fake Elixir", { sell = 10 }); ITEM(99006, "Fake Cloth", { sell = 10 }); ITEM(99008, "Fake Flask", { sell = 10 })
 ITEM(99002, "Fake Potion", { sell = 10 })
 ITEM(99100, "Green Boots", { quality = 2, ilvl = 20, class = 4, sell = 50 })
+ITEM(99101, "Unlisted Green Gloves", { quality = 2, ilvl = 20, class = 4, sell = 50 })
 local now = (GetServerTime and GetServerTime() or time())
 ScannerKingDB = { prices = {
   [13463] = { p = 3589, t = now }, [99002] = { p = 50000, t = now }, [99004] = { p = 9000, t = now },
@@ -810,10 +811,14 @@ assert row8(hover8(eitem), "Teaches") and "Enchanting" in row8(hover8(eitem), "T
 lines = hover8(99100)
 assert lines[1] == "King Maker|DISENCHANT" and lines[2].startswith("Disenchant it: about "), lines
 assert row8(lines, "Disenchant").startswith("Disenchant|about "), lines
-
-# On a shopping list: have / want
-L8.execute("ShoppingKing.Add(13463, 20, nil, 'Favorites')"); KM8.mods.Scanner.ClearTooltipCache()
-assert row8(hover8(13463), "Shopping list") == "Shopping list|Favorites: 12 / 20"
+# The disenchant value is after the cut, like the auction house's: 0.75*2.5 + 0.20*1.5 + 0.05*1 at 10s each = 22s 25c, 5% off
+de8 = KM8.mods.Market.DisenchantValue(99100)[0]
+assert abs(de8 - 2225) < 1e-6, de8
+assert row8(lines, "Disenchant") == "Disenchant|about " + L8.eval("ScannerKing.FormatMoney(2113)"), lines
+# Gear nobody lists (no auction price): still a section, with the vendor-or-disenchant verdict
+lines = hover8(99101)
+assert lines[1] == "King Maker|DISENCHANT" and "more than vendoring" in lines[2], lines
+assert row8(lines, "Disenchant") and not row8(lines, "Auction house"), lines
 
 # /sk tip turns a row off
 sk8("tip crafts off"); assert L8.eval("ScannerKingDB.ui.tip.crafts") is False

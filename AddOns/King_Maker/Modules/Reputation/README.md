@@ -39,7 +39,7 @@ All 150 once is 19,875 rep. Orders never give Merchant's Favor; filled crates an
 | **Done today** | Orders this character turned in since the daily reset |
 | **To turn in** | Orders you hold and can still turn in today (the red count) |
 | **Rep today** | Rep with the supply faction since the reset (receipts included) |
-| **Reset in** | Time to the daily reset, from the game |
+| **Reset in** | Time to the daily reset: 10 a.m. Eastern (US daylight saving included) |
 | **Standing** | Your standing, rep to the next one, and the days to get there at your 7-day pace |
 | **Progress strip** | The bar, your rep a day, Merchant's Favor and what the next standing unlocks (hover it for the whole list) |
 

@@ -380,38 +380,6 @@ function ns.Headline(c, mode)
 end
 
 ---------------------------------------------------------------------------
--- Shopping
----------------------------------------------------------------------------
-
--- What you're short of for the card's crafts: auction house items, and vendor items (bought from a vendor instead).
-function ns.Missing(c)
-    local ah, vendor = {}, {}
-    for _, m in ipairs(c and c.mats or {}) do
-        local short = m.need - (m.have or 0)
-        if short > 0 then
-            table.insert(m.vendor and vendor or ah, { id = m.id, n = short, unit = m.unit })
-        end
-    end
-    return ah, vendor
-end
-
-function ns.ShoppingAvailable()
-    return type(ShoppingKing) == "table" and type(ShoppingKing.Add) == "function"
-end
-
--- Adds the missing auction house materials to the Shopping list "Crafting". Returns items added, vendor items skipped.
-function ns.AddMissing(c)
-    if not ns.ShoppingAvailable() then return 0, {} end
-    local ah, vendor = ns.Missing(c)
-    local added = 0
-    for _, m in ipairs(ah) do
-        local ok = pcall(ShoppingKing.Add, m.id, m.n, m.unit and math.ceil(m.unit) or nil, "Crafting")
-        if ok then added = added + 1 end
-    end
-    return added, vendor
-end
-
----------------------------------------------------------------------------
 -- All crafts: every recipe you know in this profession, ranked by what you'd make now
 ---------------------------------------------------------------------------
 

@@ -70,6 +70,63 @@ end
 
 function KM.Now() return (GetServerTime and GetServerTime()) or time() end
 
+-- The daily reset (Supply Writs, Reals): 10:00 in New York, so 15:00 UTC in winter and 14:00 UTC under US daylight
+-- saving (2 a.m. on the second Sunday of March to 2 a.m. on the first Sunday of November). Worked out from the
+-- server's clock, not asked of the game: GetQuestResetTime doesn't match when Forever's dailies reset.
+KM.RESET_HOUR = 10
+local DAY = 86400
+
+local function daysFromCivil(y, m, d) -- days since 1970-01-01 (Howard Hinnant's algorithm)
+    if m <= 2 then y = y - 1 end
+    local era = math.floor(y / 400)
+    local yoe = y - era * 400
+    local mp = (m + 9) % 12
+    local doy = math.floor((153 * mp + 2) / 5) + d - 1
+    local doe = yoe * 365 + math.floor(yoe / 4) - math.floor(yoe / 100) + doy
+    return era * 146097 + doe - 719468
+end
+
+local function yearOf(t) -- the UTC year of epoch seconds t
+    local z = math.floor(t / DAY) + 719468
+    local era = math.floor(z / 146097)
+    local doe = z - era * 146097
+    local yoe = math.floor((doe - math.floor(doe / 1460) + math.floor(doe / 36524) - math.floor(doe / 146096)) / 365)
+    local doy = doe - (365 * yoe + math.floor(yoe / 4) - math.floor(yoe / 100))
+    local mp = math.floor((5 * doy + 2) / 153)
+    return yoe + era * 400 + ((mp >= 10) and 1 or 0)
+end
+
+local function nthSunday(y, m, n) -- day number of the nth Sunday of a month
+    local first = daysFromCivil(y, m, 1)
+    local wd = (first + 4) % 7 -- 0 = Sunday (day 0, 1970-01-01, was a Thursday)
+    return first + (7 - wd) % 7 + 7 * (n - 1)
+end
+
+-- Hours New York is behind UTC at epoch seconds t: 4 under daylight saving, else 5.
+function KM.EasternOffset(t)
+    local y = yearOf(t)
+    local from = nthSunday(y, 3, 2) * DAY + 7 * 3600  -- 2 a.m. EST
+    local to = nthSunday(y, 11, 1) * DAY + 6 * 3600   -- 2 a.m. EDT
+    return (t >= from and t < to) and 4 or 5
+end
+
+-- Server time of the next daily reset after now (default: the server's clock).
+function KM.NextDailyReset(now)
+    now = now or KM.Now()
+    local off = KM.EasternOffset(now)
+    local localNow = now - off * 3600
+    local at = math.floor(localNow / DAY) * DAY + KM.RESET_HOUR * 3600
+    if at <= localNow then at = at + DAY end
+    local t = at + KM.EasternOffset(at + off * 3600) * 3600 -- the offset on the reset's own day
+    if t <= now then t = t + DAY end
+    return t
+end
+
+function KM.SecondsToDailyReset(now)
+    now = now or KM.Now()
+    return KM.NextDailyReset(now) - now
+end
+
 -----
 -- Your character's name
 -----
@@ -86,9 +143,39 @@ function KM.PlayerName()
     return first
 end
 
+-- The realm's name. Since the November 2026 hotfix (realm IDs hidden to stop layer-hopping addons) GetRealmName can
+-- come back empty, so the last one the game told us is kept in KingMakerDB.realm. With none saved yet (the hotfix
+-- landed before this was kept), it's read back from this character's own saved keys ("First Last-Realm") in the
+-- modules. nil when nothing knows it (a brand-new install after the hotfix): keys then have no realm part.
+local function savedRealm()
+    if type(KingMakerDB) ~= "table" then return nil end
+    if type(KingMakerDB.realm) == "string" and KingMakerDB.realm ~= "" then return KingMakerDB.realm end
+    local me = KM.PlayerName() .. "-"
+    for _, m in ipairs(KM.order or {}) do
+        local chars = type(m.db) == "table" and m.db.chars
+        if type(chars) == "table" then
+            for k in pairs(chars) do
+                if type(k) == "string" and k:sub(1, #me) == me and #k > #me then
+                    KingMakerDB.realm = k:sub(#me + 1)
+                    return KingMakerDB.realm
+                end
+            end
+        end
+    end
+end
+
+function KM.Realm()
+    local live = GetRealmName and GetRealmName()
+    if type(live) == "string" and live ~= "" then
+        if type(KingMakerDB) == "table" then KingMakerDB.realm = live end
+        return live
+    end
+    return savedRealm()
+end
+
 local function withRealm(name)
-    local realm = GetRealmName and GetRealmName() or ""
-    return realm ~= "" and (name .. "-" .. realm) or name
+    local realm = KM.Realm()
+    return realm and (name .. "-" .. realm) or name
 end
 
 -- This character as "First Last-Realm".
@@ -130,8 +217,16 @@ function KM.RenameChar()
     local first, last = UnitName("player")
     if not first or first == "Unknown" or type(last) ~= "string" or last == "" then return end
     local old, new = KM.OldChar(), KM.Char()
+    -- Saved while the realm came back empty (the November 2026 hotfix): "First Last" and "First Last-".
+    local bare = KM.PlayerName()
+    local strays = KM.Realm() and { bare, bare .. "-" } or {}
     for _, m in ipairs(KM.order) do
-        if m.RenameChar and m.db then KM.Safe(m.RenameChar, old, new) end
+        if m.RenameChar and m.db then
+            KM.Safe(m.RenameChar, old, new)
+            for _, s in ipairs(strays) do
+                if s ~= new then KM.Safe(m.RenameChar, s, new) end
+            end
+        end
     end
 end
 
@@ -157,7 +252,7 @@ function KM.Money(c, plain)
     return out
 end
 
--- Compact money for tables and tiles (tooltips use the exact KM.Money); Shopping's rules, shared since 2.7:
+-- Compact money for tables and tiles (tooltips use the exact KM.Money):
 --   nil -> grey dash; >= 1000g -> "1,234g"; >= 1g -> "3g 45s" (rounded to the silver, "0s" left out);
 --   >= 1s -> "45s 9c"; less -> "9c"; negative -> a leading minus. plain = no coin colours.
 local COIN = { g = "|cffffd700g|r", s = "|cffc7c7cfs|r", c = "|cffeda55fc|r" }

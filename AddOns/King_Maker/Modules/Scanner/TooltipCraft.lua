@@ -3,14 +3,13 @@ local ns = KM.Module("Scanner")
 
 -- The crafting rows of King Maker's tooltip section (Tooltip.lua lays them out). Everything here is read from the
 -- other modules through KM.mods (same addon): Market (recipes and enchants, patterns, reagent costs, disenchanting,
--- your characters' skills and known recipes), Shopping (lists), Inventory (counts, names).
+-- your characters' skills and known recipes), Inventory (counts, names).
 -- Every function returns nil when a module or the data isn't there, and the caller pcalls it.
 --
 --   ns.TipBestCrafts(id)  the 3 most valuable things made from it: { { item, value, profit }, ... }
 --   ns.TipMake(id)        a crafted end product: materials for one, its price, the profit after the cut, who can make it
 --   ns.TipPattern(id)     a recipe item: what it teaches, who knows it, who can learn it
 --   ns.TipDisenchant(id)  what disenchanting one is worth on average
---   ns.TipGoal(id)        on a shopping list: "Favorites: 12 / 20"
 
 local CUT = 0.95
 local TOP = 3
@@ -220,16 +219,3 @@ function ns.TipDisenchant(id)
     return v and v > 0 and v or nil
 end
 
--- On a shopping list: "Favorites: 12 / 20", "Raid mats: want 20", or just the list's name.
-function ns.TipGoal(id)
-    if not (ShoppingKing and ShoppingKing.IsWanted) then return nil end
-    local list = ShoppingKing.IsWanted(id)
-    if not list then return nil end
-    local shop = KM.mods.Shopping
-    local e = shop and shop.Find and shop.Find(list, id)
-    local want = e and e.qty
-    if not want then return list end
-    local have = InventoryKing and InventoryKing.GetCount and InventoryKing.GetCount(id) or nil
-    if have then return list .. ": " .. have .. " / " .. want end
-    return list .. ": want " .. want
-end

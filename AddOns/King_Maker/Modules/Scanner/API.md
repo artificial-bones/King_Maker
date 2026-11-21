@@ -96,8 +96,8 @@ ScannerKing.GuildStamp()          -- (2.11) time, name of the newest scan you ho
 ## Who does what
 
 - **Scanner King** owns every auction house scan and the one Scan button.
-- **Gather King**, **Econ King**, **Shopping** and **Market King** only read prices and tell Scanner King
-  what they need: through `Watch` (Gather, Econ favorites, Shopping lists), or `RegisterScanProvider`
+- **Gather King**, **Econ King** and **Market King** only read prices and tell Scanner King
+  what they need: through `Watch` (Gather, Econ favorites), or `RegisterScanProvider`
   (Market King's ticked professions). Every quick scan covers all of them.
 - **Econ King** listens for `SCAN_RESULTS` and keeps every scan as history.
 - **The Farm Tracker** (King Maker 2.6) `Watch`es items in your live session that have no price yet, and values them on

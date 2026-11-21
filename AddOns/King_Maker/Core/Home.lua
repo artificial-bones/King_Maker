@@ -99,7 +99,7 @@ local function build(c)
     H.graph = UI.Chart(H.chart, 400, 150)
     H.graph.frame:SetPoint("TOPLEFT", 4, -32)
 
-    H.att = card(c, "Needs your attention", "What you could do right now: cooldowns ready, deals on your shopping lists, stock losing money, auctions that don't sell, old prices. Click a row to go there.")
+    H.att = card(c, "Needs your attention", "What you could do right now: cooldowns ready, stock losing money, auctions that don't sell, old prices. Click a row to go there.")
     H.att.rows = {}
     H.att.empty = UI.Text(H.att, 13, C.good, "CENTER")
     H.att.empty:SetPoint("CENTER", 0, 8)
@@ -319,7 +319,7 @@ local function drawAttention(w, h)
     H.att.right:SetText(#items > 0 and tostring(#items) or "")
     local none = #items == 0
     H.att.empty:SetText(none and "All clear" or "")
-    H.att.empty2:SetText(none and "Nothing needs you right now. Ready cooldowns, shopping deals, stock losing money and old prices show up here." or "")
+    H.att.empty2:SetText(none and "Nothing needs you right now. Ready cooldowns, stock losing money and old prices show up here." or "")
 end
 
 ---------------------------------------------------------------------------

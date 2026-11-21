@@ -339,7 +339,7 @@ local function buildWrits(c)
         end
     end)
     P.tiles[3]:SetTip("Rep with your supply faction since the reset: how far the bar moved since King Maker first read it today (receipts and the Diplomat perk included), or your writs' rep when that's more.")
-    P.tiles[4]:SetTip("Time to the daily reset, from the game. Then every order can be turned in again.")
+    P.tiles[4]:SetTip("Time to the daily reset (10 a.m. Eastern). Then every order can be turned in again.")
     P.tiles[5]:SetTip("Your standing with the supply faction, rep to the next one, and the days to get there at your pace over the last 7 days (from one reading a day).")
 
     local pr = UI.Panel(c, C.panel)

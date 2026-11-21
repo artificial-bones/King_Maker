@@ -696,7 +696,7 @@ function ns.Holding(pool, id, charKey)
 end
 
 -- Every item you hold (or own untraced) in the pool, by what you'd make selling it now.
--- only: a set { [itemID] = true } (a Shopping list) to keep.
+-- only: a set { [itemID] = true } (your favorites) to keep.
 function ns.Holdings(pool, charKey, only)
     pool = pool or ns.MyPool()
     local out, seen = {}, {}

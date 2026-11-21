@@ -28,7 +28,7 @@ It's the **Farming > Reals** page of the King Maker window (`/reals` or `/km rea
 
 - The loot window says which corpse each item is from, so a Real is credited to that exact boss when you take it
   (or when the window closes and your Reals went up).
-- The day ends at the game's daily reset; then every boss is green again.
+- The day ends at the daily reset, 10 a.m. Eastern (US daylight saving included); then every boss is green again.
 - **The boss list corrects itself.** It starts with every non-rare boss of level 55 and up in Sunken Temple, Blackrock
   Depths, Lower and Upper Blackrock Spire, Dire Maul (all three wings), Scholomance, Stratholme (both sides),
   Blackmaw Hold and Shaper's Terrace. A boss a Real comes from that isn't on it is added (*learned*); a boss looted 3

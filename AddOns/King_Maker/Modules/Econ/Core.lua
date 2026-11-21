@@ -11,10 +11,11 @@ local ns = KM.Module("Econ", { title = "Econ King", short = "Econ", legacy = "Ec
 --   EconKing.GetStats(itemID)   -> the numbers on the item's page (see History.lua), or nil
 --   EconKing.GetHistory(itemID) -> { { t, market, lowest, listed, auctions, added, gone, scans }, ... } oldest first
 --   EconKing.IsFavorite(itemID)
---   EconKing.SetFavorite(itemID, on) -> true when set (the same stars as the page; Shopping's Favorites list)
+--   EconKing.SetFavorite(itemID, on) -> true when set (the same stars as the page and the Favorites panel at the AH)
 --
 -- In King Maker its window is the "history" page (UI.lua: the list, Item.lua: an item's page), opened from
--- Auction House > Price History, the crown's quick actions or /ek.
+-- Auction House > Price History, the crown's quick actions or /ek. At the auction house the favorites also sit in a
+-- panel beside it (Panel.lua): click one to search it there, Graph for its history.
 
 EconKing = { API_VERSION = 1 }
 local API = EconKing
@@ -116,9 +117,10 @@ function API.IsFavorite(id) return ns.db and ns.db.fav[id] == true end
 function ns.SetFavorite(id, on)
     ns.db.fav[id] = on and true or nil
     if ns.Refresh then ns.Refresh() end
+    if ns.RefreshPanel then ns.RefreshPanel() end
 end
 
--- For other modules (Shopping's "Favorites" list is these favorites): one shared set of stars.
+-- For other modules: one shared set of stars.
 function API.SetFavorite(id, on)
     id = tonumber(id)
     if not (ns.db and id) then return false end
@@ -145,6 +147,7 @@ function ns.InitDB()
     db.ui = db.ui or {}
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     if db.ui.tooltip == nil then db.ui.tooltip = true end
+    if db.ui.ahPanel == nil then db.ui.ahPanel = true end -- the Favorites panel beside the auction house (Panel.lua)
     ns.db = db
     wipe(infos)
     if ns.ClearStats then ns.ClearStats() end -- numbers worked out from data that was just replaced
@@ -209,10 +212,13 @@ SlashCmdList.ECONKING = function(msg)
         for _, line in ipairs(ns.StatusLines()) do KM.Print(ns, line) end
     elseif cmd == "compact" then
         ns.CompactNow()
+    elseif cmd == "panel" then
+        ns.TogglePanel()
     else
         KM.Print(ns, "/ek   open the Price History page (or /km history)")
         KM.Print(ns, "/ek item [link]   open an item's page")
         KM.Print(ns, "/ek fav [link]   add or remove a favorite")
+        KM.Print(ns, "/ek panel   show or hide the Favorites panel at the auction house")
         KM.Print(ns, "/ek status   how much history you have and how much space it takes")
         KM.Print(ns, "/ek compact   roll up old history and forget long-gone items now")
         KM.Print(ns, "/ek tooltip [on|off]   averages and trend in item tooltips")

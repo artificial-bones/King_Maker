@@ -89,6 +89,74 @@ function ns.RenameChar(old, new)
         for i, who in ipairs(p.chars or {}) do if who == old then p.chars[i] = new end end
         KM.MoveKey(p.seen, old, new)
     end
+    if ns.MergeStrayPools then KM.Safe(ns.MergeStrayPools) end
+end
+
+-- Since the November 2026 hotfix the realm can come back empty, and for a while that made a pool "-Horde" (no realm)
+-- next to the real "Realm-Horde". Once the realm is known again (KM.Realm) such a pool is folded into the real one:
+--   its opening stock is dropped (it was the stray pool's day one, counting stock the real pool already holds),
+--   mail it called "to/Name" that went to one of your characters becomes "alt/Key",
+--   everything else moves over with its character index remapped, in time order.
+-- With no real pool yet, the stray one is just renamed.
+local OPENING_SNAPSHOT = { bags = true, bank = true, mail = true, start = true }
+function ns.MergeStrayPools()
+    local realm = KM.Realm()
+    if not (realm and ns.db and ns.db.pools) then return end
+    local bare = KM.PlayerName()
+    local function fixWho(who)
+        if who == bare or who == bare .. "-" then return KM.Char() end
+        if type(who) == "string" and who:sub(-1) == "-" then return who .. realm end
+        if type(who) == "string" and not who:find("-", 1, true) and who ~= "Warband" then return who .. "-" .. realm end
+        return who
+    end
+    local strays = {}
+    for key in pairs(ns.db.pools) do
+        if type(key) == "string" and key:match("^%-(.+)$") then strays[#strays + 1] = key end
+    end
+    for _, key in ipairs(strays) do
+        local faction = key:match("^%-(.+)$")
+        do
+            local stray, target = ns.db.pools[key], realm .. "-" .. faction
+            if not ns.db.pools[target] then
+                for i, who in ipairs(stray.chars or {}) do stray.chars[i] = fixWho(who) end
+                local seen = {}
+                for who, s in pairs(stray.seen or {}) do seen[fixWho(who)] = s end
+                stray.seen = seen
+                ns.db.pools[target], ns.db.pools[key] = stray, nil
+            else
+                local p = ns.db.pools[target]
+                for id, rec in pairs(stray.items or {}) do
+                    for _, raw in ipairs(rec.e or {}) do
+                        local e = ns.Unpack(raw)
+                        if not (e.k == "o" and OPENING_SNAPSHOT[e.s or ""]) then
+                            if e.k == "y" and type(e.s) == "string" and e.s:find("^to/") then
+                                local alt = ns.AltKey and ns.AltKey(e.s:sub(4))
+                                if alt then e.s = "alt/" .. alt end
+                            end
+                            local who = stray.chars and e.w and stray.chars[e.w]
+                            if who then e.w = ns.CharIndex(target, fixWho(who)) end
+                            e.raw = nil
+                            local r = ns.ItemRec(target, id, true)
+                            local at = #r.e + 1
+                            while at > 1 and (tonumber(r.e[at - 1]:match("^%d+:(%d+)")) or 0) > (e.t or 0) do at = at - 1 end
+                            table.insert(r.e, at, ns.Pack(e))
+                        end
+                    end
+                end
+                for who in pairs(stray.seen or {}) do
+                    -- the real pool's own snapshot of this character is the one that matches its journal
+                    if p.seen[fixWho(who)] == nil then p.seen[fixWho(who)] = stray.seen[who] end
+                end
+                ns.db.pools[key] = nil
+            end
+            if ns.db.home == key then ns.db.home = target end
+            for i, s in ipairs(ns.db.pend or {}) do
+                if s:sub(1, #key + 1) == key .. "|" then ns.db.pend[i] = target .. s:sub(#key + 1) end
+            end
+            if ns.ClearPools then ns.ClearPools() end
+            if ns.ClearCache then ns.ClearCache() end
+        end
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -113,7 +181,7 @@ function ns.PoolOf(who)
     if not who then return nil end
     if who == "Warband" then return ns.db.home or ns.PoolOf(KM.Char()) end
     if poolCache[who] then return poolCache[who] end
-    local realm = ns.RealmOf(who) or (GetRealmName and GetRealmName()) or "?"
+    local realm = ns.RealmOf(who) or KM.Realm() or "?"
     local faction
     if who == KM.Char() and UnitFactionGroup then faction = UnitFactionGroup("player") end
     if not faction then

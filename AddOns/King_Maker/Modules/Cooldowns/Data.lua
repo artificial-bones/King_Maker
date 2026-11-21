@@ -9,7 +9,7 @@ local ns = KM.Module("Cooldowns", { title = "Cooldown King", short = "Cooldowns"
 --   Core.lua    saved data, reading the game's timers (and which reading to trust), events, the badge, reminders,
 --               /cdk, the CooldownKing API
 --   Money.lua   what each cooldown is worth (Crafting Profits' rules), per week, idle cost, pace; the Scanner
---               watch list, the Shopping "Cooldown mats" list and the Inventory callback
+--               watch list and the Inventory callback
 --   UI.lua      the page (tiles, table, detail cards, price chart), the toast, the crown's quick action and
 --               tooltip line, the Home tile and note, Settings
 --

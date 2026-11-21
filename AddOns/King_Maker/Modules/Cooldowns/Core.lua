@@ -111,7 +111,6 @@ function ns.InitDB()
     if s.login == nil then s.login = true end
     if s.altChat == nil then s.altChat = false end
     s.days = math.max(1, math.min(14, math.floor(tonumber(s.days) or 7)))
-    if s.shopScope ~= "realm" and s.shopScope ~= "me" then s.shopScope = "realm" end
     db.ui = db.ui or {}
     local u = db.ui
     if u.view ~= "all" and u.view ~= "here" then u.view = "all" end
@@ -228,7 +227,7 @@ function ns.Snapshot()
     if not ns.db then return end
     local c, key = ns.Me()
     c.name = KM.PlayerName()
-    c.realm = (GetRealmName and GetRealmName()) or c.realm or ""
+    c.realm = KM.Realm() or (c.realm ~= "" and c.realm) or ""
     if UnitClass then
         local _, class = UnitClass("player")
         c.class = class or c.class
@@ -746,7 +745,6 @@ function ns.Changed(changed)
     if KM.IsShown("cooldowns") then KM.Refresh("cooldowns") end
     if changed then
         fire("CHANGED")
-        if ns.ShoppingChanged then ns.ShoppingChanged() end
     end
 end
 

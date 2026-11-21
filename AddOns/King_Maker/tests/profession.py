@@ -223,22 +223,6 @@ plus.RunScript(plus, "OnClick", "LeftButton")
 c = ns.card
 assert c.crafts == 2 and c.mats[1].need == 12 and c.costAll == 1200 and c.cost == 600
 
-# Shopping absent: the button is hidden
-shop = L.eval("BTN('Add missing to Shopping', KingMakerProfessionPanel)")
-assert shop is not None and shop.shown is False, "hidden without ShoppingKing"
-# Shopping present: shown, and it calls ShoppingKing.Add for the shortfall (12 needed, 4 owned)
-L.execute("SHOP = {}; ShoppingKing = { Add = function(id, n, max, list) table.insert(SHOP, { id = id, n = n, max = max, list = list }) return true end }")
-ns.Refresh()
-assert shop.shown is True
-shop.RunScript(shop, "OnClick", "LeftButton")
-assert L.eval("#SHOP") == 1, L.eval("#SHOP")
-assert L.eval("SHOP[1].id") == 2840 and L.eval("SHOP[1].n") == 8 and L.eval("SHOP[1].max") == 100 and L.eval("SHOP[1].list") == "Crafting"
-assert "Shopping list" in last(L), last(L)
-# a failing Add does not break the panel
-L.execute("ShoppingKing.Add = function() error('boom') end")
-shop.RunScript(shop, "OnClick", "LeftButton")
-assert not KM.errorShown, last(L)
-L.execute("ShoppingKing = nil")
 ns.SetCrafts(1)
 
 # favorite star and Price History

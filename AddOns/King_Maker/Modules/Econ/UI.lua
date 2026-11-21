@@ -454,6 +454,9 @@ KM.RegisterSettings({ id = "econ", label = "Price History", order = 11, rows = f
         { type = "header", label = "Tooltips" },
         { type = "check", label = "Averages and trend in item tooltips", tip = "The 30-day average, today against it and the weekly trend, under the prices.",
           get = function() return ns.db.ui.tooltip end, set = function(v) ns.db.ui.tooltip = v end },
+        { type = "header", label = "At the auction house" },
+        { type = "check", label = "Favorites panel beside the auction house", tip = "Your favorites next to the auction house: click one to search it there, Graph for its price history, x to remove it. The button on top favorites the item the auction house is showing. Also /ek panel.",
+          get = function() return ns.db.ui.ahPanel end, set = function(v) ns.db.ui.ahPanel = v; if ns.AHOpen and ns.AHOpen() then ns.ShowPanel(v) end end },
         { type = "header", label = "History kept" },
         keepRow("raw", "Keep every scan for", 1, "Every scan's own point, for the 7-day numbers, gone per day and the 7D graph. "
             .. "After this, a day's scans become one point. More days take more space."),
@@ -466,6 +469,6 @@ KM.RegisterSettings({ id = "econ", label = "Price History", order = 11, rows = f
         { type = "text", label = ns.db and table.concat(ns.StatusLines(), "\n") or "" },
         { type = "header", label = "Commands" },
         { type = "text", label = "/ek   open Price History\n/ek item [link]   an item's page\n/ek fav [link]   add or remove a favorite\n"
-            .. "/ek status   how much history you have and its size\n/ek compact   compact now\n/ek tooltip on|off   lines in item tooltips" },
+            .. "/ek panel   the Favorites panel at the auction house\n/ek status   how much history you have and its size\n/ek compact   compact now\n/ek tooltip on|off   lines in item tooltips" },
     }
 end })

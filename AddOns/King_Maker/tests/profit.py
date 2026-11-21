@@ -500,23 +500,6 @@ assert any(x.startswith("P&L, last 7 days|") for x in tl) and not any(x.startswi
 assert not KM.errorShown, last(L)
 print("INTEGRATIONS OK")
 
-# Shopping: the row's basis, the tooltip and detail facts
-L, KM, ns = load(only=["Scanner", "Inventory", "Mail", "Shopping", "Profit"], extra="PRICE(2589, 160)")
-add(L, ns, 2589, "b", t=nov(10), q=7, c=7 * 302, v=7 * 152)
-L.execute("ShoppingKing.Add(2589, 20, 400)")
-shop = KM.mods.Shopping
-e = [x for x in vals(shop.Entries(shop.DEFAULT)) if x.id == 2589][0]
-r = shop.Row(e)
-assert r.basis and r.basis.held == 7 and r.basis.avg == 302, r.basis
-assert shop.BasisText(r.basis).startswith("You hold 7 at "), shop.BasisText(r.basis)
-assert "now after the cut" in shop.BasisText(r.basis)
-shop.SetActive(shop.DEFAULT)
-KM.Show("shopping")
-shop.SelectItem(2589)
-assert L.eval("HASFONT('Your cost')"), "the detail facts"
-assert not KM.errorShown, last(L)
-print("SHOPPING OK")
-
 # --- 15. Without Inventory ------------------------------------------------------------------------------------------
 L, KM, ns = load(only=["Scanner", "Mail", "Profit"], extra="PRICE(2589, 100)")
 add(L, ns, 2589, "b", t=nov(10), q=5, c=500, v=475)

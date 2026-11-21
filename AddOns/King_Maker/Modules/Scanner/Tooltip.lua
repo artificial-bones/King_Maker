@@ -12,13 +12,13 @@ local API = ns.API
 -- Laid out like a crafting addon's block: light grey labels, white values (API.TooltipLine for providers).
 --   Vendor        what a vendor pays you for one
 --   Vendors sell  what you paid a vendor for one (Crafting Profits saw it)
---   Disenchant    the average value of disenchanting one (also in the verdict: DISENCHANT)
+--   Disenchant    the average value of disenchanting one, after the cut on selling what it gives (also in the
+--                 verdict: DISENCHANT). Gear nobody lists still gets the section when it can be disenchanted.
 --   Materials to craft  crafted gear, potions, bags (not materials): what one costs to make, then whether crafting
 --                 one to sell makes or loses money (or buying is cheaper); You can craft it: who
 --   Teaches       a recipe item: what it teaches, who knows it, who can learn it, whose skill is too low
 --   Drops         the mobs with the best drop chance (Farm: your kills and your guild's, QuestieDB)
 --   Used in       professions with recipes that take it (and, when ticked, the 3 most valuable things made from it)
---   Shopping list on one of your lists: how many you have of how many you want
 --   You own       how many, and on which character (Inventory's provider), then anyone else's lines
 -- The crafting rows come from TooltipCraft.lua. Each group can be switched off (ui.tip, /sk tip), and the short
 -- tooltip shows only the header, verdict, price and what you own until you hold Shift.
@@ -141,7 +141,7 @@ local function extras(id)
     local x = cache[id]
     if not x then
         x = { drops = try(drops, id), uses = try(uses, id), best = try(ns.TipBestCrafts, id), make = try(ns.TipMake, id),
-              pattern = try(ns.TipPattern, id), de = try(ns.TipDisenchant, id), goal = try(ns.TipGoal, id) }
+              pattern = try(ns.TipPattern, id), de = try(ns.TipDisenchant, id) }
         cache[id] = x
     end
     return x
@@ -186,7 +186,7 @@ local function verdict(ah, sell, de)
     local opts = {}
     if ah then opts[#opts + 1] = { "AUCTION", math.floor(ah * CUT) } end
     if sell then opts[#opts + 1] = { "VENDOR", sell } end
-    if de then opts[#opts + 1] = { "DISENCHANT", math.floor(de) } end
+    if de then opts[#opts + 1] = { "DISENCHANT", de } end
     if #opts < 2 then return nil end
     table.sort(opts, function(a, b) return a[2] > b[2] end)
     local best, second = opts[1], opts[2]
@@ -203,13 +203,12 @@ function ns.AddTooltipLines(tt, id)
     local x = extras(id)
     local buy = more and vendorBuy(id)
     local sell = vendorSell(id)
-    local de = on("de") and x.de
+    local de = on("de") and x.de and math.floor(x.de * CUT) -- the dust and essences sell through the auction house too
     local make = on("make") and x.make
     local pattern = on("pattern") and x.pattern
     local best = on("crafts") and x.best
-    local goal = on("goal") and x.goal
     local owned = InventoryKing and InventoryKing.GetCount and select(2, pcall(InventoryKing.GetCount, id))
-    local section = pr or buy or make or pattern or goal or (more and (x.drops or x.uses))
+    local section = pr or buy or de or make or pattern or (more and (x.drops or x.uses))
         or (type(owned) == "number" and owned > 0)
     local brief = section and short()
     if section then
@@ -266,7 +265,6 @@ function ns.AddTooltipLines(tt, id)
                         API.FormatMoney(b.value) .. (b.profit and ("  " .. gain(b.profit)) or ""))
                 end
             end
-            if goal then line(tt, "Shopping list", goal) end
         end
     end
     for owner, fn in pairs(providers) do

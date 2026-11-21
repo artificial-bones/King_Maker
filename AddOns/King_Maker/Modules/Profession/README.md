@@ -30,9 +30,8 @@ For the recipe you have selected, money first:
 - **With Profit & Loss tracking**: **At what you paid** is the profit with the materials you hold counted at what you
   paid for them (farmed ones by P&L's farmed setting), the rest at today's price. **Your last sales** is how many you
   sold in the last 7 days and what they brought each.
-- A crafting **cooldown** line when the recipe has one, a small **price chart**, **Add missing to Shopping** (puts what
-  you're short of on the Shopping list "Crafting"; vendor items are listed in chat instead), the **star** (a Price
-  History favorite) and **History**.
+- A crafting **cooldown** line when the recipe has one, a small **price chart**, the **star** (a Price History
+  favorite) and **History**.
 
 Enchants have nothing to sell, so the card shows what the materials cost.
 

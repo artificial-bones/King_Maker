@@ -14,7 +14,7 @@ It's the **Crafting > Cooldowns** page of the King Maker window.
 | Ready count | On the sidebar's Cooldowns button: **red** = ready on this character, **gold** = only your alts have one |
 | From the minimap | Right-click the crown: **Cooldowns**. Its tooltip lists the next three |
 | Summary | A **Cooldowns** tile on the King Maker **Home** page |
-| Reminders, the count, the shopping list | King Maker **Settings > Cooldowns** |
+| Reminders and the count | King Maker **Settings > Cooldowns** |
 
 ## What it tracks
 
@@ -54,8 +54,6 @@ line per character and cooldown:
   Click a choice to make it your pick.
 - Right-click a line: what to make, **Stop tracking this cooldown** (it comes back when you craft it), **Forget
   this character**.
-- **Shopping: a week of mats** opens Shopping on the list **Cooldown mats**: what your characters on this realm
-  and faction need for the next 7 days, minus what you own anywhere. It fills itself.
 - Profit follows Crafting Profits' **Buying mats / Farming mats** setting. Every product and material is priced in
   every Scan, ticked on Crafting Profits or not.
 - The Profession panel shows a **Cooldown** line for these recipes, and Crafting Profits tags them **CD 4d**.
@@ -77,8 +75,6 @@ line per character and cooldown:
 | Chat line, pop-up, sound when a cooldown is ready | on |
 | At login, list what's ready on your alts | on |
 | Tell me when an alt's cooldown is ready | off |
-| Shopping list covers the next N days | 7 |
-| Shopping list counts: Realm and faction / This character | Realm and faction |
 | Forget characters not seen in 90 days | button |
 
 ## Commands

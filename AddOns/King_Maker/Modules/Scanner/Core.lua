@@ -161,10 +161,11 @@ function ns.InitDB()
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     if db.ui.tooltip == nil then db.ui.tooltip = true end
     if db.ui.sources == nil then db.ui.sources = true end -- tooltip: Vendor, Drops, Used in
-    db.ui.tip = db.ui.tip or {} -- tooltip rows: best crafts, craft cost, recipe items, disenchant, shopping goal, short
-    for k, v in pairs({ crafts = false, make = true, pattern = true, de = true, goal = true, short = false }) do
+    db.ui.tip = db.ui.tip or {} -- tooltip rows: best crafts, craft cost, recipe items, disenchant, short
+    for k, v in pairs({ crafts = false, make = true, pattern = true, de = true, short = false }) do
         if db.ui.tip[k] == nil then db.ui.tip[k] = v end
     end
+    db.ui.tip.goal = nil -- 2.14.0: the Shopping list row went with Shopping
     if (db.ui.tipVersion or 1) < 2 then -- 2.5.0: the 3 best crafts under Used in crowded the tooltip; off by default
         db.ui.tip.crafts = false
         db.ui.tipVersion = 2
@@ -207,7 +208,7 @@ SlashCmdList.SCANNERKING = function(msg)
             else ns.db.ui.tip[key] = not ns.db.ui.tip[key] end
             KM.Print(ns, "Tooltip " .. key .. ": " .. (ns.db.ui.tip[key] and "on." or "off."))
         else
-            KM.Print(ns, "/sk tip crafts|make|pattern|de|goal|short [on|off]")
+            KM.Print(ns, "/sk tip crafts|make|pattern|de|short [on|off]")
         end
     elseif cmd == "sources" then
         local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
@@ -255,7 +256,7 @@ SlashCmdList.SCANNERKING = function(msg)
         KM.Print(ns, "/sk market   force a quick scan of those plus the professions ticked on Crafting Profits")
         KM.Print(ns, "/sk tooltip [on|off]   prices in item tooltips")
         KM.Print(ns, "/sk sources [on|off]   vendor price, drops and recipes in item tooltips")
-        KM.Print(ns, "/sk tip crafts|make|pattern|de|goal|short [on|off]   more tooltip rows; short = details with Shift")
+        KM.Print(ns, "/sk tip crafts|make|pattern|de|short [on|off]   more tooltip rows; short = details with Shift")
         KM.Print(ns, "/sk status   how many prices you have and how old")
         KM.Print(ns, "/sk sync [on|off]   share prices with your guild now, or turn sharing on/off")
         KM.Print(ns, "/sk sync pull   ask the guild for a newer scan than yours (done by itself at login)")

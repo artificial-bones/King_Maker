@@ -141,7 +141,7 @@ assert L.eval("RealsKing.GotToday(%d)" % WITHER) is True and L.eval("RealsKing.G
 got, left, dl = L.eval("{ RealsKing.Today() }").values()
 assert got == 4 and dl >= 11, (got, left, dl)
 assert L.eval("RealsKing.Held()") == (9, 250)
-L.execute("NOW = NOW + 7 * 3600; RESET_IN = 17 * 3600")   # past the reset
+L.execute("NOW = NOW + %d" % (KM.SecondsToDailyReset() + 60))   # past the reset (10 a.m. Eastern)
 assert not ns.Got(me(), WITHER) and L.eval("RealsKing.Today()")[0] == 0
 ns.CheckDay(me()); assert len(list(me().got.keys())) == 0
 print("RESET OK")

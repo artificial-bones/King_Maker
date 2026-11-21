@@ -192,8 +192,6 @@ local function buildCard(parent)
     end
     card.sparkLabel = UI.Text(ch, 9, C.dim)
 
-    card.shop = UI.Button(ch, "Add missing to Shopping", 170, 22, function() ns.ShopMissing() end, "primary")
-    UI.Tip(card.shop, "Adds the materials you're short of (for the crafts above) to the Shopping list \"Crafting\", at today's price as the most to pay. Vendor items are left out.")
     card.fav = UI.Button(ch, "", 26, 22, function() ns.ToggleFavorite() end)
     card.fav.icon = card.fav:CreateTexture(nil, "OVERLAY")
     card.fav.icon:SetSize(14, 14)
@@ -504,14 +502,6 @@ local function drawCard()
     y = drawSpark(c.history, y)
 
     local x = 0
-    local canShop = ns.ShoppingAvailable()
-    card.shop:SetShown(canShop)
-    if canShop then
-        at(card.shop, 0, y)
-        local ah = ns.Missing(c)
-        card.shop:SetEnabled2(#ah > 0)
-        x = 176
-    end
     local canFav = c.item and EconKing and EconKing.IsFavorite and KM.mods.Econ and KM.mods.Econ.SetFavorite
     card.fav:SetShown(canFav and true or false)
     if canFav then
@@ -695,21 +685,6 @@ function ns.Pin(spell)
     lastKey = a and a:current() or lastKey
     ns.pinned = sel
     ns.pinnedSelected = selected
-    ns.Refresh()
-end
-
-function ns.ShopMissing()
-    local c = ns.card
-    if not c then return end
-    local added, vendor = ns.AddMissing(c)
-    local msg = added > 0 and ("added " .. added .. " material(s) for " .. ns.ItemText(c.item, c.name) .. " to the Shopping list \"Crafting\".")
-        or "nothing to add: you have every auction house material."
-    if #vendor > 0 then
-        local names = {}
-        for _, v in ipairs(vendor) do names[#names + 1] = v.n .. "x " .. ns.ItemText(v.id) end
-        msg = msg .. " From a vendor: " .. table.concat(names, ", ") .. "."
-    end
-    KM.Print(ns, msg)
     ns.Refresh()
 end
 

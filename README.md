@@ -4,11 +4,18 @@ One addon for **World of Warcraft: Forever** that does the lot: auction house pr
 profits (with a profit panel beside the profession window), your sales ledger, profit and loss on every trade, everything you own
 and your net worth, which mobs
 are worth farming, one tracker and ledger for every farming session, gathering spots, crafting cooldowns on every
-character, shopping lists, what quests are worth and rested XP. All of it in one window, one minimap button and
+character, your favorites beside the auction house, what quests are worth and rested XP. All of it in one window, one minimap button and
 one set of auction house prices.
 
 **[Download the latest release](https://github.com/artificial-bones/King_Maker/releases/latest)** (`King_Maker.zip`),
 or install **King Maker** from CurseForge.
+
+## New in 2.14
+
+- **Shopping is gone.** Buying tools will live in their own addons. What stays is the quick part: your **favorites
+  beside the auction house**. One button adds the item you're looking at, **x** removes one, a click searches it,
+  and **Graph** opens its price history. They're the same stars as Price History.
+- Your old shopping lists aren't deleted (they stay in your saved data), but King Maker no longer shows them.
 
 ## New in 2.8
 
@@ -79,7 +86,6 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 | | Home | `/km` | Everything at a glance: net worth, P&L, gold per hour and cooldowns up top, a 30-day chart, what needs your attention, where your gold came from, the best craft / farm / white item / quest zone right now, and your characters |
 | Auction House | Prices | `/sk` | Scans and today's prices |
 | Auction House | Price History | `/ek` | Every item's price and supply over time |
-| Auction House | Shopping | `/shop` | Lists of what to buy with your max price; deals first; buys at the auction house |
 | Auction House | Sales Ledger | `/mlk` | What you sold and bought, profit, buyers, what isn't selling |
 | Crafting | Crafting Profits | `/mk` | The most profitable crafts for your professions |
 | Crafting | Cooldowns | `/cdk` | Transmutes, Mooncloth and salt on every character, and what they're worth |
@@ -108,7 +114,7 @@ The price engine every other page reads from.
 - **A King Maker section in every item tooltip**: auction house, vendor or disenchant (which pays most, and by how
   much), market price and when it was scanned, the 30-day average and trend, who drops it, what the materials to
   craft it cost and whether crafting one to sell pays, which of your characters can craft it, what a recipe teaches
-  and who can learn it, your shopping-list goal, and how many you own. Each part can be switched off, or held back
+  and who can learn it, and how many you own. Each part can be switched off, or held back
   until you press Shift (the 3 most valuable crafts from a material are there too, off by default).
 - **The price list**, grouped like the auction house, with search and sortable columns.
 - **Guild sharing**: Trade Goods prices go to guildmates running King Maker after every scan, and when you log in
@@ -125,6 +131,9 @@ The long-term memory of the auction house: every scan is kept, so you can see ho
 - **Item pages** with averages, lows and highs, volatility, units leaving per day, and **price and supply graphs**
   over 7 days, 30 days, 90 days, a year or everything, and how price follows supply.
 - **Deals** (at least 20% under the 30-day average), **favorites**, and **Ask guild** to fill gaps between your scans.
+- **Favorites at the auction house** (new in 2.14): a small panel beside it lists your favorites with their lowest
+  price and trend. Click one to search it in the auction house, **Graph** for its price history, **x** to remove it.
+  The button on top adds the item the auction house is showing, or takes it off. `/ek panel`.
 
 [Full guide](AddOns/King_Maker/Modules/Econ#readme)
 
@@ -180,7 +189,7 @@ if you'd rather) and its profit is what it brought after the 5% cut minus what t
 - **Holdings**: what you hold at cost and at today's price, the underwater ones marked with the price that breaks
   even, and what you listed on the auction house at.
 - **Farmed items count as free**, or at their value when looted. Day one reads your whole Sales Ledger, so your past
-  flips are matched straight away. A P&L column on the Sales Ledger, your cost in item tooltips, in Shopping and in
+  flips are matched straight away. A P&L column on the Sales Ledger, your cost in item tooltips and in
   Inventory's Items tab.
 
 `/pnl`. [Full guide](AddOns/King_Maker/Modules/Profit#readme)
@@ -255,18 +264,6 @@ Dungeon Quests is gone in 2.4.0: other addons do dungeon quests better.
 
 [Full guide](AddOns/King_Maker/Modules/Quest#readme)
 
-### Shopping
-
-Lists of what you want to buy with your own max price. The page puts deals first (green, biggest saving first) with
-what they cost, how far under your max they are and where the price is heading; the sidebar shows a gold count when
-something is under your max. At the auction house the Shopping panel looks items up, shows how many are listed under
-your max, and buys one click per step: Search all, then Buy, Confirm, Next deal. It never buys on its own, refuses
-anything over your max or your gold, and asks twice before spending a quarter of your gold. Lists from Oracle and
-Cooldowns show live and read-only. After a scan, one line in chat names what's newly under your max. `/shop`,
-`/shop deals`.
-
-[Full guide](AddOns/King_Maker/Modules/Shopping#readme)
-
 ### Cooldowns (new in 2.6)
 
 Every profession cooldown on every character: the transmutes (one shared timer, Forever's Legionite included),
@@ -276,7 +273,7 @@ Mooncloth and the Salt Shaker, plus any other long cooldown your profession wind
   have one), a chat line and a sound when one comes ready, and a login line for your alts.
 - **What it's worth**: the materials and product at today's prices, profit per craft and per week, the best
   transmute right now, and what you own of the materials on every character.
-- **A live "Cooldown mats" shopping list** for the next week of cooldowns. `/cdk`.
+- `/cdk` opens it.
 
 [Full guide](AddOns/King_Maker/Modules/Cooldowns#readme)
 

@@ -5,7 +5,7 @@ local C = UI.C
 
 -- The Cooldowns page (Crafting > Cooldowns, /cdk, /km cooldowns):
 --   tiles       ready now, next up, income a week, lost to idling this week
---   toolbar     Everyone / This character, a profession filter, "Hide not ready", Shopping
+--   toolbar     Everyone / This character, a profession filter, "Hide not ready"
 --   table       one line per character and cooldown: a bar and the time left (READY in green), what to make, profit
 --               each and per week, materials for one craft (here, and on alts)
 --   detail      the selected line: what it sells for, materials, profit, per week, trend, last crafted and pace;
@@ -17,7 +17,7 @@ local TILE_W, TILE_H = 182, 60
 local DETAIL_H = 190
 local TICK = 15
 
-local page, tbl, tiles, tabs, profBtn, readyChk, shopBtn, emptyHint
+local page, tbl, tiles, tabs, profBtn, readyChk, emptyHint
 local detail = {}
 local list = {}
 local ticker
@@ -344,7 +344,7 @@ local function drawDetail()
         detail.status:SetText(grey("Pick a line above to see what it's worth."))
         for _, l in ipairs(L) do l.l:SetText(""); l.v:SetText("") end
         detail.choices:SetRows({})
-        detail.shop:Hide(); detail.hist:Hide()
+        detail.hist:Hide()
         drawChart(nil)
         return
     end
@@ -399,8 +399,6 @@ local function drawDetail()
         cells.day:SetText(signed(c.perDay) .. grey(" (" .. ns.Duration(c.dur) .. ")"))
     end)
     detail.choices.emptyText = row.unread and "" or "Scan at the auction house for prices."
-    local canShop = item and ShoppingKing and ShoppingKing.Add and true or false
-    detail.shop:SetShown(canShop)
     detail.hist:SetShown(item and KM.pages and KM.pages.history and true or false)
     drawChart(item)
 end
@@ -422,7 +420,6 @@ local function refresh()
     tabs:Select(u.view)
     profBtn:Refresh()
     readyChk:SetChecked(u.readyOnly)
-    shopBtn:SetShown(ns.ShoppingAvailable())
     list = ns.Entries(u.view, u.prof, u.readyOnly)
     for _, row in ipairs(list) do
         if not row.unread then
@@ -452,22 +449,6 @@ end
 function ns.Refresh() KM.Refresh("cooldowns") end
 function ns.List() return list end
 function ns.IsTicking() return ticker ~= nil end
-
-function ns.ShopWeek()
-    if not ns.ShoppingAvailable() then return end
-    local items = ns.ShoppingItems()
-    if #items == 0 then
-        KM.Print(ns, "you already own the materials for the next " .. ns.db.settings.days .. " days of cooldowns.")
-    else
-        local parts = {}
-        for i, it in ipairs(items) do
-            if i > 6 then parts[#parts + 1] = "..." break end
-            parts[#parts + 1] = it.qty .. " " .. ns.ItemName(it.itemID)
-        end
-        KM.Print(ns, "the Shopping list \"" .. ns.SHOP_LIST .. "\" has " .. table.concat(parts, ", ") .. ".")
-    end
-    if KM.pages and KM.pages.shopping then KM.Show("shopping") end
-end
 
 ---------------------------------------------------------------------------
 -- Building the page
@@ -505,14 +486,6 @@ local function buildDetail(c)
     detail.status:SetPoint("RIGHT", left, "RIGHT", -8, 0)
     detail.lines = {}
     for i = 1, 7 do detail.lines[i] = line(left, -46 - (i - 1) * 15) end
-    detail.shop = UI.Button(left, "Shopping: " .. "mats", 120, 22, function()
-        local row = detail.row
-        if not row then return end
-        local n = ns.AddToShopping(row.key, row.gk)
-        KM.Print(ns, n > 0 and ("added " .. n .. " material" .. (n == 1 and "" or "s") .. " to the Shopping list \"Crafting\".") or "nothing to add: you have the materials.")
-    end, "primary")
-    detail.shop:SetPoint("BOTTOMLEFT", 10, 8)
-    UI.Tip(detail.shop, "Adds what this cooldown needs for the next days (Settings > Cooldowns) and you don't own anywhere to the Shopping list \"Crafting\".")
     detail.hist = UI.Button(left, "History", 70, 22, function()
         local row = detail.row
         local spell = row and not row.unread and ns.Pick(row.key, row.gk)
@@ -526,7 +499,7 @@ local function buildDetail(c)
             KM.Show("history")
         end
     end)
-    detail.hist:SetPoint("LEFT", detail.shop, "RIGHT", 6, 0)
+    detail.hist:SetPoint("BOTTOMLEFT", 10, 8)
     UI.Tip(detail.hist, "Open the product in Price History.")
 
     local h = UI.Heading(right, "Choices for this cooldown")
@@ -586,9 +559,6 @@ local function buildPage(c)
     profBtn:SetPoint("LEFT", tabs, "RIGHT", 12, 0)
     readyChk = UI.CheckLabel(c, "Hide not ready", function(v) ns.db.ui.readyOnly = v; tbl.offset = 0; ns.Refresh() end)
     readyChk.frame:SetPoint("LEFT", profBtn, "RIGHT", 14, 0)
-    shopBtn = UI.Button(c, "Shopping: a week of mats", 180, 24, function() ns.ShopWeek() end, "primary")
-    shopBtn:SetPoint("TOPRIGHT", 0, y)
-    UI.Tip(shopBtn, "The Shopping list \"Cooldown mats\" fills itself: what your characters need for the next days of cooldowns, minus what you own anywhere. Opens Shopping.")
 
     local function col(key, label, w, justify, sortable, tip)
         return { key = key, label = label, w = w, justify = justify, sort = sortable and function() return 0 end or nil, desc = false, tip = tip }
@@ -784,13 +754,6 @@ KM.RegisterSettings({ id = "cooldowns", label = "Cooldowns", order = 23, rows = 
     { type = "check", label = "At login, list what's ready on your alts", get = get("login"), set = set("login") },
     { type = "check", label = "Tell me when an alt's cooldown is ready", get = get("altChat"), set = set("altChat"),
       tip = "A chat line when a cooldown comes ready on another of your characters while you play this one." },
-    { type = "header", label = "Shopping list \"Cooldown mats\"" },
-    { type = "range", label = "Covers the next", min = 1, max = 14, step = 1, get = get("days"), set = set("days"),
-      fmt = function(v) return v .. (v == 1 and " day" or " days") end,
-      tip = "How many days of crafting the list buys materials for: one craft now if ready, then one each time the cooldown comes back." },
-    { type = "choice", label = "Counts", options = { { "realm", "Realm and faction" }, { "me", "This character" } },
-      get = get("shopScope"), set = set("shopScope"),
-      tip = "Whose cooldowns the list buys for: every character on this realm and faction, or only this one. What you already own anywhere is taken off." },
     { type = "header", label = "Characters" },
     { type = "button", label = "Forget characters not seen in 90 days", tip = "Deletes the cooldowns, picks and craft log of every character (not this one) you haven't logged in on for 90 days.", func = function()
         local n = ns.ForgetOld()
