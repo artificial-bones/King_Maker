@@ -962,7 +962,7 @@ function CHAT_NAME(event, sender, text)
   return name
 end
 
----------------------------------------------------------------- Reputation (2.10)
+---------------------------------------------------------------- Reputation, currencies, daily reset (from 2.10; kept for any test)
 -- Additive. REP[factionID] = { name =, value = rep from Neutral, reaction = standing 1-8 (optional) } feeds
 -- C_Reputation.GetFactionDataByID (the retail table) and GetFactionInfoByID (the classic returns). RESET_IN = seconds
 -- to the daily reset (C_DateAndTime.GetSecondsUntilDailyReset and GetQuestResetTime). CURRENCY[id] = quantity for
@@ -988,7 +988,7 @@ C_CurrencyInfo = { GetCurrencyInfo = function(id) local q = CURRENCY[id]; if q =
 function GetQuestID() return QUEST_ID end
 function TURN_IN(q, flag) if flag ~= false then COMPLETED[q] = true end FIRE("QUEST_TURNED_IN", q, 0, 0) end
 
----------------------------------------------------------------- Reals (King Maker 2.13.0)
+---------------------------------------------------------------- Instances and the currency tab (2.13; Tracker uses INSTANCE_NAME)
 -- Additive. INSTANCE_NAME for GetInstanceInfo (with INSTANCE = true). CURRENCY_LIST = { { name, currencyID, quantity } }
 -- for the currency tab (C_CurrencyInfo.GetCurrencyListSize / GetCurrencyListInfo / GetCurrencyListLink); CURRENCY_MAX[id]
 -- is the cap GetCurrencyInfo reports as maxQuantity.

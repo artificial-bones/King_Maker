@@ -397,6 +397,10 @@ local function pushIdle(e, now)
     e.readySince = nil
 end
 
+-- Entries whose stored timer an item/spell "ready" contradicts: entry -> when that was first seen (this session).
+local doubt = setmetatable({}, { __mode = "k" })
+local DOUBT = 600
+
 -- Writes one reading into a group's entry; true when the stored timer moved.
 function ns.SetReady(c, gk, ready, r)
     local e = c.cds[gk]
@@ -413,6 +417,7 @@ function ns.SetReady(c, gk, ready, r)
             changed = true
         end
     else
+        doubt[e] = nil
         pushIdle(e, now)
         if was == nil or math.abs(was - ready) > 2 then changed = true end
         e.ready = ready
@@ -463,7 +468,17 @@ function ns.ApplyGroup(c, gk, readings, reason)
     elseif ready then
         local fresh = e.est and e.ready and e.ready > now and now - (e.at or 0) < 600   -- the API lags a craft
         local accept = ready.src ~= "spell" or ((ns.db.trust.spell or not e.ready or e.ready <= now) and not fresh)
-        if accept then return ns.SetReady(c, gk, now, ready) end
+        -- A "ready" from the item or spell API against a timer the game itself gave us (not a craft estimate) is a
+        -- blip until it holds: right after a loading screen those APIs read 0 for a moment. Believed once it has
+        -- held for DOUBT seconds with no "on cooldown" reading in between (the recipe window is always believed).
+        if accept and ready.src ~= "recipe" and not e.est and e.ready and e.ready > now + 60 then
+            doubt[e] = doubt[e] or now
+            accept = now - doubt[e] >= DOUBT
+        end
+        if accept then
+            doubt[e] = nil
+            return ns.SetReady(c, gk, now, ready)
+        end
     end
     return false
 end

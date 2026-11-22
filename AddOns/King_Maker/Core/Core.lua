@@ -70,7 +70,7 @@ end
 
 function KM.Now() return (GetServerTime and GetServerTime()) or time() end
 
--- The daily reset (Supply Writs, Reals): 10:00 in New York, so 15:00 UTC in winter and 14:00 UTC under US daylight
+-- The daily reset: 10:00 in New York, so 15:00 UTC in winter and 14:00 UTC under US daylight
 -- saving (2 a.m. on the second Sunday of March to 2 a.m. on the first Sunday of November). Worked out from the
 -- server's clock, not asked of the game: GetQuestResetTime doesn't match when Forever's dailies reset.
 KM.RESET_HOUR = 10

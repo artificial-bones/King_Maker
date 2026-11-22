@@ -214,6 +214,18 @@ ITEM_CD[15846] = { UPTIME - 60, 259200 }
 read("BAG_UPDATE_DELAYED")
 s = me().cds.salt
 assert s and s.src == "item" and s.ready == NOW() + 259200 - 60 and s.known[19566]
+# a loading screen: the item API reads 0/0 for a moment. Not ready, no reminder; a real reading clears the doubt
+n0 = len(outputs(L))
+L.execute("ITEM_CD[15846] = { 0, 0 }"); read("PLAYER_ENTERING_WORLD")
+assert s.ready == NOW() + 259200 - 60 and not s.readySince, "a 0/0 blip doesn't end a 3-day timer"
+assert not any("Refined Salt is ready" in o for o in outputs(L)[n0:]), "no reminder on a blip"
+L.execute("ITEM_CD[15846] = { UPTIME - 60, 259200 }"); read("BAG_UPDATE_COOLDOWN")
+L.execute("ITEM_CD[15846] = { 0, 0 }; ADVANCE(704)"); read("BAG_UPDATE_COOLDOWN")
+assert s.ready > NOW() and not s.readySince, "doubt restarts after a real reading"
+# a 0/0 that holds for 10 minutes is believed (the timer really was wrong). 704 + 601 = a whole number of 15 s ticks,
+# so the reminder checks further down keep their phase
+L.execute("ADVANCE(601)"); read("BAG_UPDATE_COOLDOWN")
+assert s.ready == NOW() and s.readySince == NOW(), "a ready that holds is believed"
 L.execute("BAGS[0][6] = nil")
 read("BAG_UPDATE_DELAYED")
 assert not me().cds.salt, "no shaker: no salt line"

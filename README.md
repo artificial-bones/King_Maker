@@ -103,9 +103,6 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 | Farming | Farming Ledger | `/farm` | Every farming session: what it made, gold per hour, graphs |
 | Farming | Mob Farming, White Items | `/fk` | Which mobs and white items are worth farming |
 | Farming | Gathering | `/gt` | Mining, herb, fishing and treasure spots on your maps |
-| Farming | Reals | `/reals` | Which level 55+ dungeon bosses still have today's Tarnished Undermine Real for you, and a reminder to loot it |
-| Reputation | Reputation | `/rep overview` | Every tracked faction: standing, pace, days to go, the next unlock |
-| Reputation | Supply Writs | `/rep` | Writs done today, orders to turn in, rep per gold, the cheapest rep, Favor shopping, every character |
 | Characters | Rested XP | `/rk` | Rested XP on all your characters |
 | Guild | Blacklist | `/bl` | Players your guild won't group with, shared with every guildmate running King Maker: warnings when they join or invite you, BLACKLISTED in chat |
 | | Settings | `/km settings` | Everything, module by module |
@@ -285,37 +282,6 @@ Mooncloth and the Salt Shaker, plus any other long cooldown your profession wind
 
 [Full guide](AddOns/King_Maker/Modules/Cooldowns#readme)
 
-### Reputation: Supply Writs (new in 2.10)
-
-A Reputation section for the factions that pay in recipes, Favor and gold. First up: your side's supply faction (the
-Azeroth Commerce Authority or Durotar Supply and Logistics) and its daily Craftsman's Writs.
-
-- **Today**: orders done, orders in your bags you can still turn in (a red count by the page and a login reminder),
-  rep today and the reset countdown, plus every character's writs and standing.
-- **What each order costs**: buy the item or craft it, whichever is cheaper, the customer and zone (click for a
-  waypoint), and the rep per gold after the coin pouch.
-- **The cheapest rep today**: sealed writs on the auction house ranked by gold per rep point, against the receipt path.
-- **Progress**: standing, your 7-day pace and the days to go, Merchant's Favor and what the next standing unlocks.
-- **Favor shopping**: the faction's recipes with Crafting Profits' profit, to spend Favor on the best ones. `/rep`.
-
-[Full guide](AddOns/King_Maker/Modules/Reputation#readme)
-
-### Reals (new in 2.13)
-
-Tarnished Undermine Reals drop once a day from each level 55+ dungeon boss, per character, and it's easy to lose
-track of which bosses you've already had today.
-
-- **The dungeons** in green while a boss still has today's Real for you, red once you've looted them all. Click one
-  for its bosses: green waiting, red looted (with the time).
-- **Exact**: each Real is credited to the corpse it came from, when you take it.
-- **Don't forget to loot it**: a pop-up when a boss with a Real for you goes down, a warning if you close its loot
-  with the Real still in it, and a reminder naming the bosses when you leave the dungeon. A switch on the page and
-  in Settings turns the pop-up off.
-- Reals held and the cap, the time to the reset, and every character. The boss list corrects itself as you play.
-  `/reals`.
-
-[Full guide](AddOns/King_Maker/Modules/Reals#readme)
-
 ### Rested XP (was Rested King)
 
 How much rested XP every character has built up, when each one is full, and where they're resting.
@@ -350,11 +316,6 @@ collecting it and sharing it.
 
 **Quest data from [CMaNGOS classic-db](https://github.com/cmangos/classic-db)** (GPL-3.0), the open Classic world
 database: quest levels, requirements and rewards for Quest Gold, with zones and Forever's own quests from ForeverDB.net.
-
-**Supply Writs data** from [QuestieDB](https://github.com/Questie/QuestieDB) (orders, customers, rep; GPL-3.0),
-ForeverDB.net (the faction's recipes and their Favor costs) and
-[Craftman's Helper](https://github.com/emsw0rth/craftmanshelper) by Emsworth (order counts and some customers;
-GPL-3.0, data only). Thank you.
 
 Thanks also to the authors of LibStub, CallbackHandler and HereBeDragons, which King Maker includes.
 
