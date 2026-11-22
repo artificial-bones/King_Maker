@@ -815,6 +815,10 @@ assert row8(lines, "Disenchant").startswith("Disenchant|about "), lines
 de8 = KM8.mods.Market.DisenchantValue(99100)[0]
 assert abs(de8 - 2225) < 1e-6, de8
 assert row8(lines, "Disenchant") == "Disenchant|about " + L8.eval("ScannerKing.FormatMoney(2113)"), lines
+# What it gives on average, one row per result: chance, average amount, value after the cut (they add up to the total)
+assert any(l.startswith("   ") and "75% x2.5" in l and l.endswith(L8.eval("ScannerKing.FormatMoney(1781)")) for l in lines), lines
+assert any("20% x1.5" in l and l.endswith(L8.eval("ScannerKing.FormatMoney(285)")) for l in lines), lines
+assert any("(rare)" in l and "5%" in l for l in lines), lines
 # Gear nobody lists (no auction price): still a section, with the vendor-or-disenchant verdict
 lines = hover8(99101)
 assert lines[1] == "King Maker|DISENCHANT" and "more than vendoring" in lines[2], lines
@@ -831,6 +835,14 @@ L8.execute("SHIFT = false")
 lines = hover8(13463)
 assert "Hold Shift for details" in lines and row8(lines, "Drops") is None and row8(lines, "Used in") is None, lines
 assert row8(lines, "Auction house") and row8(lines, "You own") and not any("bags 12" in l for l in lines), lines
+# the disenchant value and returns show on the short tooltip too
+lines = hover8(99100)
+assert "Hold Shift for details" in lines and row8(lines, "Disenchant") and any("75% x2.5" in l for l in lines), lines
+# a result with no price: the rest still show, the total is marked
+L8.execute("ScannerKingDB.prices[10978] = nil"); KM8.mods.Scanner.ClearTooltipCache()
+lines = hover8(99100)
+assert "some unpriced" in row8(lines, "Disenchant") and any("(rare)" in l and "no price" in l for l in lines), lines
+L8.execute("ScannerKingDB.prices[10978] = { p = 1000, t = NOW }"); KM8.mods.Scanner.ClearTooltipCache()
 L8.execute("SHIFT = true")
 lines = hover8(13463)
 assert "Hold Shift for details" not in lines and row8(lines, "Used in") and any("bags 12" in l for l in lines), lines

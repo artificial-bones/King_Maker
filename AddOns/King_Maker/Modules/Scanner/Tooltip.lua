@@ -13,7 +13,9 @@ local API = ns.API
 --   Vendor        what a vendor pays you for one
 --   Vendors sell  what you paid a vendor for one (Crafting Profits saw it)
 --   Disenchant    the average value of disenchanting one, after the cut on selling what it gives (also in the
---                 verdict: DISENCHANT). Gear nobody lists still gets the section when it can be disenchanted.
+--                 verdict: DISENCHANT), then what it gives on average: each dust, essence and shard with its chance,
+--                 average amount and value. On every green, blue and purple piece of gear, the short tooltip too.
+--                 Gear nobody lists still gets the section when it can be disenchanted.
 --   Materials to craft  crafted gear, potions, bags (not materials): what one costs to make, then whether crafting
 --                 one to sell makes or loses money (or buying is cheaper); You can craft it: who
 --   Teaches       a recipe item: what it teaches, who knows it, who can learn it, whose skill is too low
@@ -141,7 +143,8 @@ local function extras(id)
     local x = cache[id]
     if not x then
         x = { drops = try(drops, id), uses = try(uses, id), best = try(ns.TipBestCrafts, id), make = try(ns.TipMake, id),
-              pattern = try(ns.TipPattern, id), de = try(ns.TipDisenchant, id) }
+              pattern = try(ns.TipPattern, id), de = try(ns.TipDisenchant, id),
+              deRows = try(ns.TipDisenchantRows, id) }
         cache[id] = x
     end
     return x
@@ -196,6 +199,21 @@ local function verdict(ah, sell, de)
     return "DISENCHANT", "Disenchant it: about " .. diff .. " more than " .. LOSER[second[1]] .. "."
 end
 
+-- The Disenchant row and what it gives on average: "   Strange Dust   75% x2.5   2s 37c".
+local function disenchantLines(tt, d, total)
+    if not d then return end
+    total = total or d.total   -- the verdict's number when there is one, so the two always agree
+    local value = total and ("about " .. API.FormatMoney(total))
+        or (d.partial and ("about " .. API.FormatMoney(d.partial) .. "+ " .. grey("(some unpriced)")))
+        or grey("no prices yet")
+    line(tt, "Disenchant", value)
+    for _, r in ipairs(d.rows) do
+        local odds = math.floor(r.chance * 100 + 0.5) .. "%" .. (r.amount ~= 1 and (" x" .. r.amount) or "")
+        line(tt, "   " .. itemText(r.id) .. (r.proc and grey(" (rare)") or ""),
+            grey(odds .. "  ") .. (r.each and API.FormatMoney(r.each) or grey("no price")))
+    end
+end
+
 function ns.AddTooltipLines(tt, id)
     if not (ns.db and tt and id) then return end
     local pr = ns.db.ui.tooltip and ns.db.prices[id]
@@ -204,11 +222,12 @@ function ns.AddTooltipLines(tt, id)
     local buy = more and vendorBuy(id)
     local sell = vendorSell(id)
     local de = on("de") and x.de and math.floor(x.de * CUT) -- the dust and essences sell through the auction house too
+    local deRows = on("de") and x.deRows
     local make = on("make") and x.make
     local pattern = on("pattern") and x.pattern
     local best = on("crafts") and x.best
     local owned = InventoryKing and InventoryKing.GetCount and select(2, pcall(InventoryKing.GetCount, id))
-    local section = pr or buy or de or make or pattern or (more and (x.drops or x.uses))
+    local section = pr or buy or de or deRows or make or pattern or (more and (x.drops or x.uses))
         or (type(owned) == "number" and owned > 0)
     local brief = section and short()
     if section then
@@ -227,13 +246,14 @@ function ns.AddTooltipLines(tt, id)
         end
     end
     if brief then
+        disenchantLines(tt, deRows, de)   -- the disenchant returns show even on the short tooltip
         tt:AddLine("Hold Shift for details", 0.55, 0.55, 0.55)
     else
         if providers[FIRST] then pcall(providers[FIRST], tt, id) end
         if section then
             if more and sell then line(tt, "Vendor", API.FormatMoney(sell)) end
             if buy then line(tt, "Vendors sell", API.FormatMoney(buy)) end
-            if de then line(tt, "Disenchant", "about " .. API.FormatMoney(de)) end
+            disenchantLines(tt, deRows, de)
             if make then
                 if make.cost then
                     line(tt, "Materials to craft", API.FormatMoney(make.cost))

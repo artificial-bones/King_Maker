@@ -323,7 +323,7 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
       get = function() return ns.db.ui.tip.make end, set = function(v) ns.db.ui.tip.make = v end },
     { type = "check", label = "Recipe items: what they teach and who can learn them", tip = "On patterns, plans, formulas and recipes: the recipe, which of your characters know it, can learn it, or need more skill.",
       get = function() return ns.db.ui.tip.pattern end, set = function(v) ns.db.ui.tip.pattern = v end },
-    { type = "check", label = "Disenchant value", tip = "On gear: what disenchanting it is worth on average, and DISENCHANT in the verdict when that pays most.",
+    { type = "check", label = "Disenchant value", tip = "On green, blue and purple gear: what disenchanting it is worth on average, what it gives (each dust, essence and shard with its chance and value), and DISENCHANT in the verdict when that pays most. Shows on the short tooltip too.",
       get = function() return ns.db.ui.tip.de end, set = function(v) ns.db.ui.tip.de = v end },
     { type = "check", label = "Short tooltip: details with Shift", tip = "Only the verdict, the price and how many you own; hold Shift for everything else.",
       get = function() return ns.db.ui.tip.short end, set = function(v) ns.db.ui.tip.short = v end },

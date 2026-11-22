@@ -10,6 +10,7 @@ local ns = KM.Module("Scanner")
 --   ns.TipMake(id)        a crafted end product: materials for one, its price, the profit after the cut, who can make it
 --   ns.TipPattern(id)     a recipe item: what it teaches, who knows it, who can learn it
 --   ns.TipDisenchant(id)  what disenchanting one is worth on average
+--   ns.TipDisenchantRows(id) what it disenchants into on average: { total, partial, rows = { { id, chance, amount, each } } }
 
 local CUT = 0.95
 local TOP = 3
@@ -217,5 +218,24 @@ function ns.TipDisenchant(id)
     if not (m and m.DisenchantValue) then return nil end
     local v = m.DisenchantValue(id)
     return v and v > 0 and v or nil
+end
+
+-- Green, blue and purple gear: each result with its chance, average amount and expected value after the cut (each =
+-- nil when it has no price). total: the sum after the cut when every result is priced; partial: the sum of the priced
+-- ones otherwise. nil for anything that can't be disenchanted.
+function ns.TipDisenchantRows(id)
+    local m = market()
+    if not (m and m.ItemInfo and m.DisenchantResults) then return nil end
+    local info = m.ItemInfo(id)
+    local results = info and m.DisenchantResults(info.q, info.ilvl, info.class)
+    if not results then return nil end
+    local rows, sum, missing = {}, 0, false
+    for _, r in ipairs(results) do
+        local p = m.AHPrice and (m.AHPrice(r[1]))   -- the same price Market's DisenchantValue uses
+        local each = p and math.floor(p * r[2] * CUT) or nil
+        if each then sum = sum + each else missing = true end
+        rows[#rows + 1] = { id = r[1], chance = r[4] or r[2], amount = r[5] or 1, each = each, proc = r[3] }
+    end
+    return { rows = rows, total = not missing and sum or nil, partial = missing and sum > 0 and sum or nil }
 end
 

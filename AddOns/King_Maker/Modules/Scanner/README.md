@@ -82,7 +82,7 @@ Every item tooltip (bags, bank, loot, links, the auction house) gets a
 | Lowest buyout, Listed | The cheapest listing, and how many are up in how many auctions |
 | 30-day average, 7-day trend | From Price History |
 | Vendor, Vendors sell | What a vendor pays you for one, and what you paid a vendor for one |
-| Disenchant | On gear: what disenchanting one is worth on average, at today's prices, after the cut (shows even when nobody lists the item) |
+| Disenchant | On green, blue and purple gear: what disenchanting one is worth on average, at today's prices, after the cut (shows even when nobody lists the item), then what it gives on average: each dust, essence and shard with its chance, average amount and value. Shows on the short tooltip too |
 | Materials to craft, You can craft it | On crafted gear, potions and bags (not on materials like leather or bars): what the materials for one cost at today's prices, then a line saying whether crafting one to sell makes money (green) or loses it (red; "Buying one is cheaper than crafting it" when the materials cost more than one sells for), and which of your characters can make it |
 | Teaches, Known by, Can learn it, Skill too low | On patterns, plans, formulas and recipes: the recipe and its skill, and where each of your characters stands |
 | Drops | The two mobs with the best drop chance (your kills and your guild's), with zone; QuestieDB fills in the rest |
@@ -92,7 +92,7 @@ Every item tooltip (bags, bank, loot, links, the auction house) gets a
 Every group has its own switch in **Settings > Scanner**: `/sk tooltip off` hides
 the prices, `/sk sources off` hides Vendor, Drops and Used in, and
 `/sk tip crafts|make|pattern|de off` hides the others. **Short tooltip**
-(`/sk tip short on`) shows only the verdict, the price and how many you own
+(`/sk tip short on`) shows only the verdict, the price, the disenchant returns and how many you own
 until you hold Shift. Your characters' skills and known recipes come from
 opening their profession windows once.
 

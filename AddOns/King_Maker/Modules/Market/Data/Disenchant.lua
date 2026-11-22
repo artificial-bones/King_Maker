@@ -67,7 +67,7 @@ function ns.DisenchantResults(quality, itemLevel, classID)
                 end
                 -- A "proc" is a rare bonus result (the 5-10% shard on greens, the
                 -- 0.5% Nexus Crystal on blues), not something you can count on.
-                table.insert(out, { id, chance * amount, chance < 0.15 })
+                table.insert(out, { id, chance * amount, chance < 0.15, chance, amount })   -- 4, 5: for the tooltip
             end
             return out
         end
