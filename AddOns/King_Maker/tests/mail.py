@@ -529,4 +529,47 @@ L.execute("HELD = MailKingDB"); ns.InitDB()
 assert len(entries(L)) == 5 and L.eval("MailKingDB == HELD"), "a second InitDB changes nothing"
 print("ONE MAIL OK")
 
+# 2.18.0: neutral auction houses (Gadgetzan, Booty Bay, Everlook). A 15% cut or the sender marks a mail h = "n";
+# a posting made at a neutral house marks its expired mail; the house filter shows only once there's neutral mail.
+L, KM, ns = load()
+L.execute("""
+function GetInboxHeaderInfo(i) local m = INBOX[i]; return nil, nil, m[6] or "Alliance Auction House", m[1], m[2] or 0, 0, m[3] or 30 end
+""")
+L.execute('MAIL({ { "Auction successful: Linen Cloth (20)", 1900, 28, { "seller", "Linen Cloth", "Bob", 2000, 2000, 600, 100, 20 } } })')
+assert all(e.h is None for e in entries(L)), "a 5% cut: your faction's"
+KM.Show("ledger"); ns.SelectTab("sale")
+assert ns.houseBtn.shown is False and not ns.HasNeutral(), "no neutral mail: no house filter"
+# a post at Gadgetzan, then its auction comes back expired from the Gadgetzan Auction House
+L.execute("""
+PLAYER.map = 1446
+SELL.item = { item = { id = 6000 }, n = 1, duration = 1, buyout = 30000 }
+FIRE("AUCTION_HOUSE_SHOW")
+local i = AuctionHouseFrame.ItemSellFrame
+i.PostButton:RunScript("OnMouseDown"); i.PostButton:RunScript("OnClick", "LeftButton")
+PLAYER.map = 1453
+""")
+posts = list(L.eval("MailKingDB.posts").values())
+assert posts[-1].h == "n", "posted at a neutral house"
+L.execute('MAIL({ { "Auction successful: Silk Cloth (10)", 8500, 29, { "seller", "Silk Cloth", "Cy", 10000, 10000, 0, 1500, 10 } },'
+          ' { "Auction expired: Green Sword", 0, 30, nil, { "Green Sword", 6000, 1 } },'
+          ' { "Auction won: Copper Ore (5)", 0, 30, { "buyer", "Copper Ore", "Di", 400, 400, 0, 0, 5 }, { "Copper Ore", 2770, 5 }, "Booty Bay Auction House" } })')
+es = {e.name: e for e in entries(L)}
+assert es["Silk Cloth"].h == "n", "15% cut"
+assert es["Green Sword"].h == "n" and es["Green Sword"].dep, "its posting was at a neutral house"
+assert es["Copper Ore"].h == "n", "the sender"
+assert es["Linen Cloth"].h is None
+assert ns.HasNeutral()
+ns.db.ui.period = 0
+ns.Refresh(); assert ns.houseBtn.shown is not False and ns.houseBtn.label.text == "All houses"
+assert any(r.cells.name.text.endswith(" N|r") for r in rows(ns.tables["sale"])), "neutral rows tagged"
+assert ns.Summary(0).sales == 2 and ns.Summary(0, None, "neutral").sales == 1 and ns.Summary(0, None, "faction").sales == 1
+click(ns.houseBtn); assert ns.db.ui.house == "faction" and ns.houseBtn.label.text == "Faction AH"
+assert [e.name for e in cur(ns)] == ["Linen Cloth"], [e.name for e in cur(ns)]
+click(ns.houseBtn); assert ns.db.ui.house == "neutral"
+assert [e.name for e in cur(ns)] == ["Silk Cloth"]
+ns.SelectTab("buy"); assert [e.name for e in cur(ns)] == ["Copper Ore"]
+ns.SelectTab("summary"); assert not KM.errorShown, last(L)
+click(ns.houseBtn); assert ns.db.ui.house is None and ns.houseBtn.label.text == "All houses"
+print("NEUTRAL OK")
+
 print("mail: ok")

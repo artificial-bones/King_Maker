@@ -47,6 +47,7 @@ def click(b, which="LeftButton"): b.RunScript(b, "OnClick", which)
 
 assert L.eval("MarketKingMinimapButton") is None and L.eval("MarketKingFrame") is None, "no window or button of its own"
 assert L.eval("MarketKingDB.mode") == "buy" and L.eval("MarketKingDB.includeDE") is True and L.eval("MarketKingDB.ui.button") is None
+assert ns.AllSelected(), "every profession is picked by default"
 
 # Data loaded
 assert ns.RECIPES[2661][1] == 2851  # Copper Chain Belt
@@ -132,7 +133,7 @@ best, ab2 = ns.Rank(None, "buy"); assert len(list(best.values())) > len(rows)
 # the page draws it (headers are drawn in capitals)
 KM.Show("crafting")
 t = fonts()
-assert "Best" in t and "Blacksmithing" in t and "First Aid" in t and "PROFIT" in t, t[:60]
+assert "All" in t and "Smith" in t and "First Aid" in t and "Leather" in t and "PROFIT" in t, t[:60]
 assert any("above the red line" in str(x) for x in t), ns.footer.text
 assert any("Copper Chain Belt" in str(x) for x in t)
 assert ns.redLine.shown, "the red line is drawn under the last row that beats not crafting"
@@ -179,22 +180,33 @@ assert all(r.deResults for r in ns.CurrentRows()[0].values())
 assert any(r.de is not None for r in ns.CurrentRows()[0].values()), "DE only counts disenchanting even with Include disenchanting off"
 click(de_btn); L.execute("MarketKingDB.includeDE = true"); KM.Refresh()
 assert KM.IsShown("crafting")
-# with every profession ticked the tabs switch to short names so they fit
-L.execute("for _, p in ipairs({1,2,3,4,6,7,8,9,10}) do MarketKingDB.profs[p] = true end")
-mk(""); mk("")
-labels = fonts()
-assert "Leather" in labels and "Tailor" in labels, labels
-# a profession tab shows just that profession
-smith = [f for f in L.eval("FRAMES").values() if type(f.label) != type(None) and f.SetLabel and getattr(f.label, "text", None) == "Smith" and f.shown != False][0]
-click(smith)
-assert all(r.prof == 2 for r in ns.CurrentRows()[0].values())
-# unticking a profession on the page filters it out
-c_fa = [f for f in L.eval("FRAMES").values() if f.prof == 1][0]
-c_fa.RunScript(c_fa, "OnClick"); assert L.eval("MarketKingDB.profs[1]") is None
-L.globals().MKPAGE = ns.Page(); all_btn = L.eval("PBTN(MKPAGE, 'All')"); click(all_btn)
-assert all(L.eval("MarketKingDB.profs[%d]" % p) for p in (1, 2, 3, 4, 6, 7, 8, 9, 10))
-click(all_btn); assert L.eval("next(MarketKingDB.profs)") is None
-assert "Tick the professions" in ns.footer.text
+# profession tabs: All lights them all; with all lit a tab picks just that profession, then each click toggles one
+L.globals().MKPAGE = ns.Page()
+def tab(label): return L.eval("PBTN(MKPAGE, %r)" % label)
+all_btn = tab("All")
+click(all_btn)
+assert ns.AllSelected() and all_btn.active and all(tab(x).active for x in ("Alch", "Smith", "Tailor", "First Aid"))
+click(tab("Smith"))
+assert all(r.prof == 2 for r in ns.CurrentRows()[0].values()) and len(list(ns.CurrentRows()[0].values())) > 0
+assert tab("Smith").active and not tab("Tailor").active and not all_btn.active
+assert L.eval("MarketKingDB.profs[2]") and L.eval("MarketKingDB.profs[8]") is None
+click(tab("First Aid"))
+assert {r.prof for r in ns.CurrentRows()[0].values()} == {1, 2} and tab("First Aid").active
+click(tab("Smith"))
+assert {r.prof for r in ns.CurrentRows()[0].values()} == {1} and not tab("Smith").active
+click(tab("First Aid"))   # the last one off: back to all, never an empty list
+assert ns.AllSelected() and all_btn.active
+# search: any part of an item's name, any case; the counts and red line follow the filtered list
+box = ns.search
+box.SetText(box, "cHaIn"); box.RunScript(box, "OnTextChanged", True)
+names = [ns.ItemName(r.item) for r in ns.CurrentRows()[0].values()]
+assert names and all("chain" in n.lower() for n in names) and "Copper Chain Belt" in names, names[:5]
+assert ns.CurrentRows()[1] <= len(names) and ns.footer.text.startswith("%d recipes" % len(names)), ns.footer.text
+box.SetText(box, "zzqx"); box.RunScript(box, "OnTextChanged", True)
+assert len(list(ns.CurrentRows()[0].values())) == 0 and "zzqx" in ns.table.emptyText
+box.RunScript(box, "OnEscapePressed"); box.RunScript(box, "OnTextChanged", False)  # the game fires it on SetText
+assert box.GetText(box) == "" and len(list(ns.CurrentRows()[0].values())) > len(names)
+assert len(list(ns.Rank(None, "buy", L.table_from({"search": "  copper chain  "}))[0].values())) >= 2
 L.execute("MarketKingDB.profs = { [2] = true, [1] = true }"); mk(""); mk("")
 assert not KM.errorShown, last(L)
 print("UI OK")
@@ -257,20 +269,22 @@ mine = list(ns.Rank(2, "buy", L.table_from({"recipes": "mine"}))[0].values())
 miss = list(ns.Rank(2, "buy", L.table_from({"recipes": "missing"}))[0].values())
 assert len(mine) + len(miss) == len(allr) and all(r.has for r in mine) and all(not r.has and r.pattern for r in miss)
 assert any(r.recipe.spell == lacking[0] for r in mine)
-# patterns you lack are greyed out in "All recipes"
-click([f for f in L.eval("FRAMES").values() if type(f.label) != type(None) and f.SetLabel and getattr(f.label, "text", None) == "Best" and f.shown != False][0])
-# the button cycles the view; right-clicking a row toggles it
-btn = L.eval("BTN('All recipes')"); click(btn); assert L.eval("MarketKingDB.recipes") == "mine"
-assert btn.label.text == "My recipes"
-click(btn); assert L.eval("MarketKingDB.recipes") == "missing"
-row_btn = [r for r in ns.table.rows.values() if r.data is not None and r.shown != False][0]
-spell = row_btn.data.recipe.spell; assert not ns.HasRecipe(spell)
-click(row_btn, "RightButton"); assert ns.HasRecipe(spell)
-click(btn); assert L.eval("MarketKingDB.recipes") == "all"
+# every recipe shows, the ones you don't have greyed out; Hide unlearned hides them; right-click toggles a row
+L.execute("MarketKingDB.profs = { [2] = true }"); KM.Refresh()
+hide = [f for f in L.eval("FRAMES").values() if type(f.label) != type(None) and getattr(f.label, "text", None) == "Hide unlearned" and f.SetChecked][0]
+assert not hide.GetChecked(hide) and L.eval("MarketKingDB.recipes") == "all"
 greyed = [r for r in ns.table.rows.values() if r.data is not None and r.shown != False and not r.data.has]
-assert all(r.alpha < 1 for r in greyed)
+assert greyed and all(r.alpha < 1 for r in greyed)
+row_btn = greyed[0]; spell = row_btn.data.recipe.spell
+click(row_btn, "RightButton"); assert ns.HasRecipe(spell) and row_btn.alpha == 1
+click(hide); assert L.eval("MarketKingDB.recipes") == "mine" and hide.GetChecked(hide)
+assert all(r.has for r in ns.CurrentRows()[0].values())
+click(hide); assert L.eval("MarketKingDB.recipes") == "all"
+assert any(not r.has for r in ns.CurrentRows()[0].values())
+ns.SetHasRecipe(spell, False)
 mk("recipes reset"); assert not ns.HasRecipe(spell) and ns.HasRecipe(3321)
 mk("recipes mine"); assert L.eval("MarketKingDB.recipes") == "mine"
+mk("recipes missing"); assert L.eval("MarketKingDB.recipes") == "all", "Patterns I lack is gone: all, greyed out"
 mk("recipes bogus"); assert L.eval("MarketKingDB.recipes") == "all"
 assert not KM.errorShown, last(L)
 print("PATTERNS OK")
@@ -292,7 +306,7 @@ assert L.eval('MENU_ITEM("Crafting Profits") ~= nil')
 L.execute('MENU_ITEM("Crafting Profits").fn()'); assert KM.IsShown("crafting")
 KM.OpenSettings("market"); assert KM.IsShown("settings") and not KM.errorShown, last(L)
 t = fonts()
-assert "Count materials as" in t and "Include disenchanting" in t and any("/mk recipes" in str(x) for x in t)
+assert "Count materials as" in t and "Include disenchanting" in t and "Hide unlearned recipes" in t and any("/mk recipes" in str(x) for x in t)
 farm_choice = [f for f in L.eval("FRAMES").values() if type(f.label) != type(None) and f.SetLabel and getattr(f.label, "text", None) == "Use my mats" and f.shown != False][-1]
 click(farm_choice); assert L.eval("MarketKingDB.mode") == "farm"
 mk("mode buy")
@@ -314,6 +328,10 @@ KM2.Show("crafting"); assert not KM2.errorShown, last(L2)
 # moved in from a 1.x stub folder
 L3, KM3 = fresh(only=["Scanner", "Market"], extra=EXTRA, stubs={"Market_King": "MarketKingDB = { profs = { [8] = true }, recipes = 'mine' }"})
 assert L3.eval("MarketKingDB.profs[8]") and L3.eval("MarketKingDB.recipes") == "mine" and L3.eval("MarketKingDB.mode") == "buy"
+assert not KM3.mods.Market.AllSelected(), "a saved pick is kept"
+# 2.18.0: an empty pick becomes every profession, and "Patterns I lack" becomes all, greyed out
+L5, KM5 = fresh(only=["Scanner", "Market"], extra=EXTRA, seed="MarketKingDB = { profs = {}, recipes = 'missing' }")
+assert KM5.mods.Market.AllSelected() and L5.eval("MarketKingDB.recipes") == "all"
 # Market without Scanner still loads and opens
 L4, KM4 = fresh(only=["Market"], extra=EXTRA)
 KM4.Show("crafting"); assert not KM4.errorShown, last(L4)

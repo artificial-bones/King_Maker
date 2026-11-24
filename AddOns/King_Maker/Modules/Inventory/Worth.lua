@@ -171,8 +171,9 @@ function API.GetCount(itemID)
     return total, by
 end
 
--- Where you hold an item: { ["Name-Realm"] = { bags, bank, mail, ah, bagsT, bankT, mailT, ahT } }, how many in each
--- place (0 for none) and when that place was last read (nil: never). Only characters (and "Warband") holding any; a copy.
+-- Where you hold an item: { ["Name-Realm"] = { bags, bank, mail, ah, bagsT, bankT, mailT, ahT, ahn } }, how many in each
+-- place (0 for none) and when that place was last read (nil: never); ahn = how many of the ah ones are on the neutral
+-- auction house. Only characters (and "Warband") holding any; a copy.
 function API.GetPlaces(itemID)
     local out = {}
     for who, s in pairs(ns.db and ns.db.stock or {}) do
@@ -182,6 +183,7 @@ function API.GetPlaces(itemID)
             row[place], row[place .. "T"] = n, s[place .. "T"]
             if n > 0 then any = true end
         end
+        row.ahn = (s.ahn or {})[itemID] or 0
         if any then out[who] = row end
     end
     return out

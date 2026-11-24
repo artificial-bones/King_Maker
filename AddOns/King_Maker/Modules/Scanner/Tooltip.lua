@@ -8,6 +8,8 @@ local API = ns.API
 --   Pays 34s 20c more than vendoring.                      <- after the auction house's 5% cut
 --   Auction house   35s 94c  2 h ago                       <- market price (else lowest), when it was scanned
 --   Lowest buyout / Listed
+--   Neutral AH    12g 30s  -15%  2 h ago                   <- only once you've scanned a neutral auction house:
+--                                                            its price and how it compares with your faction's
 --   30-day average, 7-day trend                            <- Price History (Econ's provider), first
 -- Laid out like a crafting addon's block: light grey labels, white values (API.TooltipLine for providers).
 --   Vendor        what a vendor pays you for one
@@ -227,7 +229,8 @@ function ns.AddTooltipLines(tt, id)
     local pattern = on("pattern") and x.pattern
     local best = on("crafts") and x.best
     local owned = InventoryKing and InventoryKing.GetCount and select(2, pcall(InventoryKing.GetCount, id))
-    local section = pr or buy or de or deRows or make or pattern or (more and (x.drops or x.uses))
+    local np = ns.db.ui.tooltip and ns.db.ui.neutral and ns.db.neutral.prices[id]
+    local section = pr or np or buy or de or deRows or make or pattern or (more and (x.drops or x.uses))
         or (type(owned) == "number" and owned > 0)
     local brief = section and short()
     if section then
@@ -243,6 +246,15 @@ function ns.AddTooltipLines(tt, id)
                 if pr.m then line(tt, "Lowest buyout", API.FormatMoney(pr.p)) end
                 if pr.q then line(tt, "Listed", pr.q .. (pr.n and (" in " .. pr.n .. " auction" .. (pr.n == 1 and "" or "s")) or "")) end
             end
+        end
+        if np then
+            local _, _, diff = ns.Compare(id)
+            local d = ""
+            if diff then
+                local pct = math.floor(diff * 100 + 0.5)
+                d = "  " .. (pct < 0 and "|cff4dd94d" or (pct > 0 and "|cffff8040+" or "|cff8c8c8c")) .. pct .. "%|r"
+            end
+            line(tt, "Neutral AH", API.FormatMoney(np.m or np.p) .. d .. "  " .. grey(API.PriceAge(np.t)))
         end
     end
     if brief then

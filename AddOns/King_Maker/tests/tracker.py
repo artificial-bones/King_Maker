@@ -728,10 +728,8 @@ assert ui.hudRows == 3 and ui.hudW is None and hud.w == 280, "the smallest: 3 ro
 drag(5000, 5000)
 cap = (768 - 230) // 14
 assert ui.hudRows == cap and ui.hudW == 1024 - 20, (ui.hudRows, ui.hudW)
-# the Prices tab uses the allowed height too
-L.execute('BTN("Prices", KingMakerFarmTracker):Click()')
-assert ns.hudList.cap == 16 + cap - 8, ns.hudList.cap
-L.execute('BTN("All", KingMakerFarmTracker):Click()')
+# 2.18.0: no Prices tab on the box any more
+assert L.eval('BTN("Prices", KingMakerFarmTracker)') is None
 # double-click the grip: back to 280 wide and 8 rows
 L.execute("local g = KingMakerFarmTracker.grip; g.scripts.OnDoubleClick(g)")
 assert ui.hudRows is None and ui.hudW is None and hud.w == 280 and ns.hudList.cap == 8
@@ -854,27 +852,11 @@ win.Hide(win)
 farm("export"); assert win.shown
 print("EXPORT OK")
 
-# the Mat Prices tab: price after the cut, listed, last farmed, your rate, best gold/hr when farmed
-L.execute("ScannerKingDB.prices[2770] = { p = 500, m = 600, t = NOW, q = 33 }")
-L.execute("PLAYER.map = 1429")
-farm("start")
-run(L, 'CAST(2575, "Copper Vein"); WIN({ { L_(2770), 10, { OBJ(1731, 1), 10 } } }); LOOT_ALL()')
-L.execute("ADVANCE(900)")
-farm("stop")
-mine = L.eval("TrackerKingDB.sessions[#TrackerKingDB.sessions]")
-L.execute("TRK.P.tabs.buttons.prices:Click()")
-M = ns.M
-assert P.prices.shown and not P.periods.shown and not KM.errorShown, last(L)
-assert M.tabs.buttons.mine and M.tabs.buttons.herb and M.tabs.buttons.skin
-L.execute("TRK.M.tabs.buttons.mine:Click()")
-ore = [r for r in M.table.data.values() if r.id == 2770][0]
-assert ore.price == 570 and ore.listed == 33 and ore.last == mine.t1, (ore.price, ore.listed)
-assert abs(ore.rate - 40) < 1e-6 and abs(ore.best - 5700 / 900 * 3600) < 1e-6, (ore.rate, ore.best)
-assert "LAST FARMED" in texts(L) and "YOUR RATE" in texts(L) and any("40/hr" in x for x in texts(L))
-unfarmed = [r for r in M.table.data.values() if r.id != 2770][0]
-assert unfarmed.rate is None and unfarmed.last is None
-L.execute("TRK.P.tabs.buttons.sessions:Click()")
-print("MAT PRICES OK")
+# 2.18.0: the Mat Prices tab is gone; a saved tab of "prices" opens Sessions
+assert L.eval("TRK.P.tabs.buttons.prices") is None and ns.M is None
+L.execute("TrackerKingDB.ui.tab = 'prices'"); assert ns.Tab() == "sessions"
+L.execute("TrackerKingDB.ui.hudTab = 'prices'"); ns.UpdateHUD(); assert not KM.errorShown, last(L)
+L.execute("TrackerKingDB.ui.hudTab = 'all'")
 
 # disenchanting: off by default; the setting moves the running session at once, a saved one keeps how it counted
 farm("start")

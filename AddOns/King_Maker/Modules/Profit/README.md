@@ -104,17 +104,19 @@ and Holdings, **Search items** by name.
 
 | Tile | What it is |
 |---|---|
-| **Realized** | What sales brought after the cut, minus what those units cost, minus deposits on auctions that came back |
-| **If sold now** | What what you hold is worth now, after the cut, minus what it cost |
-| **Stock at cost** | What what you hold cost you, and what it's worth |
-| **Underwater** | Items worth less now than they cost you, and what you'd lose selling them |
-| **Used or gone** | What stock that left without a sale had cost you (pending and final) |
-| **Sold, cost unknown** | What sales brought for units no lot covered |
+| **Profit** | What sales brought after the cut, minus what those units cost, minus deposits on auctions that came back; and that as a share of cost |
+| **Sales** | Everything sales brought after the cut, how many, and the average sale |
+| **Stock worth** | What you hold is worth now, after the cut, with how many and what it cost (click for Holdings) |
+| **If sold now** | Profit you haven't taken: worth now minus cost, and how many items are underwater (click for Holdings) |
+
+Under the tiles, one muted line shows what's kept out of profit on purpose: sales of units with **no cost known**,
+and stock that was **used or gone** (pending and final). Hover it for what they are.
 
 Then realized per day (green up, red down; a week per bar on All), **where it came from** (auction buys, farmed,
-crafted, opening stock, vendors and trades, deposits lost; click one for those trades) and every item you sold or
-hold. Click an item for
-its lots; right-click for Price History. Hover any tile for exactly how it's made.
+crafted, opening stock, vendors and trades, deposits lost; click one for those trades) and every item you **sold** in
+the period: how many, average price and cost, profit, ROI (**free** for farmed units), how long you held one before it
+sold, and how many you still hold (red when underwater). What you hold is on Holdings. Click an item for its lots;
+right-click for Price History. Hover any tile for exactly how it's made.
 
 **Trades.** **By sale**: every sale (and trade), the lots it used (hover it), its P&L, ROI and how long you held the
 units. **By buy**: every lot (**AH**, **Farmed**, **Quest**, **Crafted**, **DE**, **Trade**, **Vendor**, **Opening**),

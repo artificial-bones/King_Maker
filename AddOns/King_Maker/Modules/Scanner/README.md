@@ -70,6 +70,29 @@ Everything Scanner has a price for, not just raw materials.
   and again to flip the order. Hover an item for its tooltip.
 - **Scan** sits top right (the same one scan as the title bar).
 
+## The neutral auction house
+
+The goblin auction houses in **Gadgetzan, Booty Bay and Everlook** are open to
+both factions and take a 15% cut. Scan there like you do at home: the button
+says **Neutral full scan** or **Neutral quick scan**, and those prices go into a
+list of their own. Crafting Profits, Inventory, Profit & Loss and guild sharing
+keep using your faction's prices, so nothing changes if you never go there.
+
+Once you have neutral prices:
+
+- The Prices page gets **Faction AH** and **Neutral AH** buttons by the search
+  box (and opens on the house you're standing at). Neutral shows its own market
+  and lowest prices next to your faction's, with a **Diff** column (green:
+  cheaper on neutral).
+- Two tiles, also in the sidebar: **Buy on neutral** (cheaper there than it
+  sells for at home after the 5% cut: bring it home) and **Sell on neutral**
+  (pays more there even after its 15% cut). Click one to list those items.
+- Item tooltips get a **Neutral AH** line: its price, how it compares with your
+  faction's, and how old it is (Settings > Scanner, or `/sk neutral off`).
+- `/sk neutral clear` forgets them. King Maker tells which auction house you're
+  at from the zone; if it ever guesses wrong, `/sk house neutral` or
+  `/sk house faction` sets it, and `/sk house auto` goes back to guessing.
+
 ## Tooltips
 
 Every item tooltip (bags, bank, loot, links, the auction house) gets a

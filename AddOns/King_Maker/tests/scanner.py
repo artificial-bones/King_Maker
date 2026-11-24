@@ -212,6 +212,80 @@ sk("button off"); assert "crown" in last(L), last(L)
 assert not KM.errorShown
 print("PRICES PAGE OK")
 
+# 2.18.0: the neutral auction house (Gadgetzan, Booty Bay, Everlook). Its prices go to their own list, nothing that
+# values your gold changes, nothing goes to the guild, and the Prices page shows it only once there's something to show.
+c = ns.PricesPage()
+assert not c.houseNeutral.shown and not c.houseFaction.shown, "no neutral prices yet: no house buttons"
+assert KM.AuctionHouse() == "faction"
+L.execute("""
+TRADE[2589], TRADE[2770] = 100, 600     -- linen cheaper there (bring it home), ore dearer even after 15% (sell it there)
+SENT_BEFORE = #SENT
+PLAYER.map = 1446                       -- Tanaris: Gadgetzan
+EVENTS = {}
+FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()
+""")
+assert KM.AuctionHouse() == "neutral" and SK.AuctionHouse() == "neutral"
+assert tb.scan.label.text == "Neutral quick scan", tb.scan.label.text
+tip = hover(L, tb.scan)
+assert any("neutral auction house" in x for x in tip) and any(x.startswith("Neutral: last full scan never") for x in tip), tip
+sk("scan"); L.execute("RUN_TIMERS()")
+assert any("(neutral auction house)" in x for x in outputs(L)), outputs(L)[-3:]
+assert price(2589) == 120 and price(2770) == 450, "faction prices untouched"
+assert L.eval("ScannerKingDB.neutral.prices[2589].p") == 100 and L.eval("ScannerKingDB.neutral.prices[2770].p") == 600
+assert L.eval("ScannerKingDB.neutral.lastQuick") and L.eval("ScannerKingDB.neutral.lastScan")
+n_p, n_t, n_q, n_m = SK.GetNeutralPrice(2589); assert n_p == 100 and n_q == 20 and n_m is None
+assert SK.GetPrice(2589)[0] == 120 if isinstance(SK.GetPrice(2589), tuple) else True
+ev = [L.eval("EVENTS")[i] for i in range(1, len(L.eval("EVENTS")) + 1)]
+assert "NEUTRAL_RESULTS" in ev and "SCAN_RESULTS" not in ev, ev   # Price History stays faction only
+L.execute("RUN_TIMERS()")
+assert L.eval("#SENT") == L.eval("SENT_BEFORE"), "neutral prices aren't shared with the guild"
+assert SK.HasNeutral()
+# the Prices page opens on the house you're at: neutral prices, your faction's and the difference
+KM.Show("prices")
+assert c.houseNeutral.shown and c.houseNeutral.active and not c.houseFaction.active
+assert c.ntable.shown and not c.table.shown
+rows = {e.id: e for e in ns.PriceList().values()}
+assert 2840 not in rows and rows[2589].f == 120 and abs(rows[2589].diff - (100 - 120) / 120) < 1e-9, dict(rows[2589])
+assert c.tiles[1].labelText == "Neutral prices" and c.tiles[3].labelText == "Buy on neutral" and c.tiles[3].value.text == "1"
+assert c.tiles[4].labelText == "Sell on neutral" and c.tiles[4].value.text == "1", c.tiles[4].value.text
+cats = [b.cat for b in c.catButtons.values() if b.cat]
+assert cats[:3] == ["All", "Buy on neutral", "Sell on neutral"], cats
+c.tiles[3].RunScript(c.tiles[3], "OnMouseUp")
+assert [e.id for e in ns.PriceList().values()] == [2589], "Buy on neutral lists what's cheaper there"
+c.tiles[4].RunScript(c.tiles[4], "OnMouseUp")
+assert [e.id for e in ns.PriceList().values()] == [2770]
+assert "Neutral: last full scan never" in c.footer.text, c.footer.text
+c.houseFaction.Click(c.houseFaction)
+assert c.table.shown and not c.ntable.shown and 2840 in [e.id for e in ns.PriceList().values()]
+assert c.tiles[1].labelText == "Prices known"
+c.tiles[3].RunScript(c.tiles[3], "OnMouseUp"); assert len(ns.PriceList()) == 6, "faction tiles don't filter"
+# the item tooltip: a Neutral AH line with the comparison, only where there's a neutral price
+L.execute("""
+TTN = { lines = {} }
+function TTN:AddDoubleLine(l, r) self.lines[#self.lines+1] = l .. "|" .. r end
+function TTN:AddLine(l) self.lines[#self.lines+1] = l end
+""")
+def tiplines(id_):
+    L.execute("TTN.lines = {}")
+    ns.AddTooltipLines(L.eval("TTN"), id_)
+    return [str(L.eval("TTN.lines")[i]) for i in range(1, len(L.eval("TTN.lines")) + 1)]
+lin = [x for x in tiplines(2589) if x.startswith("Neutral AH|")]
+assert lin and "-17%" in lin[0], tiplines(2589)
+assert not any(x.startswith("Neutral AH|") for x in tiplines(2840)), "no neutral price: no line"
+sk("neutral off"); assert not any(x.startswith("Neutral AH|") for x in tiplines(2589)); sk("neutral on")
+# /sk house overrides the zone; auto goes back to it
+L.execute("PLAYER.map = nil")
+sk("house neutral"); assert KM.AuctionHouse() == "neutral" and "set by you" in last(L)
+sk("house auto"); assert KM.AuctionHouse() == "faction" and L.eval("ScannerKingDB.house") is None
+sk("status"); assert any("Neutral auction house: " in x for x in outputs(L)[-2:]), outputs(L)[-2:]
+L.execute('TRADE[2589], TRADE[2770] = 120, 450; FIRE("AUCTION_HOUSE_SHOW"); RUN_TIMERS()')
+assert tb.scan.label.text == "Quick scan"
+sk("neutral clear"); assert not SK.HasNeutral() and L.eval("ScannerKingDB.neutral.lastQuick") is None
+KM.Show("prices"); assert not c.houseNeutral.shown and c.table.shown
+assert not KM.errorShown, last(L)
+KM.Toggle(False)
+print("NEUTRAL OK")
+
 # The crown, the sidebar status, Home and Settings
 L.execute('KingMakerMinimapButton:Click("RightButton")')
 for label in ("Scan", "Prices"):

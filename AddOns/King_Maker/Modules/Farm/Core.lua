@@ -11,8 +11,7 @@ local ns = KM.Module("Farm", { title = "Farm King", short = "Farm", legacy = "Fa
 -- Drop rates come from your own kills, plus your guild's when they share.
 --
 -- In King Maker it has no window or minimap button of its own: the list and a mob's page are the "mobs"
--- page (UI.lua, Mob.lua), White Items is the "whites" page (White.lua), and its clicks are quick actions on the
--- King Maker crown. The session tracker is King Maker's Farm Tracker (Modules\Tracker), which Farm feeds kills.
+-- page (UI.lua, Mob.lua), and its clicks are quick actions on the King Maker crown (White Items went in 2.18.0). The session tracker is King Maker's Farm Tracker (Modules\Tracker), which Farm feeds kills.
 
 FarmKing = { API_VERSION = 1 }
 local API = FarmKing
@@ -79,8 +78,6 @@ SlashCmdList.FARMKING = function(msg)
     cmd = cmd:lower()
     if cmd == "" or cmd == "show" then
         ns.Toggle()
-    elseif cmd == "white" or cmd == "whites" then
-        KM.Show("whites")
     elseif cmd == "mob" then
         local id = tonumber(rest)
         if id then ns.Toggle(true); ns.ShowMob(id) end
@@ -108,7 +105,6 @@ SlashCmdList.FARMKING = function(msg)
             .. (ns.QuestieReady and ns.QuestieReady() and "found." or "not installed (only mobs you've seen are listed)."))
     else
         KM.Print(ns, "/fk   open the Mob Farming page (or /km mobs)")
-        KM.Print(ns, "/fk white   open the White Items page")
         KM.Print(ns, "/fk status   what's been recorded")
         KM.Print(ns, "/fk share [on|off]   answer guildmates' requests for your drop data")
         KM.Print(ns, "/fk forget guild   drop every guildmate's data")

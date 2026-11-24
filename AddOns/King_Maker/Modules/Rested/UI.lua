@@ -321,21 +321,7 @@ KM.RegisterTooltip(function(tt)
     end
 end)
 
--- Home: each character's rest in the character strip, and a row when alts sit full of rest (earning nothing more).
-KM.RegisterHomeCard({ kind = "chars", id = "rested", order = 20, get = function()
-    if not ns.db then return nil end
-    local out, now = {}, ns.Now()
-    for _, item in ipairs(ns.Characters("rested", true, false)) do
-        local e = item.e
-        if not e.unknown and not e.max then
-            local pct = math.floor(e.pct * 100 + 0.5)
-            out[item.key] = { text = e.full and "full rest" or (pct .. "% rested"), color = e.full and C.warn or nil, level = item.c.level,
-                tip = pct .. "% of a level rested" .. (e.full and ", full: it earns nothing more." or "") .. " " .. ns.FullText(e, now) }
-        end
-    end
-    return out
-end })
-
+-- Home: a row when alts sit full of rest (earning nothing more).
 KM.RegisterHomeCard({ kind = "attention", id = "rested", order = 70, get = function()
     if not ns.db then return nil end
     local me, full = ns.Char(), {}

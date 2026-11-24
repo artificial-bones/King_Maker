@@ -16,6 +16,11 @@ local ns = KM.Module("Mail")
 -- Postings: when you put something up, Mail King notes the deposit and your
 -- price, so an auction that comes back expired shows what it cost you and what
 -- you were asking (to compare with the market).
+--
+-- Neutral auction house (2.18.0): mail from the goblins' auction houses (Gadgetzan,
+-- Booty Bay, Everlook) is marked h = "n" (no h = your faction's). A sale tells by its
+-- cut (15% there, 5% at home) or the sender's name; the rest by the sender's name, or
+-- the posting it came from (postings made at a neutral house are marked too).
 
 local KEEP_SEEN = 35 * 86400   -- mail keys kept (mail lasts 30 days)
 local KEEP_POSTS = 3 * 86400   -- postings kept (auctions last at most 48 hours)
@@ -84,6 +89,14 @@ local function deposit(fn, ...)
     return ok and d or nil
 end
 
+-- The sender of a neutral auction house's mail: "Gadgetzan Auction House" and the like.
+local NEUTRAL_SENDERS = { "Gadgetzan", "Booty Bay", "Everlook" }
+function ns.NeutralSender(sender)
+    if type(sender) ~= "string" then return false end
+    for _, s in ipairs(NEUTRAL_SENDERS) do if sender:find(s, 1, true) then return true end end
+    return false
+end
+
 local function post(id, name, n, dep, each)
     if not id and not name then return end
     if not name then
@@ -91,7 +104,9 @@ local function post(id, name, n, dep, each)
         name = get and get(id) or nil
     end
     ns.LearnItem(name, id)
-    table.insert(ns.db.posts, { id = id, name = name, n = n or 1, dep = dep, each = each, t = ns.Now(), c = ns.Char() })
+    local p = { id = id, name = name, n = n or 1, dep = dep, each = each, t = ns.Now(), c = ns.Char() }
+    if KM.IsNeutralAH and KM.IsNeutralAH() then p.h = "n" end
+    table.insert(ns.db.posts, p)
 end
 
 -- Watching the sell window's Post button, not the auction house functions:
@@ -226,12 +241,13 @@ end
 -- Records mail i if it's an auction house mail not recorded before. Returns the entry.
 -- met: this read of the inbox's tally of keys so far (ReadInbox passes one), which numbers identical mails.
 function ns.ReadMail(i, met)
-    local _, _, _, subject, money, _, daysLeft = GetInboxHeaderInfo(i)
+    local _, _, sender, subject, money, _, daysLeft = GetInboxHeaderInfo(i)
     local kind, name, n = ns.ParseSubject(subject)
     if not kind or kind == "outbid" then return nil end -- an outbid refund is your own money back
     money = money or 0
     local now = ns.Now()
     local e = { k = kind, name = name, n = n or 1, c = ns.Char() }
+    if ns.NeutralSender(sender) then e.h = "n" end
 
     local inv = {}
     if GetInboxInvoiceInfo then
@@ -246,6 +262,7 @@ function ns.ReadMail(i, met)
         if inv.n and inv.n > 0 then e.n = inv.n end -- commodity invoices can say 0
         if inv.type == "seller" and inv.bid then
             e.g, e.cut, e.dep = inv.bid, inv.cut or 0, inv.dep
+            if inv.bid > 0 and (inv.cut or 0) / inv.bid >= 0.10 then e.h = "n" end -- 15% cut: a neutral house
             amount = inv.bid - (inv.cut or 0) + (inv.dep or 0)
         else
             if money <= 0 then return nil end -- no invoice and the gold already taken: nothing to learn from it
@@ -300,6 +317,7 @@ function ns.ReadMail(i, met)
     if kind == "expired" or kind == "cancelled" then
         local p = takePost(e.item, e.name, e.n)
         e.dep, e.each = p and p.dep, p and p.each
+        if p and p.h == "n" then e.h = "n" end
     end
     local sent = (daysLeft and daysLeft > 0) and (expiry - MAIL_DAYS * 86400) or now
     e.t = math.floor(math.max(now - MAIL_DAYS * 86400, math.min(now, sent)))

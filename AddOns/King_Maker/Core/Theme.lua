@@ -508,19 +508,26 @@ function UI.Table(parent, cols, rowH, opts)
         for _, c in ipairs(self.cols) do if c.key == self.sortKey then col = c end end
         if not (col and col.sort) then return end
         local desc = self.sortDesc
+        -- Stable: ties (and two missing values) keep the order the rows already had. table.sort isn't stable, so
+        -- without this, rows with the same sale time or no price swapped places on every redraw (2.18.0: the list
+        -- looked like it kept scrolling at its top or bottom).
+        local pos, keyOf = {}, {}
+        for i, row in ipairs(self.data) do pos[row] = i; keyOf[row] = col.sort(row) end
         table.sort(self.data, function(a, b)
-            local x2, y2 = col.sort(a), col.sort(b)
-            if x2 == nil or y2 == nil then return x2 ~= nil and y2 == nil end
-            if x2 == y2 then return false end
-            if desc then return x2 > y2 end
-            return x2 < y2
+            local x2, y2 = keyOf[a], keyOf[b]
+            if x2 ~= y2 then
+                if x2 == nil or y2 == nil then return x2 ~= nil end
+                if desc then return x2 > y2 end
+                return x2 < y2
+            end
+            return pos[a] < pos[b]
         end)
     end
 
-    function t:Redraw()
+    function t:Redraw(keepOrder)
         if not self.visible then self:Layout() end
         local data = self.data
-        if not opts.noSort then self:Sort() end
+        if not opts.noSort and not keepOrder then self:Sort() end
         self.offset = math.max(0, math.min(self.offset, #data - self.visible))
         for i, r in ipairs(self.rows) do
             local row = i <= self.visible and data[i + self.offset]
@@ -559,8 +566,9 @@ function UI.Table(parent, cols, rowH, opts)
 
     t:EnableMouseWheel(true)
     t:SetScript("OnMouseWheel", function(self, delta)
-        self.offset = math.max(0, self.offset - delta * 3)
-        self:Redraw()
+        local was = self.offset
+        self.offset = math.max(0, math.min(self.offset - delta * 3, #self.data - (self.visible or 0)))
+        if self.offset ~= was then self:Redraw(true) end -- scrolling only moves the window: no re-sort
     end)
     t:SetScript("OnSizeChanged", function(self) self:Layout(); if self.fill then self:Redraw() end end)
     return t

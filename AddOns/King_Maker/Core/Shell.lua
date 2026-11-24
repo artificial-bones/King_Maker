@@ -56,7 +56,7 @@ function KM.RegisterStatus(fn) table.insert(statuses, fn) end
 -- Home page tiles, notes and cards (drawn by Home.lua, which says what each kind returns):
 --   KM.RegisterHomeTile{ id, order, get = fn() -> label, value, sub, color, tip, page, spark }
 --   KM.RegisterHomeNote(fn() -> text)
---   KM.RegisterHomeCard{ kind = "attention" | "chart" | "income" | "best" | "chars", id, order, get, ... }
+--   KM.RegisterHomeCard{ kind = "attention" | "chart" | "income" | "top" | "stats", id, order, get, ... }
 -- A tile or card registered again with the same id replaces the old one.
 KM.homeTiles, KM.homeNotes, KM.homeCards = {}, {}, {}
 local function byOrder(a, b) return (a.order or 50) < (b.order or 50) end
@@ -265,7 +265,7 @@ local function create()
     local crown = side:CreateTexture(nil, "ARTWORK")
     crown:SetSize(32, 32)
     crown:SetPoint("TOPLEFT", 16, -16)
-    crown:SetTexture("Interface\\Icons\\INV_Crown_01")
+    crown:SetTexture("Interface\\Icons\\INV_Misc_Coin_02")
     crown:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     local ring = CreateFrame("Frame", nil, side)
     ring:SetPoint("TOPLEFT", crown, -1, 1)
@@ -662,7 +662,7 @@ function KM.UpdateMinimapButton()
         local icon = mini:CreateTexture(nil, "ARTWORK")
         icon:SetSize(20, 20)
         icon:SetPoint("CENTER", 0, 1)
-        icon:SetTexture("Interface\\Icons\\INV_Crown_01")
+        icon:SetTexture("Interface\\Icons\\INV_Misc_Coin_02")
         local mask = mini:CreateMaskTexture()
         mask:SetAllPoints(icon)
         mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")

@@ -6,7 +6,7 @@ local C = UI.C
 -- The Farming Ledger page (Farming > Farming Ledger, /km farming, /farm ledger) and the Farm Tracker's place in the
 -- shell: crown quick actions, the Home tile, a crown tooltip line, the sidebar status line and Settings > Farm Tracker.
 -- The page has four tabs on one top bar (with Export, the character filter and the period): Sessions (here),
--- Trends and Mat Prices (Trends.lua) and Zones (Zones.lua); a session opens in the list's place (Detail.lua).
+-- Trends (Trends.lua) and Zones (Zones.lua); a session opens in the list's place (Detail.lua).
 
 ---------------------------------------------------------------------------
 -- Sums over sessions (time-weighted: gold per hour is total value over total active time, never an average of rates)
@@ -90,7 +90,7 @@ end, tip = function(tt)
     tt:AddLine("Coin plus loot, each item at the better of its market price after the 5% cut or a vendor's price when it dropped (grey and soulbound loot at the vendor price). Paused and idle time doesn't count.", 0.7, 0.7, 0.7, true)
 end })
 
--- Home: what farming brought in (where your gold came from) and your best farm by gold per hour.
+-- Home: what farming brought in (where your gold came from) and your gold per hour (the numbers).
 KM.RegisterHomeCard({ kind = "income", id = "tracker", order = 20, get = function(since)
     if not ns.db then return nil end
     local a = ns.Aggregate(ns.SessionsSince(since))
@@ -100,15 +100,14 @@ KM.RegisterHomeCard({ kind = "income", id = "tracker", order = 20, get = functio
             .. KM.Money(a.value) .. ". Loot you sold since also counts under its auction strategy." } }
 end })
 
-KM.RegisterHomeCard({ kind = "best", id = "tracker-farm", order = 20, get = function()
-    if not (ns.db and ns.Farms) then return nil end
-    local f = ns.Farms(ns.SessionsSince(KM.Now() - 30 * 86400))[1]
-    if not (f and f.gph) then return nil end
-    local where = f.where or "?"
-    return { label = "Farm", sub = where .. " (" .. f.label .. ")", value = KM.MoneyShort(f.gph) .. "/hr", icon = "Interface\\Icons\\INV_Misc_Bag_08",
-        page = "farming", tab = function() ns.db.ui.tab = "trends" end,
-        tip = "Your best farm in the last 30 days by gold per hour of active time: " .. where .. " (" .. f.label .. "), " .. f.n .. " session"
-            .. (f.n == 1 and "" or "s") .. ", " .. ns.Dur(f.act) .. ", " .. KM.Money(f.value) .. ". Click for the Farming Ledger's Trends." }
+KM.RegisterHomeCard({ kind = "stats", id = "tracker", order = 50, get = function(since)
+    if not ns.db then return nil end
+    local a = ns.Aggregate(ns.SessionsSince(since))
+    if a.n == 0 or not a.gph then return nil end
+    return { { label = "Farming", value = KM.MoneyShort(a.gph, true) .. "/hr", color = C.accent,
+        sub = ns.Dur(a.act) .. ", " .. a.n .. " session" .. (a.n == 1 and "" or "s"), page = "farming",
+        tip = "Gold per hour of active time over your farming sessions in the last 30 days (" .. KM.Money(a.value) .. " in "
+            .. ns.Dur(a.act) .. "). Click for the Farming Ledger." } }
 end })
 
 KM.RegisterTooltip(function(tt)
@@ -360,13 +359,13 @@ local function fillRow(r, s, cells)
     end
 end
 
--- The top bar the three tabs share: Sessions | Trends | Mat Prices, Export, the character filter and the period.
+-- The top bar the tabs share: Sessions | Trends | Zones, Export, the character filter and the period.
 local TABS = { { id = "sessions", label = "Sessions", w = 82 }, { id = "trends", label = "Trends", w = 72 },
-    { id = "zones", label = "Zones", w = 66 }, { id = "prices", label = "Mat Prices", w = 90 } }
+    { id = "zones", label = "Zones", w = 66 } }
 
 function ns.Tab()
     local t = U().tab
-    if t ~= "trends" and t ~= "prices" and t ~= "zones" then t = "sessions" end
+    if t ~= "trends" and t ~= "zones" then t = "sessions" end -- 2.18.0 removed Mat Prices
     return t
 end
 
@@ -384,7 +383,6 @@ local function buildTop(c)
     P.tabs:SetPoint("TOPLEFT", 0, 0)
     UI.Tip(P.tabs.buttons.trends, "What you farmed per day, your best farms and the items that made the most.")
     UI.Tip(P.tabs.buttons.zones, "Every zone, dungeon and raid you farmed, each with all its sessions added together: where you do best. Click one for its details.")
-    UI.Tip(P.tabs.buttons.prices, "Gathering mats: what they sell for now, against what they're worth to you (how fast you farm them and your gold per hour when you do).")
     local items = {}
     for _, p in ipairs(PERIODS) do items[#items + 1] = { id = p[1], label = p[2], w = 70 } end
     P.periods = UI.Tabs(top, items, function(id) U().period = id; KM.Refresh("farming") end, 24)
@@ -563,7 +561,6 @@ local function build(c)
     buildList(c)
     if ns.BuildDetail then ns.BuildDetail(c) end
     if ns.BuildTrends then ns.BuildTrends(c) end
-    if ns.BuildPrices then ns.BuildPrices(c) end
     if ns.BuildZones then ns.BuildZones(c) end
     c:SetScript("OnSizeChanged", function(self) if self:IsShown() then KM.Refresh("farming") end end)
 end
@@ -573,12 +570,10 @@ local function refreshTop()
     local tab = ns.Tab()
     P.tabs:Select(tab)
     P.periods:Select(u.period or 30)
-    P.periods:SetShown(tab ~= "prices")
-    P.export:SetShown(tab ~= "prices")
     P.charBtn:SetLabel(u.mine and "This character" or "All characters")
     P.charBtn:SetActive(u.mine and true or false)
     P.charBtn:ClearAllPoints()
-    if tab == "prices" then P.charBtn:SetPoint("TOPRIGHT", 0, 0) else P.charBtn:SetPoint("RIGHT", P.periods, "LEFT", -10, 0) end
+    P.charBtn:SetPoint("RIGHT", P.periods, "LEFT", -10, 0)
 end
 
 local function refresh(c)
@@ -592,13 +587,12 @@ local function refresh(c)
         P.top:Show()
         refreshTop()
         local tab = ns.Tab()
-        show = (tab == "trends" and P.trends) or (tab == "prices" and P.prices) or (tab == "zones" and P.zones) or P.list
+        show = (tab == "trends" and P.trends) or (tab == "zones" and P.zones) or P.list
     end
-    for _, f in ipairs({ P.list, P.detail, P.trends, P.prices, P.zones }) do if f and f ~= show then f:Hide() end end
+    for _, f in ipairs({ P.list, P.detail, P.trends, P.zones }) do if f and f ~= show then f:Hide() end end
     show:Show()
     if show == P.detail then ns.RefreshDetail(c)
     elseif show == P.trends then ns.RefreshTrends(c)
-    elseif show == P.prices then ns.RefreshPrices(c)
     elseif show == P.zones then ns.RefreshZones(c)
     else ns.RefreshList(c) end
 end
@@ -626,7 +620,6 @@ KM.RegisterPage({
         if P.view == "detail" then return "One farming session: what you looted, where it came from and what it made per hour." end
         if ns.db and ns.Tab() == "trends" then return "Your farming over time: gold per day, your best farms and what made the most." end
         if ns.db and ns.Tab() == "zones" then return "Where you farm best: every zone, dungeon and raid with all its sessions added together." end
-        if ns.db and ns.Tab() == "prices" then return "What gathering mats sell for, and what they're worth to you: how fast you farm them and what that pays." end
         return "Every farming session: what you looted, what it's worth and your gold per hour."
     end,
     badge = function() return ns.State() == "running" and "LIVE" or "" end,

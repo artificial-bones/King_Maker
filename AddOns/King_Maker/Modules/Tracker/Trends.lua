@@ -3,20 +3,16 @@ local ns = KM.Module("Tracker")
 local UI = KM.UI
 local C = UI.C
 
--- The Farming Ledger's other two tabs and its export (King Maker 2.6.2):
+-- The Farming Ledger's Trends tab and its export (King Maker 2.6.2; the Mat Prices tab was removed in 2.18.0):
 --   Trends      six tiles, farmed per day (one bar a day), Best farms (a zone and what you did there, time-weighted
 --               gold per hour; click one to see only its sessions) and the top items farmed
---   Mat Prices  gathering mats by profession: what one sells for now, how many are listed, the change against the
---               30-day average, and what it's worth to you: when you last farmed it, how many an hour, and your best
---               gold per hour in a session that farmed it
 --   Export      the sessions shown as comma-separated text (UI.Window, Ctrl+C), also /farm export
--- Carried-over sessions (legacy, act = 0) never count in a trend or a rate. Both tabs lay out from the container's
+-- Carried-over sessions (legacy, act = 0) never count in a trend or a rate. The tab lays out from the container's
 -- size (the window zooms), like the Sessions tab.
 
 local P = ns.P
 local T = {}          -- Trends frames
-local M = {}          -- Mat Prices frames
-ns.T, ns.M = T, M     -- (tests)
+ns.T = T              -- (tests)
 local DAY = 86400
 local BEST_MIN = 600  -- a farm's gold per hour needs 10 active minutes in all
 local DASH = "|cff808080-|r"
@@ -315,134 +311,6 @@ function ns.RefreshTrends(c)
     T.farms:SetRows(farms, fillFarm)
     T.items:SetRows(items, fillTop)
     T.footer:SetText(#farms > 0 and "Click a farm to see only its sessions. Carried-over sessions aren't counted." or "")
-end
-
----------------------------------------------------------------------------
--- Mat Prices tab
----------------------------------------------------------------------------
-
--- What every saved session (not carried over) says about each item: { [id] = { q, act, last, best } }. Your rate is
--- units per active hour over the sessions that farmed it; best is the best gold per hour of one of them (10+ min).
-function ns.ItemHistory(char)
-    local out = {}
-    for _, s in ipairs(counted(ns.SessionsSince(nil, char))) do
-        local g = (s.act or 0) >= BEST_MIN and (s.value or 0) / s.act * 3600 or nil
-        for id, it in pairs(s.items or {}) do
-            if (it.q or 0) > 0 then
-                local e = out[id]
-                if not e then e = { q = 0, act = 0, n = 0 }; out[id] = e end
-                e.q, e.act, e.n = e.q + it.q, e.act + s.act, e.n + 1
-                if not e.last or (s.t1 or 0) > e.last then e.last = s.t1 end
-                if g and (not e.best or g > e.best) then e.best = g end
-            end
-        end
-    end
-    return out
-end
-
--- One sub-tab's rows: { id, name, price, listed, vs30, last, rate, best }
-function ns.MatRows(key, char)
-    local G = KM.mods.Gather
-    if not (G and G.MaterialList) then return {} end
-    local hist = ns.ItemHistory(char)
-    local rows = {}
-    for _, id in ipairs(KM.Safe(G.MaterialList, key) or {}) do
-        local price = KM.ItemValue(id)
-        local market, listed
-        if ScannerKing and ScannerKing.GetMarketPrice then
-            local m, _, q = KM.Safe(ScannerKing.GetMarketPrice, id)
-            market, listed = m, q
-        end
-        if not price and market then price = market * KM.AH_CUT end   -- item info not loaded yet: the AH side of the rule
-        local stats = EconKing and EconKing.GetStats and KM.Safe(EconKing.GetStats, id)
-        local h = hist[id]
-        rows[#rows + 1] = { id = id, name = (G.ItemName and KM.Safe(G.ItemName, id)) or KM.Item(id).name or ("Item " .. id),
-            price = (price and price > 0) and price or nil, listed = listed,
-            vs30 = type(stats) == "table" and stats.vs30 or nil,
-            last = h and h.last, rate = (h and h.act >= 60) and h.q / h.act * 3600 or nil, best = h and h.best, q = h and h.q }
-    end
-    return rows
-end
-
-local MAT_COLS = {
-    { key = "item", label = "Item", w = 170, sort = function(e) return e.name end, desc = false },
-    { key = "price", label = "Price", tip = "What one sells for: the market price after the 5% auction house cut, or the vendor price if that pays more.", w = 86, justify = "RIGHT", sort = function(e) return e.price end },
-    { key = "listed", label = "Listed", tip = "How many were up in your last scan.", w = 60, justify = "RIGHT", sort = function(e) return e.listed end },
-    { key = "vs30", label = "Vs 30d", tip = "The price now against its 30-day average (Price History). Green below zero: cheaper than usual, so a worse time to sell.", w = 62, justify = "RIGHT", sort = function(e) return e.vs30 end },
-    { key = "last", label = "Last farmed", w = 84, justify = "RIGHT", sort = function(e) return e.last end },
-    { key = "rate", label = "Your rate", tip = "How many an hour you farm, over the active time of the sessions that farmed it.", w = 74, justify = "RIGHT", sort = function(e) return e.rate end },
-    { key = "best", label = "Best g/hr farming it", tip = "Your best gold per hour in a session (10+ active minutes) that farmed it: everything that session made, not this item alone.", w = 0, justify = "RIGHT", sort = function(e) return e.best end },
-}
-
-local function fillMat(r, e, cells)
-    if r.icon then r.icon:SetTexture(KM.Item(e.id).icon) end
-    r.item = e.id
-    cells.item:SetText(KM.Item(e.id).name and KM.ItemText(e.id) or e.name)
-    cells.price:SetText(e.price and KM.Money(e.price) or (UI.Hex(C.dim) .. "no price|r"))
-    cells.listed:SetText(e.listed and KM.Commas(e.listed) or DASH)
-    if e.vs30 then
-        local p = math.floor(e.vs30 * 100 + 0.5)
-        cells.vs30:SetText(UI.Hex(p < 0 and C.good or (p > 0 and C.bad or C.muted)) .. (p > 0 and "+" or "") .. p .. "%|r")
-    else
-        cells.vs30:SetText(DASH)
-    end
-    cells.last:SetText(e.last and (ns.Date("%d %b", e.last) or "?") or DASH)
-    cells.rate:SetText(e.rate and (string.format("%.0f", e.rate) .. "/hr") or DASH)
-    cells.best:SetText(e.best and (KM.Money(e.best) .. "/hr") or DASH)
-end
-
-function ns.BuildPrices(c)
-    local v = CreateFrame("Frame", nil, c)
-    v:SetAllPoints(c)
-    v:Hide()
-    P.prices = v
-    M.frame = v
-    local G = KM.mods.Gather
-    local items = {}
-    for _, t in ipairs((G and G.MAT_TABS) or {}) do items[#items + 1] = { id = t.key, label = t.label, w = 76 } end
-    M.tabs = UI.Tabs(v, items, function(key) U().priceTab = key; KM.Refresh("farming") end, 22)
-    M.tabs:SetPoint("TOPLEFT", 0, -32)
-    M.note = UI.Text(v, 10, C.muted, "RIGHT")
-    M.note:SetPoint("LEFT", M.tabs, "RIGHT", 12, 0)
-    M.note:SetPoint("RIGHT", v, "RIGHT", 0, 0)
-    M.table = UI.Table(v, MAT_COLS, 22, { icon = true, onClick = function(e)
-        if not e.id then return end
-        if IsShiftKeyDown and IsShiftKeyDown() and ChatEdit_InsertLink then
-            local _, link = ((C_Item and C_Item.GetItemInfo) or GetItemInfo)(e.id)
-            if link then pcall(ChatEdit_InsertLink, link) end
-            return
-        end
-        local Econ = KM.mods.Econ
-        if Econ and Econ.Toggle and Econ.ShowItem then KM.Safe(Econ.Toggle, true); KM.Safe(Econ.ShowItem, e.id) end
-    end })
-    M.table:SetPoint("TOPLEFT", 0, -62)
-    M.table:SetPoint("BOTTOMRIGHT", 0, 18)
-    M.table:SetSort("price", true)
-    M.table.emptyText = (G and G.MAT_TABS) and "No mats on this tab." or "Mat Prices needs the Gathering module."
-    M.footer = UI.Text(v, 10, C.dim)
-    M.footer:SetPoint("BOTTOMLEFT", 0, 2)
-end
-
-function ns.RefreshPrices()
-    local G = KM.mods.Gather
-    local key
-    for _, t in ipairs((G and G.MAT_TABS) or {}) do if t.key == U().priceTab then key = t.key end end
-    key = key or ((G and G.MAT_TABS and G.MAT_TABS[1]) and G.MAT_TABS[1].key) or nil
-    if key then M.tabs:Select(key) end
-    local rows = key and ns.MatRows(key, ns.CharFilter()) or {}
-    M.rows = rows
-    M.table:SetRows(rows, fillMat)
-    local newest
-    if ScannerKing and ScannerKing.GetMarketPrice then
-        for _, e in ipairs(rows) do
-            local _, t = KM.Safe(ScannerKing.GetMarketPrice, e.id)
-            if t and (not newest or t > newest) then newest = t end
-        end
-    end
-    M.note:SetText(newest and ("Prices from " .. KM.Ago(newest) .. (KM.Ago(newest) == "now" and "" or " ago") .. ", after the AH cut")
-        or (ScannerKing and "Scan at the auction house to fill in the prices" or "The Scanner module scans prices"))
-    M.footer:SetText("Your rate and best gold per hour come from your saved sessions" .. (U().mine and " on this character" or "")
-        .. " (carried-over ones left out). Click an item for its Price History.")
 end
 
 ---------------------------------------------------------------------------

@@ -79,16 +79,36 @@ local function add(r, e)
     r.profit = r.income - r.spent - r.lost
 end
 
+-- Whether entry e is from house: nil = every auction house, "neutral" = the goblins' (e.h == "n"), "faction" = yours.
+function ns.InHouse(e, house)
+    if house == "neutral" then return e.h == "n" end
+    if house == "faction" then return e.h ~= "n" end
+    return true
+end
+
+-- Whether any entry came from a neutral auction house (the Sales Ledger shows its house filter only then).
+local neutralSeen, neutralN = false, -1
+function ns.HasNeutral()
+    local all = ns.db and ns.db.entries
+    if not all then return false end
+    if #all ~= neutralN then
+        neutralN, neutralSeen = #all, false
+        for _, e in ipairs(all) do if e.h == "n" then neutralSeen = true; break end end
+    end
+    return neutralSeen
+end
+
 -- since: server time to start from (0 = everything). onlyChar: "Name-Realm" or nil for all.
+-- house: nil (every auction house), "neutral" or "faction" (ns.InHouse).
 -- Returns { sales, gross, cut, income, spent, lost, expired, profit, strategies = { row... },
 --           items = { row... }, entries = { entry... } (newest first) }
-function ns.Summary(since, onlyChar)
+function ns.Summary(since, onlyChar, house)
     local all = ns.db.entries
     local buys, sales = index(all)
     local total = row({}, "total")
     local byStrategy, byItem, list = {}, {}, {}
     for _, e in ipairs(all) do
-        if (e.t or 0) >= (since or 0) and (not onlyChar or e.c == onlyChar) then
+        if (e.t or 0) >= (since or 0) and (not onlyChar or e.c == onlyChar) and ns.InHouse(e, house) then
             local s = ns.EntryStrategy(e, buys, sales)
             ns.strategyOf[e] = s -- for the lists; worked out fresh each time, never saved
             add(total, e)
@@ -114,7 +134,7 @@ function ns.Summary(since, onlyChar)
 end
 
 -- Profit per day for the last n days, oldest first: { { day = "10-11", profit, income } }.
-function ns.Daily(n, onlyChar)
+function ns.Daily(n, onlyChar, house)
     local now = ns.Now()
     local today = math.floor(now / 86400)
     local days = {}
@@ -122,7 +142,7 @@ function ns.Daily(n, onlyChar)
         local d = today - i
         table.insert(days, { d = d, day = date and date("%m-%d", d * 86400) or tostring(d), profit = 0, income = 0 })
     end
-    local s = ns.Summary((today - n + 1) * 86400, onlyChar)
+    local s = ns.Summary((today - n + 1) * 86400, onlyChar, house)
     for _, e in ipairs(s.entries) do
         local slot = days[math.floor(e.t / 86400) - (today - n + 1) + 1]
         if slot then
@@ -145,11 +165,11 @@ ns.Market = market
 -- "Still hold" = up to as many as Inventory counts on your characters (onlyChar: that character), newest purchases
 -- first, so stock you had before doesn't count as bought. Without the Inventory module everything counts as held.
 -- An estimate, used when the Profit & Loss module isn't tracking (2.7): then its lots answer instead (fromPnL = true).
-function ns.BoughtWorth(since, onlyChar)
+function ns.BoughtWorth(since, onlyChar, house)
     local out = { paid = 0, held = 0, worth = 0, gone = 0, unpriced = 0 }
     local by, order = {}, {}
     for _, e in ipairs(ns.db.entries) do
-        if e.k == "buy" and (e.t or 0) >= (since or 0) and (not onlyChar or e.c == onlyChar) then
+        if e.k == "buy" and (e.t or 0) >= (since or 0) and (not onlyChar or e.c == onlyChar) and ns.InHouse(e, house) then
             local g = e.g or 0
             out.paid = out.paid + g
             local id = e.item or ("?" .. tostring(e.name))
@@ -159,7 +179,7 @@ function ns.BoughtWorth(since, onlyChar)
     end
     -- With Profit & Loss (2.7): what you still hold of these purchases is what its lots say (sales and stock used up
     -- took the rest, by its method), at today's value. The estimate below is the fallback.
-    local pnl = ProfitKing and ProfitKing.BoughtHeld and ProfitKing.IsTracking and ProfitKing.IsTracking()
+    local pnl = not house and ProfitKing and ProfitKing.BoughtHeld and ProfitKing.IsTracking and ProfitKing.IsTracking()
         and KM.Safe(ProfitKing.BoughtHeld, since or 0, onlyChar)
     if pnl then
         out.held, out.worth, out.unpriced = math.floor(pnl.held + 0.5), pnl.worth, pnl.unpriced
@@ -202,9 +222,9 @@ end
 --   fav = { item, name, mails, units, gold }, items = { [key] = {...} } } } (most mails first),
 --   mails, gold, unknown = mails with no name on them }.
 ns.REGULAR = 3 -- this many mails or more makes someone a regular
-function ns.Buyers(since, onlyChar, kind)
+function ns.Buyers(since, onlyChar, kind, house)
     kind = kind or "sale"
-    local s = ns.Summary(since, onlyChar)
+    local s = ns.Summary(since, onlyChar, house)
     local by, out = {}, { rows = {}, mails = 0, gold = 0, unknown = 0 }
     for _, e in ipairs(s.entries) do
         if e.k == kind then
@@ -273,8 +293,8 @@ end
 --   vsMarket  listEach against the market: 0.25 = asking 25% over it
 --   why       "over" (asking 10%+ over the market), "never" (none sold), "slow" (under half sold), or nil
 --   held      how many you still have (Inventory King)
-function ns.NotSelling(since, onlyChar)
-    local s = ns.Summary(since, onlyChar)
+function ns.NotSelling(since, onlyChar, house)
+    local s = ns.Summary(since, onlyChar, house)
     local out = {}
     for _, r in ipairs(s.items) do
         if r.expired > 0 then

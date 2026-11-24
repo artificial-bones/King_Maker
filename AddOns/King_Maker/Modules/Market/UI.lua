@@ -4,31 +4,23 @@ local UI = KM.UI
 local C = UI.C
 
 -- The Crafting Profits page of the King Maker window (Crafting > Crafting Profits).
---   Top:    which professions to show and price (and All), Scan (the Scanner's one scan, at the auction house).
---   Then:   Buy mats (the materials are a cost) or Use my mats (you already have them), disenchanting options, and which
---           recipes to show (all, mine, patterns I lack).
---   Tabs:   Best (every ticked profession together), then one per ticked profession.
+--   Top:    profession tabs (All, then one per profession: which to show and price), Scan (the Scanner's one scan,
+--           at the auction house). With every profession lit, clicking one shows just it; after that each click turns
+--           a profession on or off (ns.ClickProf). All lights them all again.
+--   Then:   Buy mats (the materials are a cost) or Use my mats (you already have them), disenchanting options, and
+--           Hide unlearned (otherwise patterns you don't have show greyed out).
+--   Search: only items whose name has the typed text in it, anywhere (not saved).
 --   List:   most profitable first, with a red line where crafting stops beating selling the raw materials.
 --           Hover a row for the full breakdown; right-click it to mark the recipe as had or not had.
 -- Also here: the crown's quick action and the Settings section.
 
 local PAGE = "crafting"
-local PAGE_W = 764               -- the page container is about 764 x 560
-local CHECK_W, CHECK_H = 116, 22
-local TAB_Y, TABLE_Y = -88, -122
+local ROW2_Y, SEARCH_Y, TABLE_Y = -32, -64, -96
 
-local page, tbl, footer, redLine, checks, modeButtons, deCheck, deOnlyButton, procCheck, recipesButton, tabsHolder
-local tabs, tabSig = nil, nil
-local tabCache = {}
-local tab = "best"
+local page, tbl, footer, redLine, profTabs, allTab, modeButtons, deCheck, deOnlyButton, procCheck, hideCheck, search
+local query = ""          -- the search box's text; this session only
+local multi = true        -- more than one profession showing: the Skill column names the profession
 local shown, above = {}, 0
-
--- The recipes button cycles through these.
-local RECIPES_VIEW = {
-    { key = "all", label = "All recipes", hint = "Every recipe. Patterns you don't have are greyed out." },
-    { key = "mine", label = "My recipes", hint = "Trainer recipes and the patterns you have." },
-    { key = "missing", label = "Patterns I lack", hint = "Only patterns you don't have: what would be worth getting." },
-}
 
 local MODES = {
     buy = { label = ns.MODE_LABELS.buy, hint = "The materials are a cost: what's worth buying the mats for and crafting (flips)." },
@@ -136,7 +128,7 @@ local function fillRow(r, row, cells)
     local cdTag = cd and (UI.Hex(C.violet) .. "  CD " .. (cd >= 86400 and (math.floor(cd / 86400 + 0.5) .. "d") or (math.floor(cd / 3600 + 0.5) .. "h")) .. "|r") or ""
     cells.item:SetText("|cff" .. color .. ns.ItemName(row.item) .. "|r" .. (row.made > 1 and (" x" .. row.made) or "") .. cdTag)
     local p = ns.PROF_BY_ID[row.prof]
-    cells.skill:SetText((tab == "best" and p and (p.name:sub(1, 4) .. " ") or "") .. (row.skill > 0 and row.skill or ""))
+    cells.skill:SetText((multi and p and (p.name:sub(1, 4) .. " ") or "") .. (row.skill > 0 and row.skill or ""))
     cells.mats:SetText(row.missing and "|cffff4040missing|r" or money(mode == "farm" and row.raw or row.cost))
     cells.craft:SetText(money(row.craftSale))
     cells.de:SetText(money(row.deSale))
@@ -154,7 +146,7 @@ local function fillRow(r, row, cells)
     end
     cells.gain:SetText(row.gain and colored(row.gain) or DASH)
     -- Patterns you don't have stay in the list but greyed out
-    r:SetAlpha((row.has or ns.db.recipes == "missing") and 1 or 0.45)
+    r:SetAlpha(row.has and 1 or 0.45)
 end
 
 -- The red line sits under the last row that beats selling raw (or above the first when none do).
@@ -183,47 +175,10 @@ end
 local function footerText()
     local mode = ns.db.mode
     local last = ScannerKing and ScannerKing.LastScan and ScannerKing.LastScan()
-    if not next(ns.db.profs) then
-        footer:SetText("Tick the professions to show. Click Scan at the auction house to get prices.")
-    else
-        local n = math.min(#shown, tbl.visible or #shown)
-        footer:SetText(#shown .. " recipes, " .. above .. " beat " .. (mode == "farm" and "selling raw" or "not crafting")
-            .. " (above the red line).  Prices from " .. (last and ScannerKing.PriceAge(last) or "no scan yet")
-            .. (#shown > n and ".  Scroll for more." or "."))
-    end
-end
-
--- Tabs: Best, then each ticked profession. A UI.Tabs strip is fixed, so one is made per set of professions.
-local function refreshTabs()
-    local items = { { id = "best", label = "Best", short = "Best" } }
-    local sig = "best"
-    for _, p in ipairs(ns.PROFESSIONS) do
-        if ns.Selected(p.id) then
-            table.insert(items, { id = p.id, label = p.name, short = p.short })
-            sig = sig .. ":" .. p.id
-        end
-    end
-    local ok = false
-    for _, it in ipairs(items) do if it.id == tab then ok = true end end
-    if not ok then tab = "best" end
-    if sig ~= tabSig then
-        if tabs then tabs:Hide() end
-        tabs = tabCache[sig]
-        if not tabs then
-            -- Full names, or short ones when they'd run off the page.
-            local width = 0
-            for _, it in ipairs(items) do width = width + math.max(64, 18 + 7 * #it.label) - 1 end
-            local useShort = width > PAGE_W
-            local list = {}
-            for _, it in ipairs(items) do list[#list + 1] = { id = it.id, label = useShort and it.short or it.label } end
-            tabs = UI.Tabs(tabsHolder, list, function(id) tab = id; tbl.offset = 0; ns.Refresh() end)
-            tabs:SetPoint("TOPLEFT", 0, 0)
-            tabCache[sig] = tabs
-        end
-        tabs:Show()
-        tabSig = sig
-    end
-    tabs:Select(tab)
+    local n = math.min(#shown, tbl.visible or #shown)
+    footer:SetText(#shown .. " recipes, " .. above .. " beat " .. (mode == "farm" and "selling raw" or "not crafting")
+        .. " (above the red line).  Prices from " .. (last and ScannerKing.PriceAge(last) or "no scan yet")
+        .. (#shown > n and ".  Scroll for more." or "."))
 end
 
 local function refreshControls()
@@ -234,10 +189,9 @@ local function refreshControls()
     deOnlyButton:SetActive(db.deOnly)
     procCheck:SetChecked(db.deNoProcs)
     procCheck.frame:SetShown(db.deOnly)
-    for _, v in ipairs(RECIPES_VIEW) do
-        if v.key == db.recipes then recipesButton:SetLabel(v.label) end
-    end
-    for id, c in pairs(checks) do c:SetChecked(ns.Selected(id)) end
+    hideCheck:SetChecked(db.recipes == "mine")
+    allTab:SetActive(ns.AllSelected())
+    for id, b in pairs(profTabs) do b:SetActive(ns.Selected(id)) end
 end
 
 local function setHeaders()
@@ -251,17 +205,16 @@ end
 
 local function refresh()
     if not ns.db or not page then return end
+    if not next(ns.db.profs) then ns.SelectAll() end
     refreshControls()
-    refreshTabs()
     setHeaders()
     local db = ns.db
-    if not next(db.profs) then
-        shown, above = {}, 0
-    else
-        shown, above = ns.Rank(tab ~= "best" and tab or nil, db.mode,
-            { noDE = not db.includeDE and not db.deOnly, deOnly = db.deOnly, noProcs = db.deOnly and db.deNoProcs, recipes = db.recipes })
-    end
-    tbl.emptyText = not next(db.profs) and "Tick a profession above to see what it's worth crafting."
+    local count = 0
+    for _, p in ipairs(ns.PROFESSIONS) do if ns.Selected(p.id) then count = count + 1 end end
+    multi = count > 1
+    shown, above = ns.Rank(nil, db.mode, { noDE = not db.includeDE and not db.deOnly, deOnly = db.deOnly,
+        noProcs = db.deOnly and db.deNoProcs, recipes = db.recipes, search = query })
+    tbl.emptyText = query:match("%S") and ("No item names with \"" .. query .. "\" in them for these professions and filters.")
         or "Nothing to show for these professions and filters."
     tbl:SetRows(shown, fillRow)
 end
@@ -294,35 +247,37 @@ function ns.Page() return page end
 local function buildPage(c)
     page = c
 
-    -- Professions: All, then two rows of five ticks so every name fits.
-    local all = UI.Button(c, "All", 50, 22, function()
-        local everything = true
-        for _, p in ipairs(ns.PROFESSIONS) do if not ns.Selected(p.id) then everything = false end end
-        for _, p in ipairs(ns.PROFESSIONS) do ns.db.profs[p.id] = (not everything) or nil end
-        ns.Refresh()
-    end)
-    all:SetPoint("TOPLEFT", 0, 0)
-    UI.Tip(all, "Tick every profession, or untick them all.")
-    checks = {}
-    for i, p in ipairs(ns.PROFESSIONS) do
-        local col, line = (i - 1) % 5, math.floor((i - 1) / 5)
-        local cb = UI.CheckLabel(c, p.name, function(on)
-            ns.db.profs[p.id] = on or nil
-            ns.Refresh()
+    -- Profession tabs: All, then one per profession (short names so they fit; the tip has the full one).
+    local function tabTip(b, text)
+        UI.Tip(b, function(tt)
+            tt:AddLine(text, 1, 1, 1)
+            tt:AddLine("With every profession lit, clicking one shows just it. After that, each click adds or removes a "
+                .. "profession. All lights them all again. Scan prices the lit ones.", 0.7, 0.7, 0.7, true)
         end)
-        cb.frame:SetPoint("TOPLEFT", 64 + col * CHECK_W, -2 - line * CHECK_H)
-        cb.prof = p.id
-        checks[p.id] = cb
     end
-    local scan = UI.Button(c, "Scan", 104, 24, function() ns.OpenMarketScan() end, "primary")
+    allTab = UI.Button(c, "All", 54, 24, function() ns.SelectAll(); tbl.offset = 0; ns.Refresh() end, "ghost")
+    allTab:SetPoint("TOPLEFT", 0, 0)
+    tabTip(allTab, "Every profession")
+    local x = 53
+    profTabs = {}
+    for _, p in ipairs(ns.PROFESSIONS) do
+        local w = math.max(62, 18 + 7 * #p.short)
+        local b = UI.Button(c, p.short, w, 24, function() ns.ClickProf(p.id); tbl.offset = 0; ns.Refresh() end, "ghost")
+        b:SetPoint("TOPLEFT", x, 0)
+        b.prof = p.id
+        tabTip(b, p.name)
+        profTabs[p.id] = b
+        x = x + w - 1
+    end
+    local scan = UI.Button(c, "Scan", 90, 24, function() ns.OpenMarketScan() end, "primary")
     scan:SetPoint("TOPRIGHT", 0, 0)
     UI.Tip(scan, "At the auction house: King Maker's one Scan. A full scan when the game allows one (every 15 minutes), "
-        .. "otherwise a quick scan of Trade Goods plus everything the ticked professions make and use.")
+        .. "otherwise a quick scan of Trade Goods plus everything the lit professions make and use.")
 
-    -- How to count, disenchanting, which recipes.
-    local y = -52
+    -- How to count, disenchanting, unlearned recipes.
+    local y = ROW2_Y
     modeButtons = {}
-    local x = 0
+    x = 0
     for _, key in ipairs({ "buy", "farm" }) do
         local m = MODES[key]
         local b = UI.Button(c, m.label, 112, 24, function() ns.db.mode = key; ns.Refresh() end)
@@ -350,38 +305,37 @@ local function buildPage(c)
         ns.Refresh()
     end, "Value disenchants without rare procs (the 5% shard on greens, the Nexus Crystal on blues), so you only see what's profitable on the dust and essences you can count on.")
     procCheck.frame:SetPoint("TOPLEFT", x + 256, y - 3)
-    recipesButton = UI.Button(c, "", 128, 24, function()
-        for i, v in ipairs(RECIPES_VIEW) do
-            if v.key == ns.db.recipes then
-                ns.db.recipes = RECIPES_VIEW[i % #RECIPES_VIEW + 1].key
-                break
-            end
-        end
+    hideCheck = UI.CheckLabel(c, "Hide unlearned", function(on)
+        ns.db.recipes = on and "mine" or "all"
+        tbl.offset = 0
+        ns.Refresh()
+    end, function(tt)
+        tt:AddLine("Hide recipes you don't have. Off, they show greyed out, so you can see which patterns are worth getting.", 1, 1, 1, true)
+        tt:AddLine("Trainer recipes always count as yours; patterns count once you open that profession's window. "
+            .. "Right-click any row to mark it as had or not.", 0.7, 0.7, 0.7, true)
+    end)
+    hideCheck.frame:SetPoint("TOPRIGHT", 0, y - 3)
+
+    -- Search: item names with the text anywhere in them.
+    search = UI.EditBox(c, 260, 24, "Search items (any part of the name)", function(text)
+        text = text or ""
+        if text == query then return end
+        query = text
         tbl.offset = 0
         ns.Refresh()
     end)
-    recipesButton:SetPoint("TOPRIGHT", 0, y)
-    UI.Tip(recipesButton, function(tt)
-        for _, v in ipairs(RECIPES_VIEW) do
-            local on = v.key == ns.db.recipes
-            tt:AddLine((on and "> " or "   ") .. v.label .. ": " .. v.hint, on and 1 or 0.7, on and 0.82 or 0.7, on and 0 or 0.7, true)
-        end
-        tt:AddLine(" ")
-        tt:AddLine("Click to switch. Recipes you know are picked up when you open your trade skill window. Right-click any row to mark it as had or not.", 1, 1, 1, true)
-    end)
-
-    -- Profession tabs (made in refreshTabs).
-    tabsHolder = CreateFrame("Frame", nil, c)
-    tabsHolder:SetPoint("TOPLEFT", 0, TAB_Y)
-    tabsHolder:SetPoint("TOPRIGHT", 0, TAB_Y)
-    tabsHolder:SetHeight(24)
+    search:SetPoint("TOPLEFT", 0, SEARCH_Y)
+    search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
+    UI.Tip(search, "Type part of an item's name: \"cloak\" finds every cloak, \"iron\" finds Iron Buckle and Green Iron "
+        .. "Bracers. Escape clears it.")
+    ns.search = search
 
     -- The ranked list.
     local function farm() return ns.db.mode == "farm" end
     local cols = {
         { key = "item", label = "Item", w = 196,
           tip = "Greyed out: a pattern you don't have. A violet CD tag: the recipe has a cooldown (how long), so you can't make it at will. Hover a row for every figure behind it." },
-        { key = "skill", label = "Skill", w = 64, tip = "The skill the recipe needs. On the Best tab the profession comes first, cut to four letters." },
+        { key = "skill", label = "Skill", w = 64, tip = "The skill the recipe needs. With more than one profession showing, the profession comes first, cut to four letters." },
         { key = "mats", label = "Mat cost", w = 84, justify = "RIGHT", tip = function(tt)
             if farm() then
                 tt:AddLine("Raw value: what the auction-house materials would sell for raw, at the lowest buyout after the 5% cut. Vendor reagents aren't in it: they come off the profit instead.", 1, 1, 1, true)
@@ -461,30 +415,6 @@ KM.RegisterPage({
 -- The crown and Settings
 ---------------------------------------------------------------------------
 
--- Home's Best right now: the most profitable craft you know (crafts only, no disenchanting), in the page's mode.
--- Ranking every recipe is the page's work, so Home reuses the answer for a minute, or until the next price scan.
-local bestCache, bestAt, bestScan = nil, -1, nil
-local function lastScan() local sc = KM.mods.Scanner; return sc and sc.db and math.max(sc.db.lastDeep or 0, sc.db.lastQuick or 0) or 0 end
-KM.RegisterHomeCard({ kind = "best", id = "market-craft", order = 10, get = function()
-    if not ns.db then return nil end
-    local now = GetTime and GetTime() or 0
-    if now - bestAt > 60 or now < bestAt or bestScan ~= lastScan() then
-        bestAt, bestScan = now, lastScan()
-        bestCache = false
-        local rows = ns.Rank(nil, ns.db.mode, { noDE = true, recipes = "mine" })
-        local r = rows[1]
-        if r and r.gain and r.gain > 0 then bestCache = { item = r.item, gain = r.gain, made = r.made } end
-    end
-    local b = bestCache
-    if not b then return nil end
-    local info = ns.ItemInfo(b.item)
-    return { label = "Craft", sub = info.name or ("Item " .. b.item), value = "+" .. KM.MoneyShort(b.gain, true), color = C.good,
-        icon = info.icon, page = PAGE,
-        tip = "The most profitable recipe you know right now: " .. (info.name or "?") .. ", " .. KM.Money(b.gain) .. " a craft"
-            .. (ns.db.mode == "farm" and " over selling the materials raw." or " after buying the materials and the 5% cut.")
-            .. " Uses the professions ticked on Crafting Profits. Click for Crafting Profits." }
-end })
-
 -- Your profession skills, on one line under the crown's title (2.9: was Skill-ups').
 KM.RegisterTooltip(function(tt)
     if not ns.db then return end
@@ -498,12 +428,6 @@ end)
 
 KM.RegisterQuickAction({ id = "market-crafting", label = "Crafting Profits", order = 20, func = function() ns.Toggle(true) end })
 
-local function viewChoices()
-    local out = {}
-    for _, v in ipairs(RECIPES_VIEW) do out[#out + 1] = { v.key, v.key == "all" and "All" or (v.key == "mine" and "Mine" or v.label) } end
-    return out
-end
-
 KM.RegisterSettings({ id = "market", label = "Market", order = 20, rows = {
     { type = "header", label = "Crafting Profits" },
     { type = "choice", label = "Count materials as", options = { { "buy", MODES.buy.label, MODES.buy.hint }, { "farm", MODES.farm.label, MODES.farm.hint } },
@@ -515,13 +439,13 @@ KM.RegisterSettings({ id = "market", label = "Market", order = 20, rows = {
       get = function() return ns.db.deOnly end, set = function(v) ns.db.deOnly = v; ns.Refresh() end },
     { type = "check", label = "No procs (disenchanting only)", tip = "Value disenchants without the rare shard and crystal procs.",
       get = function() return ns.db.deNoProcs end, set = function(v) ns.db.deNoProcs = v; ns.Refresh() end },
-    { type = "choice", label = "Recipes to show", options = viewChoices(), tip = "All: every recipe, patterns you lack greyed out. Mine: trainer recipes and patterns you have. Patterns I lack: only the ones you don't have.",
-      get = function() return ns.db.recipes end, set = function(v) ns.db.recipes = v; ns.Refresh() end },
+    { type = "check", label = "Hide unlearned recipes", tip = "Show only trainer recipes and the patterns you have. Off: every recipe, the ones you don't have greyed out.",
+      get = function() return ns.db.recipes == "mine" end, set = function(v) ns.db.recipes = v and "mine" or "all"; ns.Refresh() end },
     { type = "button", label = "Clear my have/don't-have marks", func = function() SlashCmdList.MARKETKING("recipes reset") end,
       tip = "Back to what your trade skill windows show, for this character." },
     { type = "header", label = "Recipe data" },
     { type = "text", label = "Every WoW: Forever recipe and its reagents: data from ForeverDB.net (foreverdb.net, GPL-3.0)." },
     { type = "header", label = "Commands" },
-    { type = "text", label = "/mk   open Crafting Profits\n/mk scan   Scan (at the auction house): prices the ticked professions\n/mk mode buy|mine   Buy mats or Use my mats\n"
-        .. "/mk recipes all|mine|missing   which recipes to show\n/mk recipes reset   clear your have/don't-have marks" },
+    { type = "text", label = "/mk   open Crafting Profits\n/mk scan   Scan (at the auction house): prices the lit professions\n/mk mode buy|mine   Buy mats or Use my mats\n"
+        .. "/mk recipes all|mine   show every recipe, or hide unlearned\n/mk recipes reset   clear your have/don't-have marks" },
 } })

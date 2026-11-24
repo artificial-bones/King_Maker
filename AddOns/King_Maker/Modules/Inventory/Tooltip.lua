@@ -37,7 +37,10 @@ function ns.AddTooltipLines(tt, id)
         local s, bits = ns.db.stock[c[1]] or {}, {}
         for _, place in ipairs(ns.PLACES) do
             local n = (s[place] or {})[id]
-            if n and n > 0 then table.insert(bits, SHORT[place] .. " " .. n) end
+            if n and n > 0 then
+                local nn = place == "ah" and ns.NeutralAH(c[1], id) or 0
+                table.insert(bits, SHORT[place] .. " " .. n .. (nn > 0 and (" (" .. nn .. " neutral)") or ""))
+            end
         end
         tt:AddDoubleLine("     " .. ns.CharText(c[1]), table.concat(bits, ", "), 1, 1, 1, 0.65, 0.65, 0.65)
     end

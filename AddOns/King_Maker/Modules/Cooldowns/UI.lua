@@ -710,16 +710,6 @@ KM.RegisterHomeCard({ kind = "attention", id = "cooldowns", order = 10, get = fu
     return out
 end })
 
-KM.RegisterHomeCard({ kind = "chars", id = "cooldowns", order = 30, get = function()
-    if not ns.db then return nil end
-    local here, alts = ns.ReadyList()
-    local out = {}
-    for _, it in ipairs(here) do out[it.key] = out[it.key] or { n = 0, color = C.bad }; out[it.key].n = out[it.key].n + 1 end
-    for _, it in ipairs(alts) do out[it.key] = out[it.key] or { n = 0, color = C.accent }; out[it.key].n = out[it.key].n + 1 end
-    for _, f in pairs(out) do f.text = f.n .. " cd" .. (f.n == 1 and "" or "s") .. " ready"; f.tip = f.n .. " profession cooldown" .. (f.n == 1 and "" or "s") .. " ready." end
-    return out
-end })
-
 KM.RegisterHomeCard({ kind = "income", id = "cooldowns", order = 30, get = function(since)
     if not ns.db then return nil end
     local total, n, value = 0, 0, {}

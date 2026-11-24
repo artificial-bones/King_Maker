@@ -89,6 +89,28 @@ L.execute("MONEY = 2000000; FIRE('PLAYER_MONEY'); RUN_TIMERS()")
 assert L.eval("InventoryKingDB.chars")[ME].gold == 2000000
 print("MAIL AND AH OK")
 
+# 2.18.0: the neutral auction house (Gadgetzan's Tanaris) lists only its own auctions: On AH keeps both houses
+L.execute("""PLAYER.map = 1446
+OWNED = { { itemKey = { itemID = 2589 }, quantity = 4, status = 0 }, { itemKey = { itemID = 118 }, quantity = 2, status = 0 } }
+FIRE("OWNED_AUCTIONS_UPDATED"); RUN_TIMERS()""")
+st = stock()[ME]
+assert st.ah[2589] == 14 and st.ah[118] == 2 and st.ahn[2589] == 4 and st.ahnT, (st.ah[2589], st.ahn[2589])
+# back at the faction house: only the faction part is replaced, the neutral one stays
+L.execute("""PLAYER.map = 1453
+OWNED = { { itemKey = { itemID = 2589 }, quantity = 6, status = 0 } }
+FIRE("OWNED_AUCTIONS_UPDATED"); RUN_TIMERS()""")
+st = stock()[ME]
+assert st.ah[2589] == 10 and st.ah[118] == 2 and st.ahn[2589] == 4, st.ah[2589]
+assert L.eval("InventoryKing.GetPlaces(2589)")[ME].ahn == 4
+# a neutral read with nothing up clears only the neutral part
+L.execute("""PLAYER.map = 1446; OWNED = {}; FIRE("OWNED_AUCTIONS_UPDATED"); RUN_TIMERS()""")
+st = stock()[ME]
+assert st.ah[2589] == 6 and st.ah[118] is None and st.ahn[2589] is None
+L.execute("""OWNED = { { itemKey = { itemID = 2589 }, quantity = 4, status = 0 } }; FIRE("OWNED_AUCTIONS_UPDATED"); RUN_TIMERS()
+PLAYER.map = 1453""")
+assert stock()[ME].ah[2589] == 10
+print("NEUTRAL AH OK")
+
 # What it's worth: market price, else lowest, else vendor
 assert ns.Price(2589) == (100, "market") and ns.Price(2770) == (40, "lowest") and ns.Price(118) == (6, "vendor")
 assert ns.Price(6000) == (1000, "vendor")
@@ -136,8 +158,10 @@ print("HISTORY OK")
 first, lines = L.eval("HOVER(2589)")
 lines = [str(x) for x in lines.values()]
 assert any(l.startswith("You own|45  ") and "worth" in l for l in lines), lines
-assert any("bags 35, on AH 10" in l for l in lines), lines
-assert any("Jay" in l and l.endswith("|bags 35, on AH 10") for l in lines), lines
+assert any("bags 35, on AH 10 (4 neutral)" in l for l in lines), lines
+assert any("Jay" in l and l.endswith("|bags 35, on AH 10 (4 neutral)") for l in lines), lines
+_, lines = L.eval("HOVER(118)")
+assert not any("neutral" in str(l) for l in lines.values()), "no neutral auctions: nothing extra"
 ik("tooltip off"); assert L.eval("InventoryKingDB.ui.tooltip") is False
 _, lines = L.eval("HOVER(2589)")
 assert not any("owned" in str(l) for l in lines.values())

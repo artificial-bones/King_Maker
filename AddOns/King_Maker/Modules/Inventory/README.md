@@ -29,7 +29,7 @@ Inventory keeps up as you play.
 | Bank | When you open it. The game only lets addons read the bank while it's open |
 | Warband bank | When you open it, kept once under "Warband" |
 | Mailbox | Items attached to mail, and gold waiting in it, whenever you open it |
-| On the auction house | Your auctions still up, whenever the auction house lists them (the Auctions tab) |
+| On the auction house | Your auctions still up, whenever the auction house lists them (the Auctions tab). Your faction's and the neutral one's (Gadgetzan, Booty Bay, Everlook) are both kept: each only lists its own. Hover an item to see how many are neutral. |
 | Gold | Whenever it changes |
 
 Soulbound items are left out: they can't be sold, so they aren't worth anything.
@@ -99,8 +99,9 @@ Ctrl+A, then Ctrl+C, and paste it into a spreadsheet.
 
 ```lua
 InventoryKing.GetCount(itemID)    -- total, { ["Name-Realm"] = n } across bags, bank, mail and auctions
-InventoryKing.GetPlaces(itemID)   -- { ["Name-Realm"] = { bags, bank, mail, ah, bagsT, bankT, mailT, ahT } }: how many in
-                                  -- each place and when it was last read (nil: never), characters holding any
+InventoryKing.GetPlaces(itemID)   -- { ["Name-Realm"] = { bags, bank, mail, ah, bagsT, bankT, mailT, ahT, ahn } }: how many in
+                                  -- each place and when it was last read (nil: never), characters holding any;
+                                  -- ahn = how many of the ah ones are on the neutral auction house
 InventoryKing.NetWorth()          -- { total, gold, mail, assets, items, chars }, in copper
 InventoryKing.GetCharacters()     -- { { who, class, level, gold, mail, assets, items, worth, seen, bankSeen } }
 InventoryKing.GetHistory(days, who) -- { { day, gold, assets, total } }, oldest first

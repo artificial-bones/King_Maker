@@ -310,6 +310,26 @@ function KM.Register(f, ...)
     end
 end
 
+-- Which auction house you're standing at: "neutral" (the goblins' in Gadgetzan, Booty Bay and Everlook, open
+-- to both factions, 15% cut) or "faction" (your own side's). Only one auction house is in each of those zones,
+-- so the zone tells (map IDs, then the zone and subzone names as a fallback). Scanner's /sk house neutral|faction
+-- overrides it when the guess is wrong; /sk house auto goes back to guessing.
+KM.NEUTRAL_MAPS = { [1446] = "Gadgetzan", [1434] = "Booty Bay", [1452] = "Everlook" }
+local NEUTRAL_ZONES = { Gadgetzan = true, ["Booty Bay"] = true, Everlook = true, Tanaris = true,
+    ["Stranglethorn Vale"] = true, Winterspring = true }
+function KM.AuctionHouse()
+    local sk = KM.mods and KM.mods.Scanner
+    local forced = sk and sk.db and sk.db.house
+    if forced == "neutral" or forced == "faction" then return forced end
+    local map = C_Map and C_Map.GetBestMapForUnit and select(2, pcall(C_Map.GetBestMapForUnit, "player"))
+    if type(map) == "number" and KM.NEUTRAL_MAPS[map] then return "neutral" end
+    local zone = GetRealZoneText and GetRealZoneText() or nil
+    local sub = GetSubZoneText and GetSubZoneText() or nil
+    if (zone and NEUTRAL_ZONES[zone]) or (sub and NEUTRAL_ZONES[sub]) then return "neutral" end
+    return "faction"
+end
+function KM.IsNeutralAH() return KM.AuctionHouse() == "neutral" end
+
 -- Runs fn and reports an error once instead of breaking the caller (calls across modules go through this).
 function KM.Safe(fn, ...)
     if not fn then return end

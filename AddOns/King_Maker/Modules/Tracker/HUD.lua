@@ -7,7 +7,6 @@ local C = UI.C
 --   All         total, gold per hour, the last ten minutes' pace, the Mobs | Gathering split, a sparkline, top items
 --   Mobs        kills and each mob's value and value per kill, then the top drops (skins included)
 --   Gathering   mining, herbs, fishing, treasure and containers with value per action, then the top materials
---   Prices      Mat Prices: what raw materials sell for (was the farming ledger's second tab)
 -- The title bar keeps the clock and gold per hour, also when folded with -. x hides the box; the session keeps
 -- recording. Wheel scrolls the lists; Ctrl+wheel zooms the box (70-140%). L opens the Farming Ledger.
 -- The lists are as long as what they hold, up to the rows the player allows: drag the dots in the bottom-right corner
@@ -23,12 +22,12 @@ ns.AQUA = { 0.098, 0.620, 0.439, 1 }     -- Gathering #199E70
 ns.BLUE = { 0.224, 0.529, 0.898, 1 }     -- Mixed    #3987E5
 ns.ACTIVITY_COLOR = { mobs = ns.ORANGE, gathering = ns.AQUA, mixed = ns.BLUE, none = C.dim }
 
-local frame, content, tabs, priceTabs
+local frame, content, tabs
 local big, gphFS, paceFS, unpricedFS, split, legend, spark, countsFS, footer
 local btnPause, btnStop, btnSplit, btnStart, btnLedger, autoCheck
 local headHit, splitHit   -- hover areas over the headline numbers and the mobs/gathering bar
 local rows, used, y = {}, 0, 0
-local itemOffset, priceOffset = 0, 0
+local itemOffset = 0
 local drag0       -- { w, rows } when a grip drag started
 local justSaved   -- { s, at }
 
@@ -60,7 +59,6 @@ function ns.HUDRows() return math.max(ROWS_MIN, math.min(maxRows(), math.floor(t
 
 -- Each tab's list keeps its old length at the default and moves row for row with the grip.
 local function moreRows() return ns.HUDRows() - ROWS_DEFAULT end
-local function priceRows() return math.max(ROWS_MIN, 16 + moreRows()) end
 local function gatherRows() return math.max(ROWS_MIN, 6 + moreRows()) end
 
 -- Two lists sharing budget rows: each gets half, and what one doesn't need goes to the other.
@@ -294,8 +292,7 @@ local function create()
         onClose = function() ns.SetHUD(false) end,
         onCollapse = function(collapsed) U().hudCollapsed = collapsed; ns.UpdateHUD() end,
         onWheel = function(delta)
-            if U().hudTab == "prices" then priceOffset = math.max(0, priceOffset - delta * 3)
-            else itemOffset = math.max(0, itemOffset - delta) end
+            itemOffset = math.max(0, itemOffset - delta)
             ns.UpdateHUD()
         end,
         zoom = { get = function() return U().hudScale or 1 end, set = function(z) U().hudScale = z end },
@@ -325,10 +322,8 @@ local function create()
 
     local items = { { id = "all", label = "All", w = 66 }, { id = "mobs", label = "Mobs", w = 66 },
         { id = "gathering", label = "Gathering", w = 70 } }
-    if KM.mods.Gather and KM.mods.Gather.MAT_TABS then items[#items + 1] = { id = "prices", label = "Prices", w = 64 } end
     tabs = UI.Tabs(b, items, function(id) U().hudTab = id; itemOffset = 0; ns.UpdateHUD() end, 20)
     tabs:SetPoint("TOPLEFT", 0, 0)
-    if tabs.buttons.prices then UI.Tip(tabs.buttons.prices, "What gathering mats fetch right now, best first: market price after the 5% cut, or vendor price if that's higher.") end
 
     content = CreateFrame("Frame", nil, b)
     content:SetPoint("TOPLEFT", 0, -26)
@@ -382,17 +377,13 @@ local function create()
     btnLedger = UI.Button(content, "Open the ledger", 120, 20, function() TrackerKing.OpenLedger() end)
     autoCheck = UI.CheckLabel(content, "Start by itself when I farm", function(v) ns.Settings().autoStart = v end,
         "A session starts by itself after a few kills, nodes or catches within five minutes.")
-
-    local pitems = {}
-    for _, t in ipairs((KM.mods.Gather and KM.mods.Gather.MAT_TABS) or {}) do pitems[#pitems + 1] = { id = t.key, label = t.label, w = 53 } end
-    priceTabs = UI.Tabs(content, pitems, function(key) U().priceTab = key; priceOffset = 0; ns.UpdateHUD() end, 18)
 end
 
 local function hideAll()
     for i = 1, #rows do rows[i]:Hide() end
     used, y = 0, 0
     for _, w in ipairs({ big, gphFS, paceFS, unpricedFS, split, legend, spark, countsFS, footer, btnPause, btnStop,
-        btnSplit, btnStart, btnLedger, autoCheck.frame, priceTabs, headHit, splitHit }) do w:Hide() end
+        btnSplit, btnStart, btnLedger, autoCheck.frame, headHit, splitHit }) do w:Hide() end
 end
 
 local function buttons(s)
@@ -525,49 +516,6 @@ local function drawGathering(s, t)
     buttons(s)
 end
 
-local function drawPrices()
-    local G = KM.mods.Gather
-    if not (G and G.MAT_TABS and G.MaterialList) then return end
-    local key
-    for _, tab in ipairs(G.MAT_TABS) do if tab.key == U().priceTab then key = tab.key end end
-    key = key or "mine"
-    priceTabs:Select(key)
-    place(priceTabs, 24)
-    local list = {}
-    for _, id in ipairs(KM.Safe(G.MaterialList, key) or {}) do
-        local value = KM.ItemValue(id)
-        local market, when
-        if ScannerKing and ScannerKing.GetMarketPrice then market, when = ScannerKing.GetMarketPrice(id) end
-        if not value and market then value = market * KM.AH_CUT end   -- item info not loaded yet: the AH side of the rule
-        list[#list + 1] = { id = id, price = value or 0, name = (G.ItemName and KM.Safe(G.ItemName, id)) or KM.Item(id).name or ("Item " .. id), when = when }
-    end
-    table.sort(list, function(a, b) if a.price ~= b.price then return a.price > b.price end return a.name < b.name end)
-    local PRICE_ROWS = priceRows()
-    priceOffset = math.max(0, math.min(priceOffset, #list - PRICE_ROWS))
-    ns.hudList = { rows = math.min(PRICE_ROWS, #list), cap = PRICE_ROWS, total = #list }
-    local newest
-    for _, e in ipairs(list) do if e.when and (not newest or e.when > newest) then newest = e.when end end
-    for i = 1, math.min(PRICE_ROWS, #list) do
-        local e = list[i + priceOffset]
-        local r = row()
-        r.left:SetText(e.name)
-        r.right:SetText(e.price > 0 and KM.Money(e.price) or "|cff808080no price|r")
-        r.item = e.id
-    end
-    local note
-    if newest then
-        note = "Prices from " .. ((G.PriceAge and KM.Safe(G.PriceAge, newest)) or KM.Ago(newest)) .. ", after the AH cut"
-    else
-        note = ScannerKing and "Scan at the auction house to fill this in" or "The Scanner module scans prices"
-    end
-    if #list > PRICE_ROWS then
-        note = note .. ". Scroll for more (" .. (priceOffset + 1) .. "-" .. (priceOffset + math.min(PRICE_ROWS, #list)) .. " of " .. #list .. ")"
-    end
-    y = y - 2
-    footer:SetText(note)
-    place(footer, 14, 2)
-end
-
 local function drawIdle()
     local r = row(C.muted)
     r.left:SetText("Not farming right now.")
@@ -638,11 +586,10 @@ function ns.UpdateHUD()
     if collapsed then return end
     split:SetWidth(W - 16); legend:SetWidth(W - 16); spark:SetWidth(W - 16)
     local tab = U().hudTab or "all"
-    if tab == "prices" and not (KM.mods.Gather and KM.mods.Gather.MAT_TABS) then tab = "all" end
+    if tab ~= "mobs" and tab ~= "gathering" then tab = "all" end -- 2.18.0 removed the Prices tab
     tabs:Select(tab)
     hideAll()
-    if tab == "prices" then drawPrices()
-    elseif not s then drawIdle()
+    if not s then drawIdle()
     elseif tab == "mobs" then drawMobs(s, t)
     elseif tab == "gathering" then drawGathering(s, t)
     else drawAll(s, t) end

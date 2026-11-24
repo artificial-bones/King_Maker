@@ -112,11 +112,7 @@ gathering and mob farming alike (its own README: `Modules/Tracker/README.md`):
 - `/gt ledger` still shows and hides it (`on`, `off`); `/gt ledger reset` saves
   the session and starts fresh; `/gt ledger timer` pauses or resumes it. `/farm`
   does the same and more.
-- The **Mat Prices** tab is the tracker's **Prices** tab, unchanged: **Mining**,
-  **Herbs**, **Skins**, **Cloth** and **Ench**, most valuable first, scroll with
-  the mouse wheel. Prices there use King Maker's one value rule now (the auction
-  price after the 5% cut, or the vendor price if that's better), so they read a
-  little lower than the old raw lowest buyout.
+- The **Mat Prices** tab became the tracker's **Prices** tab, and King Maker 2.18.0 removed it.
 - Your old ledger moved into the Farming Ledger as one **Carried over** session,
   and the tracker shows where your ledger box was.
 

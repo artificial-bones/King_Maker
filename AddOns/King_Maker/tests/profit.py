@@ -355,9 +355,15 @@ ns.SelectTab("overview")
 assert not KM.errorShown, last(L)
 rv = P.tiles.realized.value.text
 assert rv.startswith("+") and P.tiles.realized.value.color[1] == L.eval("KingMaker.UI.C.good[1]"), rv
-assert P.tiles.under.value.text == "1 item" and P.tiles.under.value.color[1] == L.eval("KingMaker.UI.C.bad[1]")
-assert "unit" in P.tiles.unknown.sub.text
-for key in ("realized", "ifsold", "stock", "under", "gone", "unknown"):
+# 2.18.0: four tiles; underwater sits under If sold now, the rest kept out of profit in one muted line
+assert [P.tiles[i].labelText for i in range(1, 5)] == ["Profit", "Sales", "Stock worth", "If sold now"]
+assert P.tiles.under is None and P.tiles.unknown is None
+assert "1 underwater" in P.tiles.ifsold.sub.text and "on cost" in P.tiles.realized.sub.text, P.tiles.ifsold.sub.text
+assert "sales" in P.tiles.sales.sub.text or "sale" in P.tiles.sales.sub.text
+assert "cost unknown" in P.asideText.text and "used or gone" in P.asideText.text and "units" in P.asideText.text
+L.execute("GameTooltip.lines = {}"); P.aside.RunScript(P.aside, "OnEnter")
+assert any("Kept out of profit" in x for x in tiptext(L)) and any("Pending" in x for x in tiptext(L))
+for key in ("realized", "sales", "stock", "ifsold"):
     t = P.tiles[key]
     L.execute("GameTooltip.lines = {}"); t.RunScript(t, "OnEnter")
     assert len(tiptext(L)) >= 3, key
@@ -371,11 +377,13 @@ hb = [r for r in P.hbars.rows.values() if r.shown is not False]
 assert [r.data.label for r in hb] == ["Auction buys", "Farmed", "Crafted", "Opening stock", "Vendor, trades", "Deposits lost"]
 assert hb[1].value.text.find("+") >= 0, "farmed units sold free: all profit"
 irows = rows(P.itemTable)
-assert {r.data.item for r in irows} >= {2589, 2770, 13468}
-lotus = [r for r in irows if r.data.item == 13468][0]
-assert "UNDER" in lotus.cells.flag.text and lotus.pnlTint.shown, "underwater: the flag and the red tint"
-lotus.RunScript(lotus, "OnEnter")
-assert any("List at" in x for x in tiptext(L)), "break-even"
+assert {r.data.item for r in irows} == {2589, 2770}, "sold items only: the held-only Black Lotus is on Holdings"
+lin_i = [r for r in irows if r.data.item == 2589][0]
+assert lin_i.cells.sold.text == "40" and lin_i.cells.realized.text.find("+") >= 0
+assert lin_i.cells.price.text and lin_i.cells.held.text not in ("", None), (lin_i.cells.price.text, lin_i.cells.held.text)
+ore = [r for r in irows if r.data.item == 2770][0]
+assert "no cost" in ore.cells.cost.text or "free" in ore.cells.cost.text or ore.cells.cost.text, ore.cells.cost.text
+assert "items sold" in P.footer.text or "item sold" in P.footer.text or "Counts are off" in P.footer.text, P.footer.text
 click(hb[1])
 assert ns.db.ui.tab == "trades" and all(any(p.lot.k == "l" for p in vals(r.data.parts)) for r in rows(P.saleTable)), "click: those trades"
 assert "From: Farmed" in P.footer.text

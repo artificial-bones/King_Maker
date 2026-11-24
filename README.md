@@ -4,7 +4,7 @@ One addon for **World of Warcraft: Forever** that does the lot: auction house pr
 profits (with a profit panel beside the profession window), your sales ledger, profit and loss on every trade, everything you own
 and your net worth, which mobs
 are worth farming, one tracker and ledger for every farming session, gathering spots, crafting cooldowns on every
-character, your favorites beside the auction house, what quests are worth and rested XP. All of it in one window, one minimap button and
+character, your favorites beside the auction house and rested XP. All of it in one window, one minimap button and
 one set of auction house prices.
 
 **[Download the latest release](https://github.com/artificial-bones/King_Maker/releases/latest)** (`King_Maker.zip`),
@@ -42,8 +42,6 @@ or install **King Maker** from CurseForge.
   want, the 7-day trend, a detail pane with a price chart, and an auction house panel that looks items up, shows how
   many are under your max and steps through the deals (every buy is still your click).
 - **Zoom the window**: drag the dots in its bottom-right corner (`/km size 120`, `/km size reset`).
-- **Quest Gold looks up quest gold by itself** the first time each character enters a zone, and ships with every
-  amount learned so far.
 - **Version check**: when a guildmate has a newer King Maker, you get one line in chat. `/km version`.
 
 ## New in 2.0: one addon, one window
@@ -91,7 +89,7 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 
 | Group | Page | Slash | What it does |
 |---|---|---|---|
-| | Home | `/km` | Everything at a glance: net worth, P&L, gold per hour and cooldowns up top, a 30-day chart, what needs your attention, where your gold came from, the best craft / farm / white item / quest zone right now, and your characters |
+| | Home | `/km` | Everything at a glance: net worth, P&L, gold per hour and cooldowns up top, a 30-day chart, what needs your attention, where your gold came from, your top items and the numbers for the last 30 days (net worth change, realized profit, return on cost, sell-through, gold per hour) |
 | Auction House | Prices | `/sk` | Scans and today's prices |
 | Auction House | Price History | `/ek` | Every item's price and supply over time |
 | Auction House | Sales Ledger | `/mlk` | What you sold and bought, profit, buyers, what isn't selling |
@@ -99,9 +97,8 @@ Your settings and data live in `WTF`, not in the addon folders, so updating neve
 | Crafting | Cooldowns | `/cdk` | Transmutes, Mooncloth and salt on every character, and what they're worth |
 | Gold | Profit & Loss | `/pnl` | Every sale matched to what you paid; what you hold, at cost and at today's price |
 | Gold | Inventory | `/ik` | Everything on every character, and your net worth |
-| Gold | Quest Gold | `/qk` | What the level 48+ quests left are worth, zone by zone |
 | Farming | Farming Ledger | `/farm` | Every farming session: what it made, gold per hour, graphs |
-| Farming | Mob Farming, White Items | `/fk` | Which mobs and white items are worth farming |
+| Farming | Mob Farming | `/fk` | Which mobs are worth farming |
 | Farming | Gathering | `/gt` | Mining, herb, fishing and treasure spots on your maps |
 | Characters | Rested XP | `/rk` | Rested XP on all your characters |
 | Guild | Blacklist | `/bl` | Players your guild won't group with, shared with every guildmate running King Maker: warnings when they join or invite you, BLACKLISTED in chat |
@@ -122,6 +119,10 @@ The price engine every other page reads from.
   and who can learn it, and how many you own. Each part can be switched off, or held back
   until you press Shift (the 3 most valuable crafts from a material are there too, off by default).
 - **The price list**, grouped like the auction house, with search and sortable columns.
+- **The neutral auction house** (Gadgetzan, Booty Bay, Everlook), for those who use it: scans there keep their own
+  prices, and the Prices page compares them with your faction's (what's cheaper there to bring home, what pays more
+  there even after its 15% cut), with a Neutral AH line in tooltips. Your values never use them, and none of it shows
+  until you scan a neutral auction house.
 - **Guild sharing**: Trade Goods prices go to guildmates running King Maker after every scan, and when you log in
   whoever online holds the newest scan catches you up, even if it was scanned by someone who has since logged off.
 
@@ -151,6 +152,8 @@ Your auction house mail as a ledger: what you actually made, where it came from,
 - **Strategies** (Herbalism, Mining, Cloth, Mob drops...) so you see which farms pay off.
 - **Items**, **Not selling** (and why it might be stuck), **Buyers** and **Sellers**, and **Export** to a spreadsheet.
 - **My characters** beside the mailbox: click an alt to put its name in Send Mail.
+- **Neutral auction houses**: their sales, purchases and expired auctions are recognised, and once you have any an
+  All houses / Faction AH / Neutral AH button splits the ledger by house.
 
 [Full guide](AddOns/King_Maker/Modules/Mail#readme)
 
@@ -162,7 +165,9 @@ For every item your professions make: sell the raw materials, craft and sell, or
   first, after the 5% auction cut.
 - **Two ways to count materials**: *Buy mats* treats them as a cost (finds flips), *Use my mats* treats them as
   already yours (is crafting worth more than selling them raw?).
-- **Disenchanting**, or **DE only** to hunt disenchant profits; **your recipes** or the patterns you lack.
+- **Profession tabs** across the top, a **search** that finds any part of an item's name, and every recipe shown
+  with the ones you don't have greyed out (or **Hide unlearned**).
+- **Disenchanting**, or **DE only** to hunt disenchant profits.
 - A **red line** where crafting stops paying, and a hover breakdown of every material and price.
 
 [Full guide](AddOns/King_Maker/Modules/Market#readme)
@@ -208,18 +213,17 @@ net worth.
   ranked.
 - **Items**: auction house categories, filter by character and place, search, sort any column, **Export**; with
   Profit & Loss, what each item cost you and what selling it now would make.
-- **Item tooltips** show how many you own and where.
+- **Item tooltips** show how many you own and where (and how many of your auctions are on a neutral auction house).
 
 Log in on each character and open each bank once. [Full guide](AddOns/King_Maker/Modules/Inventory#readme)
 
-### Mob Farming and White Items (was Farm King)
+### Mob Farming (was Farm King)
 
 Ranks mobs by the average gold a kill is worth: coin plus each drop's chance times what it sells for.
 
 - **Drop rates from real kills**: every loot window you open is recorded.
 - **Best farms**, favorites, recent kills, this zone and every zone; **mob pages** with every drop's chance and value.
-- **Track on map** (with QuestieDB) and **White Items** worth farming. Kills and drops also go to the **Farm
-  Tracker** (below).
+- **Track on map** (with QuestieDB). Kills and drops also go to the **Farm Tracker** (below).
 
 [Full guide](AddOns/King_Maker/Modules/Farm#readme)
 
@@ -230,7 +234,7 @@ Marks mining, herb, fishing and treasure spots on your world map and minimap, an
 - **Auto-tags nodes when you harvest them**, or mark one by hand: `/gt mine thorium`.
 - **Markers** with size, opacity and per-type show/hide; filters like `/gt only thorium, mithril`.
 - **Loot stats per node**, **profiles**, **guild sync** and share codes. What you gather goes to the **Farm
-  Tracker** (below), whose Prices tab lists raw materials by their auction price.
+  Tracker** (below).
 - Works with **Leatrix Maps**.
 
 [Full guide](AddOns/King_Maker/Modules/Gather#readme)
@@ -239,7 +243,7 @@ Marks mining, herb, fishing and treasure spots on your world map and minimap, an
 
 One tracker for everything you farm, and a ledger of every session.
 
-- **The Farm Tracker**: a small floating box with All, Mobs, Gathering and Prices tabs. Mob loot and coin, mining,
+- **The Farm Tracker**: a small floating box with All, Mobs and Gathering tabs. Mob loot and coin, mining,
   herbs, skinning, fishing, pickpocketing, chests and opened clams or lockboxes, valued at the auction house after
   its cut (or a vendor, when that pays more). Start, Pause, Stop & save and Split; it pauses itself when you're idle
   and can start itself when you begin farming. Its lists grow with what you loot; drag its corner dots for more rows
@@ -250,24 +254,6 @@ One tracker for everything you farm, and a ledger of every session.
   `/gt ledger` still work.
 
 [Full guide](AddOns/King_Maker/Modules/Tracker#readme)
-
-### Quest Gold (was Quest King)
-
-Since Forever's November hotfix, most quests of level 48 and up pay gold. Quest Gold works out what each one is
-worth and where the most is left for the character you're on.
-
-- **Every 48+ quest** (847 of them, in 38 zones) for your faction and class, with the zones ranked by the gold
-  you have left to earn there: quests left of total, and what they're worth.
-- **Each quest's worth**: its gold, plus the best reward item at today's prices (auction house after the cut, or
-  a vendor), plus any item it always gives, minus what the items you hand in would sell for.
-- **Done, in your log, ready, your level too low, or after another quest**, for the character you're logged in on.
-- **Forever's real quest gold** ships with King Maker (every amount learned so far), is looked up by itself the
-  first time each character enters a zone, and is learned as you quest (quest givers, your log, turn-ins). Amounts not
-  known yet are estimates, marked ~.
-
-Dungeon Quests is gone in 2.4.0: other addons do dungeon quests better.
-
-[Full guide](AddOns/King_Maker/Modules/Quest#readme)
 
 ### Cooldowns (new in 2.6)
 
@@ -313,9 +299,6 @@ doesn't include or change any of it, so install Questie and QuestieDB from their
 **Recipe data from [ForeverDB.net](https://foreverdb.net)** (GPL-3.0): every Forever recipe, its reagents, skill
 ranges and where it's learned, used by Crafting Profits, the profession panel and the item tooltips. Thank you to ForeverDB for
 collecting it and sharing it.
-
-**Quest data from [CMaNGOS classic-db](https://github.com/cmangos/classic-db)** (GPL-3.0), the open Classic world
-database: quest levels, requirements and rewards for Quest Gold, with zones and Forever's own quests from ForeverDB.net.
 
 Thanks also to the authors of LibStub, CallbackHandler and HereBeDragons, which King Maker includes.
 

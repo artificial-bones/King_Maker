@@ -11,7 +11,7 @@ local ns = KM.Module("Tracker", { title = "Farm Tracker", short = "Tracker", db 
 --   HUD.lua       the floating Farm Tracker (UI.HUD "KingMakerFarmTracker"): All, Mobs, Gathering, Prices
 --   Page.lua      the Farming Ledger page (Sessions), quick actions, Home tile, crown tooltip, settings
 --   Detail.lua    one saved session: tiles, charts, Items / Mobs / Gathering / Money
---   Trends.lua    the ledger's Trends and Mat Prices tabs, and its export (2.6.2)
+--   Trends.lua    the ledger's Trends tab and its export (2.6.2)
 --
 -- Saved data: TrackerKingDB (account-wide, version 1): live[char] = the session in progress per character,
 -- sessions = finished ones (each tagged with its character), settings, ui. See the King Dashboard

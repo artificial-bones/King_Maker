@@ -27,20 +27,22 @@ Since King Maker 2.0 it has no window or minimap button of its own: it's the
 
 ## Use
 
-1. Tick the professions you care about at the top of the page (Alchemy,
-   Blacksmithing, Cooking, Enchanting, Engineering, First Aid, Leatherworking,
-   Smelting, Tailoring; **All** ticks or unticks them all).
+1. Pick the professions with the tabs at the top of the page (Alch, Smith,
+   Cook, Ench, Eng, First Aid, Leather, Smelt, Tailor; hover one for its full
+   name). They all start lit (**All**). Click one to show just that
+   profession; after that each click turns a profession on or off, lit or
+   not. **All** lights them all again.
 2. At the auction house, click **Scan** (the title bar, or the button on this
    page). When the game allows a full scan (once every 15 minutes) it prices
    every item on the auction house; otherwise it does a quick scan of Trade
-   Goods plus every item the ticked professions make and use, and every
-   disenchanting material. There is no picker any more: the ticks are the
-   choice.
+   Goods plus every item the lit professions make and use, and every
+   disenchanting material. There is no picker: the lit tabs are the choice.
 3. The page updates when the scan is done. Open it any time from the King
    Maker window, the crown's right-click menu or `/mk`.
-4. **Best** has every ticked profession together; the other tabs have one
-   profession each (short names when they're all ticked). Everything is
-   sorted most profitable first.
+4. Type in **Search** to find items by any part of their name ("cloak" finds
+   every cloak, "iron" finds Iron Buckle and Green Iron Bracers). Escape
+   clears it. Everything is sorted most profitable first; with more than one
+   profession lit, the Skill column says which profession each row is.
 
 Each row shows:
 
@@ -59,13 +61,9 @@ by what crafting and disenchanting them makes, for when you're only hunting
 disenchant profits; **No procs** next to it values disenchants without the
 rare shard and crystal procs.
 
-The recipes button (right, under Scan) chooses which recipes you see;
-click it to switch:
-
-- **All recipes**: everything, with patterns you don't have greyed out.
-- **My recipes**: trainer recipes plus the patterns you have.
-- **Patterns I lack**: only patterns you don't have, to see which are worth
-  getting.
+Every recipe shows, and the ones you don't have are **greyed out**, so you can
+see which patterns are worth getting. Tick **Hide unlearned** (right, under
+Scan) to show only the recipes you have.
 
 Trainer recipes always count as yours. A pattern recipe (one taught by a
 pattern, plans, schematic, formula, manual or recipe item) counts once you open
@@ -114,9 +112,9 @@ panel and the item tooltip's "who can make it" use them. Skill-ups' saved skills
 | Command | What it does |
 |---|---|
 | `/mk` | Open or close the Crafting Profits page |
-| `/mk scan` | Scan (auction house open): prices the ticked professions |
+| `/mk scan` | Scan (auction house open): prices the lit professions |
 | `/mk mode buy` / `mine` | Buy mats or Use my mats (`farm` works too) |
-| `/mk recipes all` / `mine` / `missing` | Which recipes to show |
+| `/mk recipes all` / `mine` | Show every recipe, or hide unlearned ones |
 | `/mk recipes reset` | Clear your have/don't-have marks |
 | `/mk button` | Points you at the King Maker crown (`/km button`) |
 

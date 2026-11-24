@@ -45,6 +45,10 @@ Open your mailbox and every auction house mail in it is recorded, once:
   and what.
 - **Characters.** Each character's mail is kept separately. Look at all of them together, or just
   the one you're on.
+- **Neutral auction houses (2.18.0).** Mail from Gadgetzan, Booty Bay and Everlook is marked as
+  neutral: a sale by its 15% cut or the sender, the rest by the sender or where you posted it. Once you
+  have any, an **All houses / Faction AH / Neutral AH** button appears beside the character button, and
+  neutral lines carry a small grey **N**. Until then nothing changes.
 
 ## The page
 
@@ -134,7 +138,8 @@ Ctrl+C, and paste it into a spreadsheet.
 
 ```lua
 MailKing.GetEntries()      -- copies of every ledger line: { t, k = "sale"|"buy"|"expired"|"cancelled",
-                           --   item, name, n, g = price, cut, dep, each = asking price (expired), who, c = "Name-Realm" }
+                           --   item, name, n, g = price, cut, dep, each = asking price (expired), who, c = "Name-Realm",
+                           --   h = "n" from a neutral auction house (absent: your faction's) }
 MailKing.Summary(since)    -- { income, spent, lost, profit, sales } since a server time (0 = all)
 MailKing.StrategyOf(itemID)
 MailKing.Buyers(since)     -- { { who, mails, units, gold, last } }, most sales first

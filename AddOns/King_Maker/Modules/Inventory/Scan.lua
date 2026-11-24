@@ -110,7 +110,9 @@ function ns.ReadMail()
     c.mail, c.mailT = money, ns.Now()
 end
 
--- Your auctions still up (sold ones are on their way as gold).
+-- Your auctions still up (sold ones are on their way as gold). The open auction house lists only its own, so
+-- "ah" keeps both houses: a neutral read (Gadgetzan, Booty Bay, Everlook) replaces the neutral part ("ahn"), a
+-- faction read the rest.
 function ns.ReadAuctions()
     if not (ns.db and C_AuctionHouse and C_AuctionHouse.GetNumOwnedAuctions) then return end
     local out = {}
@@ -119,7 +121,30 @@ function ns.ReadAuctions()
         local id = a and a.itemKey and a.itemKey.itemID
         if id and (a.status or 0) == 0 then out[id] = (out[id] or 0) + (a.quantity or 1) end
     end
-    note(ns.Char(), "ah", out)
+    local who = ns.Char()
+    local s = stockOf(who)
+    local neutral = KM.AuctionHouse and KM.AuctionHouse() == "neutral"
+    local keep = {} -- the other house's auctions, as last seen
+    if neutral then
+        local oldN = s.ahn or {}
+        for id, n in pairs(s.ah or {}) do
+            local left = n - (oldN[id] or 0)
+            if left > 0 then keep[id] = left end
+        end
+        s.ahn, s.ahnT = out, ns.Now()
+    else
+        for id, n in pairs(s.ahn or {}) do keep[id] = n end
+    end
+    local all = {}
+    for id, n in pairs(out) do all[id] = n end
+    for id, n in pairs(keep) do all[id] = (all[id] or 0) + n end
+    note(who, "ah", all)
+end
+
+-- How many of an item this character has up on the neutral auction house (0 for none).
+function ns.NeutralAH(who, id)
+    local s = ns.db and ns.db.stock[who]
+    return s and s.ahn and s.ahn[id] or 0
 end
 
 -- When this character's places were last seen: { bags = t, bank = t, mail = t, ah = t }.

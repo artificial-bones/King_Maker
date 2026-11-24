@@ -1,11 +1,11 @@
 ## Interface: 16001
 ## Title: King Maker
-## Notes: Every King addon in one: AH prices and history, crafting profits, skill-ups, gold ledger, inventory, farming, gathering, dungeon quests and rested XP. /km
+## Notes: Every King addon in one: AH prices and history, crafting profits, profit and loss, gold ledger, inventory, farming, gathering, cooldowns and rested XP. /km
 ## Author: BearBones
 ## X-License: GPL-3.0
 ## X-Credits: Recipe data from ForeverDB.net
-## Version: 2.17.0
-## IconTexture: Interface\Icons\INV_Crown_01
+## Version: 2.18.0
+## IconTexture: Interface\Icons\INV_Misc_Coin_02
 ## SavedVariables: KingMakerDB, ScannerKingDB, EconKingDB, MarketKingDB, SkillupKingDB, FarmKingDB, GatherKingDB, InventoryKingDB, MailKingDB, QuestKingDB, RestedKingDB, MinimapKingDB, ShoppingKingDB, ProfessionKingDB, CooldownKingDB, TrackerKingDB, ProfitKingDB, BlacklistKingDB, ReputationKingDB, RealsKingDB
 ## OptionalDeps: QuestieDB, TomTom, LibDBIcon-1.0, Auctionator
 
@@ -62,7 +62,6 @@ Modules\Farm\Mobs.lua
 Modules\Farm\Sync.lua
 Modules\Farm\Map.lua
 Modules\Farm\Mob.lua
-Modules\Farm\White.lua
 Modules\Farm\UI.lua
 
 # Gather
@@ -99,13 +98,6 @@ Modules\Mail\Mail.lua
 Modules\Mail\Ledger.lua
 Modules\Mail\UI.lua
 Modules\Mail\Alts.lua
-
-# Quest
-Modules\Quest\Data\Quests.lua
-Modules\Quest\Data\QuestGold.lua
-Modules\Quest\Core.lua
-Modules\Quest\Money.lua
-Modules\Quest\MoneyUI.lua
 
 # Rested
 Modules\Rested\Core.lua

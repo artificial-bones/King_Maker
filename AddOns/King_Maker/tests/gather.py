@@ -363,26 +363,13 @@ gt("ledger on"); assert led.shown
 L.execute("KingMakerFarmTracker.close:Click()"); assert L.eval("TrackerKingDB.ui.hud") is False and "/farm shows it again" in last(L)
 assert L.eval("TrackerKing.State()") == "running"
 gt("ledger on")
-# Mat Prices: the Farm Tracker's Prices tab
-def click(label): L.execute('BTN("%s", KingMakerFarmTracker):Click()' % label)
-click("Prices"); assert L.eval("TrackerKingDB.ui.hudTab") == "prices"
-click("Herbs")
+# the material lists Gather keeps for its scans (the tracker's Prices tab that showed them went in 2.18.0)
 herbs = [ns.ItemName(i) for i in ns.LedgerMaterials("herb").values()]
 mines = [ns.ItemName(i) for i in ns.LedgerMaterials("mine").values()]
 assert "Marefoil" in herbs and "Rosecap" in herbs and "Thorium" not in " ".join(herbs) and "Pyrite" in mines and "Rough Stone" in mines
-t = texts(L)
-assert "Rosecap" in t and any("Prices from" in x for x in t), t[-20:]
-L.execute("KingMakerFarmTracker.scripts.OnMouseWheel(KingMakerFarmTracker, -1)")
-assert fonts(L, "Scroll for more (4-") is not None
-for label, key in [("Skins", "skin"), ("Cloth", "cloth"), ("Ench", "ench")]:
-    click(label); assert L.eval("TrackerKingDB.ui.priceTab") == key
-click("Skins")
-t = texts(L)
-assert "Light Leather" in t and "Devilsaur Leather" in t
 assert [ns.ItemName(i) for i in ns.MaterialList("cloth").values()][:2] == ["Linen Cloth", "Wool Cloth"]
 assert "Nexus Crystal" in [ns.ItemName(i) for i in ns.MaterialList("ench").values()]
-click("Mining"); assert L.eval("TrackerKingDB.ui.priceTab") == "mine"
-click("All"); assert L.eval("TrackerKingDB.ui.hudTab") == "all"
+assert L.eval('BTN("Prices", KingMakerFarmTracker)') is None
 print("LEDGER OK")
 
 # ---- the Gathering page ----
@@ -457,7 +444,6 @@ L2.eval("SlashCmdList.GATHERKING")("scan"); assert "Scanner King" in last(L2)
 assert ns2.Price(2770) is None and ns2.FormatMoney(10000) == "|cffffd7001g|r"
 KM2.Show("gathering"); assert not KM2.errorShown, last(L2)
 L2.eval("SlashCmdList.GATHERKING")("ledger on")
-L2.execute('BTN("Prices", KingMakerFarmTracker):Click()'); assert any("The Scanner module scans prices" in x for x in texts(L2))
 L5, KM5, ns5 = load(only=["Gather"])
 L5.eval("SlashCmdList.GATHERKING")("ledger"); assert "isn't loaded" in last(L5), "without the Farm Tracker /gt ledger says so"
 print("MIGRATION OK")

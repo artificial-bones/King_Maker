@@ -7,8 +7,9 @@ local C = UI.C
 --   Top, on every tab: Overview / Trades / Holdings and Export; whose (all characters or this one), the counting menu
 --   (FIFO or LIFO, farmed items free or at their value), the period (Today, 7 days, 30 days, All; not on Holdings) and,
 --   on Trades and Holdings, a search by item name (2.8).
---   Overview: six tiles (realized, if sold now, stock at cost, underwater, used or gone, sold with cost unknown),
---             realized per day, where it came from, and every item you sold or hold.
+--   Overview: four tiles (profit, sales, stock, if sold now), one muted line with what's kept out of profit (sold
+--             with cost unknown, used or gone), realized per day, where it came from, and every item you sold
+--             (2.18.0: holdings columns moved out; they're the Holdings tab).
 --   Trades:   by sale (each sale and the lots it used), by buy (each lot and what used it), or what left unsold.
 --   Holdings: what you hold, at cost and at today's price, the underwater ones marked; untraced stock and Adopt.
 -- Also here: the Home tile and note, the crown line, the item tooltip line and the export window.
@@ -16,7 +17,7 @@ local C = UI.C
 local R = "RIGHT"
 local PERIODS = { { id = 1, label = "Today", w = 64 }, { id = 7, label = "7 days", w = 64 }, { id = 30, label = "30 days", w = 64 },
     { id = 0, label = "All", w = 64 } }
-local TILE_H, GAP = 58, 10
+local TILE_H, GAP, ASIDE_H = 58, 10, 18
 local DAY = 86400
 
 local P = {}
@@ -244,30 +245,28 @@ end
 ---------------------------------------------------------------------------
 
 local ITEM_COLS = {
-    col("name", "Item", 166, nil, byName, nil, false),
-    col("sold", "Sold", 42, R, function(r) return r.sold end, "Units sold in this period."),
-    col("realized", "Realized", 82, R, function(r) return r.realized end, "What those sales brought after the 5% cut, minus what the units cost you."),
-    col("roi", "ROI", 50, R, function(r) return r.roi end, "Realized against what the sold units cost. Free (farmed) units have no ROI."),
-    col("hold", "Hold", 44, R, function(r) return r.hold end, "Units you hold now that have a lot."),
-    col("avg", "Avg cost", 76, R, function(r) return r.avg end, "What the units you hold cost you, on average (by the method you chose)."),
-    col("each", "Now each", 72, R, function(r) return r.each end, "What one would bring now: the market price after the 5% cut, or a vendor's price if that pays more."),
-    col("ifSold", "If sold", 82, R, function(r) return r.ifSold end, "What the units you hold are worth now, minus what they cost."),
-    col("age", "Age", 40, R, function(r) return r.age end, "How long you've held the oldest of them."),
-    col("flag", "", 0),
+    col("name", "Item", 196, nil, byName, nil, false),
+    col("sold", "Sold", 50, R, function(r) return r.sold end, "Units sold in this period."),
+    col("price", "Avg price", 80, R, function(r) return r.avgPrice end, "What one sold for on average, after the 5% cut."),
+    col("cost", "Avg cost", 80, R, function(r) return r.avgCost end, "What one of the sold units cost you on average (the lots the sales used). Farmed units are free unless you count them at their value."),
+    col("realized", "Profit", 90, R, function(r) return r.realized end, "What the sales brought after the cut, minus what those units cost you."),
+    col("roi", "ROI", 60, R, function(r) return r.roi end, "Profit against what the sold units cost. Free (farmed) units show free."),
+    col("held", "Held", 56, R, function(r) return r.heldAvg end, "How long you held a unit before it sold, on average: how fast this item turns your gold over."),
+    col("stock", "In stock", 0, R, function(r) return r.hold end, "How many you still hold. Red: worth less now than they cost you (underwater). Holdings has the details."),
 }
 
 local function fillItem(r, row, cells)
     r.icon:SetTexture(icon(row.item))
     cells.name:SetText(KM.ItemText(row.item))
-    cells.sold:SetText(row.sold > 0 and tostring(row.sold) or grey("-"))
+    cells.sold:SetText(KM.Commas(row.sold))
+    cells.price:SetText(row.avgPrice and KM.MoneyShort(row.avgPrice) or grey("-"))
+    local free = row.matchedQ > 0 and (row.basis or 0) == 0
+    cells.cost:SetText(free and (hex(C.muted) .. "free|r") or (row.avgCost and KM.MoneyShort(row.avgCost) or grey("no cost")))
     cells.realized:SetText(row.realized and signed(row.realized) or grey("-"))
-    cells.roi:SetText(pct(row.roi))
-    cells.hold:SetText((row.hold or 0) > 0 and KM.Commas(row.hold) or grey("-"))
-    cells.avg:SetText(row.avg and KM.MoneyShort(row.avg) or grey("-"))
-    cells.each:SetText(row.each and KM.MoneyShort(row.each) or grey("-"))
-    cells.ifSold:SetText(row.ifSold and signed(row.ifSold) or grey("-"))
-    cells.age:SetText((row.hold or 0) > 0 and ageText(row.age) or grey("-"))
-    cells.flag:SetText(flagText(row.h))
+    cells.roi:SetText(row.roi and pct(row.roi) or (free and (hex(C.muted) .. "free|r") or grey("-")))
+    cells.held:SetText(row.heldAvg and ageText(row.heldAvg) or grey("-"))
+    local hold = row.hold or 0
+    cells.stock:SetText(hold > 0 and ((row.under and hex(C.bad) or "") .. KM.Commas(hold) .. (row.under and "|r" or "")) or grey("-"))
     tint(r, row.under)
 end
 
@@ -306,7 +305,7 @@ local function itemClick(row, which, r)
     if which == "RightButton" then itemMenu(r, row.item) else ns.ShowItemLots(row.item) end
 end
 
-local TILE_KEYS = { "realized", "ifsold", "stock", "under", "gone", "unknown" }
+local TILE_KEYS = { "realized", "sales", "stock", "ifsold" }
 
 local function buildOverview(c)
     local v = CreateFrame("Frame", nil, c)
@@ -323,62 +322,68 @@ local function buildOverview(c)
     local T = P.tiles
     T.realized:SetTip(function(tt)
         local S = P.S or {}
-        tt:AddLine("What your sales brought after the 5% cut, minus what those units cost you, minus deposits on auctions that came back.", 1, 1, 1, true)
+        tt:AddLine("Profit you've taken: what your sales brought after the 5% cut, minus what those units cost you, minus deposits on auctions that came back.", 1, 1, 1, true)
         dl(tt, "Brought in (units with a cost)", KM.Money(S.proceeds or 0))
         dl(tt, "What those units cost", "-" .. KM.Money(S.basis or 0))
         dl(tt, "Deposits lost", "-" .. KM.Money(S.deposits or 0))
-        dl(tt, "Realized", signed(S.realized, true))
-        dl(tt, "Sales", (S.sales or 0) .. " (" .. KM.Commas(S.units or 0) .. " units)")
-        if S.heldAvg then dl(tt, "Held before selling, on average", ageText(S.heldAvg)) end
+        dl(tt, "Profit", signed(S.realized, true))
+        if S.roi then dl(tt, "Return on cost", pctPlain(S.roi)) end
         tt:AddLine("Everything, with sales of unknown cost and stock used or gone: " .. signedPlain(S.allIn) .. ".", 0.8, 0.8, 0.8, true)
         if (S.folded or 0) > 0 then tt:AddLine(S.folded .. " older month" .. (S.folded == 1 and "" or "s") .. " counted from monthly totals.", 0.6, 0.6, 0.6, true) end
         scopeLine(tt)
     end)
-    T.ifsold:SetTip(function(tt)
+    T.sales:SetTip(function(tt)
         local S = P.S or {}
-        tt:AddLine("What you'd make selling everything you hold right now: its worth at today's market price after the 5% cut, minus what it cost you. Not counted in Realized until it sells.", 1, 1, 1, true)
-        dl(tt, "Worth now", KM.Money(S.worth or 0))
-        dl(tt, "What it cost", "-" .. KM.Money(S.cost or 0))
-        dl(tt, "If sold now", signed(S.ifSold, true))
-        if (S.noPrice or 0) > 0 then tt:AddLine(S.noPrice .. " item" .. (S.noPrice == 1 and "" or "s") .. " with no price left out: scan at the auction house.", 0.7, 0.7, 0.7, true) end
+        tt:AddLine("Everything your sales brought in this period, after the 5% cut: auction house, vendors and trades.", 1, 1, 1, true)
+        dl(tt, "Sales", (S.sales or 0) .. " (" .. KM.Commas(S.units or 0) .. " units)")
+        dl(tt, "Brought in", KM.Money((S.proceeds or 0) + (S.unknownP or 0)))
+        if (S.unknownP or 0) > 0 then dl(tt, "  of it with no cost known", KM.Money(S.unknownP)) end
+        if S.heldAvg then dl(tt, "Held before selling, on average", ageText(S.heldAvg)) end
+        scopeLine(tt)
     end)
     T.stock:SetTip(function(tt)
         local S = P.S or {}
-        tt:AddLine("What the stock you hold cost you: bought items at what you paid, opening stock at its value the day tracking began, farmed items free (or at their value when looted).", 1, 1, 1, true)
+        tt:AddLine("What the stock you hold is worth now (market price after the cut), against what it cost you: bought items at what you paid, opening stock at its value the day tracking began, farmed items free (or at their value when looted).", 1, 1, 1, true)
         dl(tt, "Units held (in lots)", KM.Commas(S.held or 0))
-        dl(tt, "Cost", KM.Money(S.cost or 0))
         dl(tt, "Worth now", KM.Money(S.worth or 0))
+        dl(tt, "Cost", KM.Money(S.cost or 0))
+        if (S.noPrice or 0) > 0 then tt:AddLine(S.noPrice .. " item" .. (S.noPrice == 1 and "" or "s") .. " with no price left out of Worth: scan at the auction house.", 0.7, 0.7, 0.7, true) end
         if (S.untraced or 0) > 0 then
             tt:AddLine(KM.Commas(S.untraced) .. " more you own have no lot (untraced, worth " .. KM.Money(S.untracedWorth or 0) .. "): valued, never given a cost. Holdings > Count them as opening stock.", 0.7, 0.7, 0.7, true)
         end
     end)
-    T.under:SetTip(function(tt)
+    T.ifsold:SetTip(function(tt)
         local S = P.S or {}
-        tt:AddLine("Items you hold that are worth less now (after the cut) than they cost you, and what you'd lose selling them today.", 1, 1, 1, true)
-        dl(tt, "Items underwater", tostring(S.underwater or 0))
-        dl(tt, "If sold now", signed(S.underwaterLoss, true))
-        tt:AddLine("Holdings marks them UNDER, with the price that breaks even.", 0.6, 0.6, 0.6, true)
+        tt:AddLine("Profit you haven't taken yet: what selling everything you hold right now would make, at today's market price after the cut, minus what it cost you.", 1, 1, 1, true)
+        dl(tt, "If sold now", signed(S.ifSold, true))
+        dl(tt, "Underwater", (S.underwater or 0) .. " item" .. ((S.underwater or 0) == 1 and "" or "s") .. ((S.underwater or 0) > 0 and (", " .. signedPlain(S.underwaterLoss)) or ""))
+        tt:AddLine("Underwater: worth less now than it cost you. Holdings marks them UNDER with the price that breaks even. Click for Holdings.", 0.7, 0.7, 0.7, true)
     end)
-    T.gone:SetTip(function(tt)
+    T.ifsold:SetScript("OnMouseUp", function() UI.Click(); ns.SelectTab("holdings") end)
+    T.stock:SetScript("OnMouseUp", function() UI.Click(); ns.SelectTab("holdings") end)
+
+    -- What's kept out of profit, on purpose: one muted line, the details on hover.
+    P.aside = CreateFrame("Frame", nil, v)
+    P.aside:SetPoint("TOPLEFT", 0, -(TILE_H + 4))
+    P.aside:SetPoint("TOPRIGHT", 0, -(TILE_H + 4))
+    P.aside:SetHeight(ASIDE_H)
+    P.asideText = UI.Text(P.aside, 10, C.muted)
+    P.asideText:SetPoint("LEFT", 2, 0)
+    P.asideText:SetPoint("RIGHT", -2, 0)
+    UI.Tip(P.aside, function(tt)
         local S = P.S or {}
-        tt:AddLine("What stock that left without a sale had cost you: used, eaten, equipped, mailed to someone else, used in a craft that made nothing to sell (an enchant). Shown beside your profit, never in it. Mats you crafted with aren't here: their cost moved into what you made.", 1, 1, 1, true)
-        dl(tt, "Pending (under 30 days)", KM.Money(S.gonePending or 0))
-        dl(tt, "Final", KM.Money(S.goneFinal or 0))
-        if (S.goneUsed or 0) > 0 then dl(tt, "  of it used in crafts or mailed away", KM.Money(S.goneUsed)) end
-        if (S.goneStartup or 0) > 0 then dl(tt, "Before tracking began", KM.Money(S.goneStartup)) end
-        tt:AddLine("Pending: a sale mail read late, or the units turning up again (mail to an alt, a bank not opened), undoes it within 30 days.", 0.7, 0.7, 0.7, true)
-        scopeLine(tt)
-    end)
-    T.unknown:SetTip(function(tt)
-        local S = P.S or {}
-        tt:AddLine("What sales brought for units no lot covered: things given to you, and crafts or rewards made while the module couldn't see them, mostly. Shown beside your profit, never in it.", 1, 1, 1, true)
-        dl(tt, "Brought in", KM.Money(S.unknownP or 0))
-        dl(tt, "Units", KM.Commas(S.unknownQ or 0) .. " in " .. (S.unknownSales or 0) .. " sale" .. ((S.unknownSales or 0) == 1 and "" or "s"))
+        tt:AddLine("Kept out of profit")
+        tt:AddLine("Sold, cost unknown: what sales brought for units no lot covered (given to you, or made while King Maker couldn't see it).", 1, 1, 1, true)
+        dl(tt, "  Brought in", KM.Money(S.unknownP or 0) .. ", " .. KM.Commas(S.unknownQ or 0) .. " units")
+        tt:AddLine("Used or gone: what stock that left without a sale had cost you (used, eaten, equipped, mailed away, used in a craft that made nothing to sell).", 1, 1, 1, true)
+        dl(tt, "  Pending (under 30 days)", KM.Money(S.gonePending or 0))
+        dl(tt, "  Final", KM.Money(S.goneFinal or 0))
+        tt:AddLine("Pending is undone if the units turn up again (mail to an alt, a bank not opened) or a late sale mail explains them.", 0.7, 0.7, 0.7, true)
         scopeLine(tt)
     end)
 
     local cp = UI.Panel(v, C.panel)
-    cp:SetPoint("TOPLEFT", 0, -(TILE_H + GAP))
+    cp:SetPoint("TOPLEFT", 0, -(TILE_H + ASIDE_H + GAP))
     cp:SetHeight(150)
     P.chartPanel = cp
     local head = UI.Heading(cp, "Realized per day")
@@ -390,7 +395,7 @@ local function buildOverview(c)
     P.chart.frame:SetPoint("TOPLEFT", 6, -24)
 
     local sp = UI.Panel(v, C.panel)
-    sp:SetPoint("TOPRIGHT", 0, -(TILE_H + GAP))
+    sp:SetPoint("TOPRIGHT", 0, -(TILE_H + ASIDE_H + GAP))
     sp:SetSize(284, 150)
     P.srcPanel = sp
     local sh = UI.Heading(sp, "Where it came from")
@@ -407,7 +412,7 @@ local function buildOverview(c)
     P.srcNote:SetPoint("RIGHT", sp, "RIGHT", -10, 0)
 
     P.itemTable = makeTable(v, "items", ITEM_COLS, 22, { "realized", true }, fillItem, itemEnter, itemClick)
-    P.itemTable:SetPoint("TOPLEFT", 0, -(TILE_H + GAP + 160))
+    P.itemTable:SetPoint("TOPLEFT", 0, -(TILE_H + ASIDE_H + GAP + 160))
     P.itemTable:SetPoint("BOTTOMRIGHT", 0, 20)
 end
 
@@ -477,24 +482,30 @@ local function refreshOverview(w)
     local S = ns.Summary(s, mine)
     P.S = S
     local T = P.tiles
-    T.realized:Set("Realized", signedPlain(S.realized), S.sales .. " sale" .. (S.sales == 1 and "" or "s") .. (S.roi and ("  ROI " .. pctPlain(S.roi)) or ""), tone(S.realized))
-    T.ifsold:Set("If sold now", signedPlain(S.ifSold), KM.Commas(S.held) .. " held", tone(S.ifSold))
-    T.stock:Set("Stock at cost", KM.MoneyShort(S.cost, true), "worth " .. KM.MoneyShort(S.worth, true))
-    T.under:Set("Underwater", S.underwater .. " item" .. (S.underwater == 1 and "" or "s"), S.underwater > 0 and signedPlain(S.underwaterLoss) or "none", S.underwater > 0 and C.bad or C.text)
+    T.realized:Set("Profit", signedPlain(S.realized), S.roi and (pctPlain(S.roi) .. " on cost") or "nothing sold at a cost yet", tone(S.realized))
+    local brought = S.proceeds + S.unknownP
+    T.sales:Set("Sales", KM.MoneyShort(brought, true), S.sales .. " sale" .. (S.sales == 1 and "" or "s")
+        .. (S.sales > 0 and (", avg " .. KM.MoneyShort(brought / S.sales, true)) or ""))
+    T.stock:Set("Stock worth", KM.MoneyShort(S.worth, true), KM.Commas(S.held) .. " held, cost " .. KM.MoneyShort(S.cost, true))
+    T.ifsold:Set("If sold now", signedPlain(S.ifSold), S.underwater > 0 and (hex(C.bad) .. S.underwater .. " underwater " .. signedPlain(S.underwaterLoss) .. "|r") or "nothing underwater", tone(S.ifSold))
     local gone = S.gonePending + S.goneFinal
-    T.gone:Set("Used or gone", gone > 0 and ("-" .. KM.MoneyShort(gone, true)) or "0c", S.gonePending > 0 and (KM.MoneyShort(S.gonePending, true) .. " pending") or "nothing pending", C.text)
-    T.unknown:Set("Sold, cost unknown", KM.MoneyShort(S.unknownP, true), KM.Commas(S.unknownQ) .. " unit" .. (S.unknownQ == 1 and "" or "s"))
+    P.asideText:SetText("Kept out of profit:  sold with cost unknown " .. KM.MoneyShort(S.unknownP, true) .. " (" .. KM.Commas(S.unknownQ) .. " units)"
+        .. "   |   used or gone " .. (gone > 0 and ("-" .. KM.MoneyShort(gone, true)) or "0c")
+        .. (S.gonePending > 0 and (" (" .. KM.MoneyShort(S.gonePending, true) .. " pending)") or "") .. "   |   hover for what these are")
     drawChart(s, mine)
     drawSources(s, mine)
     local empty = S.sales == 0 and S.held == 0 and (S.untraced or 0) == 0
     P.itemTable.emptyText = empty and "Nothing to match yet. Buy or sell something at the auction house and open your mailbox: every purchase becomes a lot, and every sale is matched to what you paid."
-        or "Nothing sold or held in this period."
-    P.itemTable:SetRows(ns.ByItem(s, mine))
-    local scanned = ScannerKing and ScannerKing.LastScan and KM.Safe(ScannerKing.LastScan)
-    P.footer:SetText((ns.db.settings.method == "lifo" and "Sales use up your newest stock first (LIFO)." or "Sales use up your oldest stock first (FIFO).")
-        .. " Prices: market after the 5% cut" .. (type(scanned) == "number" and (", scanned " .. KM.Ago(scanned) .. " ago") or "") .. "."
-        .. (ns.db.start and (" Tracking since " .. ns.Day(ns.db.start) .. ".") or "")
-        .. (hasInventory() and "" or "  Counts are off: what you hold isn't checked (no Inventory module)."))
+        or "Nothing sold in this period. What you hold is on Holdings."
+    local sold = {}
+    for _, r in ipairs(ns.ByItem(s, mine)) do if r.sold > 0 then sold[#sold + 1] = r end end
+    P.itemTable:SetRows(sold)
+    if not hasInventory() then
+        P.footer:SetText("Counts are off: what you hold isn't checked (no Inventory module).")
+    else
+        P.footer:SetText(#sold .. " item" .. (#sold == 1 and "" or "s") .. " sold.  " .. (ns.db.start and ("Tracking since " .. ns.Day(ns.db.start) .. ".  ") or "")
+            .. "Click one for its lots.")
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -502,16 +513,16 @@ end
 ---------------------------------------------------------------------------
 
 local SALE_COLS = {
-    col("t", "Sold", 76, nil, function(r) return r.t end),
-    col("name", "Item", 160, nil, byName, nil, false),
-    col("q", "Qty", 36, R, function(r) return r.q end),
-    col("each", "Each", 72, R, function(r) return r.each end, "What each unit brought, after the 5% cut."),
-    col("costEach", "Cost ea", 72, R, function(r) return r.costEach end, "What each unit cost you (the lots it used)."),
+    col("t", "Sold", 92, nil, function(r) return r.t end),
+    col("name", "Item", 168, nil, byName, nil, false),
+    col("q", "Qty", 38, R, function(r) return r.q end),
+    col("each", "Each", 68, R, function(r) return r.each end, "What each unit brought, after the 5% cut."),
+    col("costEach", "Cost ea", 68, R, function(r) return r.costEach end, "What each unit cost you (the lots it used)."),
     col("pl", "P&L", 80, R, function(r) return r.pl end, "What the sale brought after the cut minus what those units cost. \"no cost\": no lot covered it (given to you, or made while the module couldn't see it)."),
     col("roi", "ROI", 50, R, function(r) return r.roi end, "P&L against what the units cost."),
     col("held", "Held", 44, R, function(r) return r.held end, "How long you held the units before they sold, on average."),
-    col("char", "Char", 76, nil, function(r) return r.char or "" end, "The character whose auction it was.", false),
-    col("from", "From", 0, nil, nil, "Where the units came from: one lot, or how many."),
+    col("char", "Char", 70, nil, function(r) return r.char or "" end, "The character whose auction it was.", false),
+    col("from", "From", 0, nil, nil, "Where the units came from: AH, farmed, crafted, vendor, a trade, or how many lots. Hover the sale for when."),
 }
 local BUY_COLS = {
     col("t", "Got", 76, nil, function(r) return r.t end),
@@ -546,10 +557,10 @@ local function fillSale(r, x, cells)
     cells.roi:SetText(x.pl and (x.basis > 0 and pct(x.roi) or hex(C.muted) .. "free|r") or grey("-"))
     cells.held:SetText(x.held and ageText(x.held) or grey("-"))
     cells.char:SetText(first(x.char))
-    local from = x.from
-    if x.kind == "n" then from = "vendor sale" .. (x.from ~= "-" and (", " .. x.from) or "")
+    local from = (x.from or "-"):gsub(" %d+ %a+$", "")  -- "AH 22 Nov" -> "AH": the date is in the tooltip
+    if x.kind == "n" then from = "vendor sale"
     elseif x.kind == "t" then from = "trade" .. (x.partner and x.partner ~= "" and (" to " .. first(x.partner)) or "") end
-    cells.from:SetText(from)
+    cells.from:SetText(from == "-" and grey("-") or from)
     tint(r, false)
 end
 
@@ -928,7 +939,8 @@ local function layout(c)
     if not w or w < 400 then w = 764 end
     if w == P.width then return end
     P.width = w
-    local tw = math.floor((w - 5 * GAP) / 6)
+    local n = #P.tiles
+    local tw = math.floor((w - (n - 1) * GAP) / n)
     for i, t in ipairs(P.tiles) do
         t:SetSize(tw, TILE_H)
         t:ClearAllPoints()
@@ -1123,6 +1135,45 @@ KM.RegisterHomeCard({ kind = "chart", id = "daily", order = 20, label = "Daily p
                 if d.best and d.best.pl then GameTooltip:AddDoubleLine("Best", (KM.ItemText and KM.ItemText(d.best.item) or "") .. " " .. signedPlain(d.best.pl), 0.8, 0.8, 0.8, 1, 1, 1) end
             end }
     end })
+
+-- Home's numbers and top items, over the period Home asks for (30 days).
+KM.RegisterHomeCard({ kind = "stats", id = "profit", order = 20, get = function(since)
+    if not (ns.db and ns.db.start) then return nil end
+    local S = ns.Summary(since)
+    if S.sales == 0 and (S.held or 0) == 0 then return nil end -- nothing sold or held yet: no zeros
+    local out = { { label = "Realized profit", value = signedPlain(S.realized), color = tone(S.realized),
+        sub = S.sales .. " sale" .. (S.sales == 1 and "" or "s"), page = "profit",
+        tip = "What your sales brought after the 5% cut, minus what those units cost you, minus deposits lost, over the last 30 days. Click for Profit & Loss." } }
+    if S.roi then
+        local held = S.heldAvg and (S.heldAvg >= DAY and (string.format("%.1f", S.heldAvg / DAY) .. " days to sell")
+            or (math.max(1, math.floor(S.heldAvg / 3600 + 0.5)) .. " h to sell")) or nil
+        out[#out + 1] = { order = 30, label = "Return on cost", value = (S.roi > 0 and "+" or "") .. math.floor(S.roi * 100 + 0.5) .. "%",
+            color = tone(S.roi), sub = held and ("avg " .. held) or nil, page = "profit",
+            tip = "Profit on what you sold as a share of what it cost you: " .. KM.Money(S.proceeds - S.basis) .. " on "
+                .. KM.Money(S.basis) .. ". The average time from buying (or looting) to selling: how fast your gold turns over." }
+    end
+    if (S.held or 0) > 0 and S.ifSold then
+        out[#out + 1] = { order = 80, label = "If sold now", value = signedPlain(S.ifSold), color = tone(S.ifSold),
+            sub = KM.Commas(S.held) .. " held" .. (S.underwater > 0 and (", " .. S.underwater .. " underwater") or ""),
+            page = "profit", tab = function() ns.SelectTab("holdings") end,
+            tip = "What the stock you hold would make over what it cost you, sold today at its market price after the cut (unrealized). Click for Holdings." }
+    end
+    return out
+end })
+
+KM.RegisterHomeCard({ kind = "top", id = "profit", order = 10, get = function(since)
+    if not (ns.db and ns.db.start) then return nil end
+    local out = {}
+    for _, r in ipairs(ns.ByItem(since)) do
+        if r.realized and r.realized > 0 then
+            out[#out + 1] = { item = r.item, value = r.realized, sub = "x" .. r.sold, page = "profit",
+                tip = KM.Money(r.realized) .. " realized on " .. r.sold .. " sold" .. (r.roi and (", " .. math.floor(r.roi * 100 + 0.5) .. "% on cost") or "")
+                    .. ", last 30 days. Click for Profit & Loss." }
+            if #out >= 6 then break end
+        end
+    end
+    return out
+end })
 
 KM.RegisterTooltip(function(tt)
     if not (ns.db and ns.db.start) then return end

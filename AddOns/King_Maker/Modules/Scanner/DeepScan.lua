@@ -115,23 +115,24 @@ local function finish()
     if not running then return end
     running = false
     local now, found = ns.Now(), 0
+    local book = ns.Book() -- faction, or the neutral auction house's own list
     local watched = {}
     for _, id in ipairs(ns.WatchedItems()) do watched[id] = true end
     for id, r in pairs(results) do
-        ns.db.prices[id] = { p = r.p, m = r.m, q = r.q, n = r.n, t = now, d = (not isShared(id, watched)) or nil }
+        book.prices[id] = { p = r.p, m = r.m, q = r.q, n = r.n, t = now, d = (not isShared(id, watched)) or nil }
         found = found + 1
     end
-    ns.db.lastScan, ns.db.lastDeep = now, now
+    book.lastScan, book.lastDeep = now, now
     resetButton()
-    local summary = "Deep Scan done: " .. found .. " items priced"
+    local summary = "Deep Scan done: " .. found .. " items priced" .. (ns.house == "neutral" and " at the neutral auction house" or "")
         .. (method == "browse" and " (lowest prices only)." or method == "partial" and " (the auction house stopped answering partway)." or ".")
     KM.Print(ns, summary)
     ns.Fire("SCAN_PROGRESS", "Deep Scan done: " .. found .. " items")
     if ns.DeepWindowDone then ns.DeepWindowDone(summary, true) end
-    ns.Fire("SCAN_RESULTS", results, "deep", method)
+    ns.FireResults(results, "deep", method)
     ns.Fire("SCAN_FINISHED", found)
-    ns.Fire("PRICES_UPDATED")
-    if ns.SharePrices then ns.SharePrices() end
+    ns.Fire("PRICES_UPDATED", ns.house)
+    ns.ShareAfterScan()
 end
 
 local function stop(reason)
@@ -318,6 +319,7 @@ function API.DeepScan()
         return
     end
     running, results = true, {}
+    ns.StartHouse()
     local b = button()
     if b then b:SetEnabled2(false) end
     ns.Fire("SCAN_STARTED")

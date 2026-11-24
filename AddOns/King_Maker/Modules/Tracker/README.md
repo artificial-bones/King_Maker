@@ -81,7 +81,6 @@ anything. **x** hides the box; the session keeps recording.
 | **All** | Farmed so far and gold per hour, the last ten minutes' pace, the Mobs / Gathering split, a sparkline, the top items and coin, kills, skins and deaths |
 | **Mobs** | Kills and kills per hour, each mob's value and value per kill, the top drops (skins included) |
 | **Gathering** | Mining, herbs, fishing, treasure and containers with their value per node, catch or chest; the top materials and the nodes by name |
-| **Prices** | Mat Prices (was the farming ledger's tab): Mining, Herbs, Skins, Cloth and Ench, most valuable first |
 
 Hover an item for where it came from and how it's valued; shift-click links it.
 Not farming, it shows your last session and a **Start** button.
@@ -89,7 +88,7 @@ Not farming, it shows your last session and a **Start** button.
 **Size.** Until you size it, the box grows with what you loot: three items, three
 rows, up to 8, and past that the mouse wheel scrolls the list. Drag the **dots in
 the bottom-right corner** to size it yourself: down for a taller box (every tab's
-list, the Prices tab too), right for a wider one with room for longer names. Once
+list), right for a wider one with room for longer names. Once
 sized, the box keeps that size, with blank rows until the loot fills it. The
 smallest is 280 wide and 3 rows, the largest what fits on your screen;
 **double-click** the dots to go back to growing with your loot. **Ctrl + wheel**
@@ -97,8 +96,8 @@ makes the whole box bigger or smaller (70 to 140%).
 
 ## The Farming Ledger
 
-Four tabs share the top bar with **Export**, **All characters / This character** and the period (7 days, 30 days,
-All): **Sessions**, **Trends**, **Zones** and **Mat Prices**.
+Three tabs share the top bar with **Export**, **All characters / This character** and the period (7 days, 30 days,
+All): **Sessions**, **Trends** and **Zones**.
 
 **Sessions.** Six tiles for the period you pick (7 days, 30 days, All): farmed,
 gold per hour (and how it compares with the period before), time, sessions,
@@ -129,12 +128,6 @@ hour of each session there, its sessions (click one for its details; **Back**
 comes back here) and its top items. A session counts for the dungeon or raid it
 spent most of its time in, else its main zone. Sessions from before 2.15 that the
 game gave no map, or only the continent's, are placed by the mobs they looted.
-
-**Mat Prices.** Mining, Herbs, Skins, Cloth and Ench: what one sells for (after the
-5% cut, or the vendor price), how many are listed, the price against its 30-day
-average (Price History), when you last farmed it, how many an hour you farm it, and
-your best gold per hour in a session that farmed it. Click an item for its Price
-History.
 
 **Export** (or `/farm export`) puts the sessions shown into a window as
 comma-separated text: Ctrl+A, Ctrl+C, paste into a spreadsheet. Money is in copper,

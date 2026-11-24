@@ -207,9 +207,6 @@ assert 1 <= len(rested) <= 3 and "Full" in rested[0], tip
 KM.Show("home"); assert not KM.errorShown, last(L)
 full = [a for a in KM.home.attItems.values() if a.page == "rested"]
 assert full and "full of rest" in full[0].text, "Home: alts sitting full of rest"
-chars = {c.key: c for c in KM.home.charsShown.values()}
-facts = [f.text for c in chars.values() for f in c.facts.values()]
-assert any(x == "full rest" for x in facts) and any(x.endswith("% rested") for x in facts), facts
 KM.OpenSettings("rested"); assert "Show max-level characters" in texts() and "Well Rested perk rank" in texts()
 cb = L.eval('CHECK("Show max-level characters")'); cb.GetScript(cb, "OnClick")(cb)
 assert L.eval("RestedKingDB.ui.showMax") is True

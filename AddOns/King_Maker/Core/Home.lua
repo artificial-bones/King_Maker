@@ -4,8 +4,8 @@ local _, KM = ...
 --
 --   +-- hero tiles (KM.RegisterHomeTile) ---------------------------------------------------------------+
 --   +-- chart (kind "chart", tabs) ----------------------+ +-- needs your attention (kind "attention") --+
---   +-- where your gold came from (kind "income") ------+ +-- best right now (kind "best") --------------+
---   +-- characters (kind "chars") --------------------------------------------------------------------- +
+--   +-- where your gold came from (kind "income") ------+ +-- top items (kind "top") -------------------+
+--   +-- the numbers, 30 days (kind "stats") --------------------------------------------------------------+
 --   notes (KM.RegisterHomeNote)
 --
 -- Registration (Shell.lua holds the lists, so modules can register while they load):
@@ -17,8 +17,11 @@ local _, KM = ...
 --                  red (C.bad) rows first, then C.warn, then the rest; a click runs tab() and opens page
 --     "chart"      label, title, shown = fn() -> bool, get() -> a UI.Chart spec (only the chosen tab is worked out)
 --     "income"     get(since) -> { { label, value (copper), page, tip } } | nil       (the last 30 days)
---     "best"       get() -> { label, value, sub, icon, color, page, tip } | nil
---     "chars"      get() -> { [charKey] = { text, color, tip, worth, class, level, primary = bool } } | nil
+--     "top"        get(since) -> { { item, value (copper), sub, page, tab, tip } } | nil   (the best earners, 30 days;
+--                  the first provider that returns rows wins, so Profit & Loss goes before the Sales Ledger)
+--     "stats"      get(since) -> { { label, value, sub, color, page, tab, tip, order } } | nil   (one cell each, 30 days;
+--                  sorted by each row's order, else the provider's; as many as fit the width show)
+-- 2.18.0: "best" (Best right now) and "chars" (Characters) went; the numbers replaced them.
 -- Every get runs through KM.Safe, only while Home is open (on show and on KM.Refresh). Empty sections say how to fill
 -- them. The page is laid out from the container's size (763 x 557 at any zoom: the window scales whole).
 
@@ -27,8 +30,9 @@ local C = UI.C
 local tiles, notes, cards = KM.homeTiles, KM.homeNotes, KM.homeCards
 
 local GAP, RIGHT_W, PAD = 10, 280, 12
-local TILE_H, SOURCES_H, CHARS_H = 84, 128, 80
-local ROW_H, BEST_H = 22, 24
+local TILE_H, SOURCES_H, STATS_H = 84, 128, 80
+local ROW_H, TOP_H = 22, 24
+local CELL_MIN = 118
 local W0, H0 = 763, 557
 local DAY = 86400
 local TEAL = { 0.36, 0.78, 0.74, 1 }
@@ -115,13 +119,13 @@ local function build(c)
     H.src.empty = UI.Para(H.src, 11, C.dim, 400)
     H.src.empty:SetPoint("TOPLEFT", PAD, -36)
 
-    H.best = card(c, "Best right now", "The best opportunity from each part of King Maker: the most profitable craft you know, your best farm by gold per hour, the white item most worth hunting, and the zone with the most quest gold left. Click one to open its page.")
-    H.best.rows = {}
-    H.best.empty = UI.Para(H.best, 11, C.dim, RIGHT_W - 2 * PAD)
-    H.best.empty:SetPoint("TOPLEFT", PAD, -36)
+    H.top = card(c, "Top items, 30 days", "The items that made you the most in the last 30 days: realized profit from Profit & Loss (what they sold for after the cut, minus what they cost you), or the Sales Ledger's auction profit without it. Click one to go there.")
+    H.top.rows = {}
+    H.top.empty = UI.Para(H.top, 11, C.dim, RIGHT_W - 2 * PAD)
+    H.top.empty:SetPoint("TOPLEFT", PAD, -36)
 
-    H.chars = card(c, "Characters", "Every character King Maker knows, richest first: gold and items (Inventory), rested XP and cooldowns ready. Click one to open Inventory.")
-    H.chars.cells = {}
+    H.stats = card(c, "The numbers, 30 days", "How your gold-making went over the last 30 days. Hover a number for how it's worked out; click it to go there.")
+    H.stats.cells = {}
 
     H.notes = UI.Para(c, 10, C.muted, W0)
 end
@@ -375,161 +379,118 @@ local function drawIncome(w)
 end
 
 ---------------------------------------------------------------------------
--- Best right now
+-- Top items, 30 days
 ---------------------------------------------------------------------------
 
-local function bestRow(i)
-    local r = H.best.rows[i]
+local function topRow(i)
+    local r = H.top.rows[i]
     if r then return r end
-    r = rowButton(H.best, BEST_H)
+    r = rowButton(H.top, TOP_H)
     r.icon = r:CreateTexture(nil, "ARTWORK")
     r.icon:SetSize(18, 18)
     r.icon:SetPoint("LEFT", 6, 0)
     r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    r.label = UI.Text(r, 9, C.muted)
-    r.label:SetPoint("LEFT", 30, 0)
-    r.label:SetWidth(56)
     r.name = UI.Text(r, 11, C.text)
-    r.name:SetPoint("LEFT", 88, 0)
+    r.name:SetPoint("LEFT", 30, 0)
     r.value = UI.Text(r, 11, C.text, "RIGHT")
     r.value:SetPoint("RIGHT", -6, 0)
-    H.best.rows[i] = r
+    H.top.rows[i] = r
     return r
 end
 
-local function drawBest(w, h)
+local function drawTop(w, h, since)
     local got = {}
-    for _, p in ipairs(list("best")) do
-        local b = KM.Safe(p.get)
-        if type(b) == "table" and b.label then got[#got + 1] = b end
+    for _, p in ipairs(list("top")) do
+        local rows = KM.Safe(p.get, since)
+        if type(rows) == "table" and #rows > 0 then
+            for _, r in ipairs(rows) do if type(r) == "table" and r.item then got[#got + 1] = r end end
+            break
+        end
     end
-    local fit = math.max(1, math.floor((h - 32) / BEST_H))
+    local fit = math.max(1, math.floor((h - 32) / TOP_H))
     local n = math.min(#got, fit)
-    H.bestItems = got
+    H.topItems = got
     for i = 1, n do
-        local b, r = got[i], bestRow(i)
+        local b, r = got[i], topRow(i)
         r.data, r.page, r.tab, r.tip = b, b.page, b.tab, b.tip
-        r.icon:SetTexture(b.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
-        r.label:SetText((b.label or ""):upper())
-        r.value:SetText(b.value or "")
-        setColor(r.value, b.color or C.accent)
-        local vw = math.min(110, (r.value:GetStringWidth() or 50) + 8)
-        r.name:SetWidth(math.max(30, w - 8 - 88 - vw - 6))
-        r.name:SetText(b.sub or "")
+        local info = KM.Item(b.item)
+        r.icon:SetTexture(info.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+        r.value:SetText(KM.MoneyShort(b.value or 0, true))
+        setColor(r.value, (b.value or 0) < 0 and C.bad or C.good)
+        local vw = math.min(90, (r.value:GetStringWidth() or 50) + 8)
+        r.name:SetWidth(math.max(30, w - 8 - 30 - vw - 6))
+        r.name:SetText((KM.ItemText and KM.ItemText(b.item) or info.name or ("Item " .. b.item))
+            .. (b.sub and ("  |cff8c8c8c" .. b.sub .. "|r") or ""))
         r:ClearAllPoints()
-        r:SetPoint("TOPLEFT", H.best, "TOPLEFT", 4, -28 - (i - 1) * BEST_H)
+        r:SetPoint("TOPLEFT", H.top, "TOPLEFT", 4, -28 - (i - 1) * TOP_H)
         r:SetWidth(w - 8)
         r:Show()
     end
-    for i = n + 1, #H.best.rows do H.best.rows[i]:Hide() end
-    H.best.empty:SetText(n == 0 and "Scan the auction house, pick your professions on Crafting Profits and save a farming session: the best craft, farm, white item and quest zone show here." or "")
+    for i = n + 1, #H.top.rows do H.top.rows[i]:Hide() end
+    H.top.empty:SetWidth(w - 2 * PAD)
+    H.top.empty:SetText(n == 0 and "Nothing sold in the last 30 days yet. Open your mail after an auction sells: your best earners show here." or "")
 end
 
 ---------------------------------------------------------------------------
--- Characters
+-- The numbers, 30 days
 ---------------------------------------------------------------------------
 
-local function charList()
-    local by, out = {}, {}
-    for _, p in ipairs(list("chars")) do
-        local got = KM.Safe(p.get)
-        if type(got) == "table" then
-            for key, fact in pairs(got) do
-                if type(fact) == "table" then
-                    local ch = by[key]
-                    if not ch then ch = { key = key, facts = {}, worth = 0 }; by[key] = ch; out[#out + 1] = ch end
-                    if fact.worth then ch.worth = math.max(ch.worth, fact.worth) end
-                    ch.class = ch.class or fact.class
-                    ch.level = ch.level or fact.level
-                    if fact.primary then ch.primary = fact else ch.facts[#ch.facts + 1] = fact end
+local function statList(since)
+    local out = {}
+    for _, p in ipairs(list("stats")) do
+        local rows = KM.Safe(p.get, since)
+        if type(rows) == "table" then
+            for i, r in ipairs(rows) do
+                if type(r) == "table" and r.label and r.value then
+                    r.rank, r.i = r.order or p.order or 50, #out + i
+                    out[#out + 1] = r
                 end
             end
         end
     end
-    local me = KM.Char()
-    table.sort(out, function(a, b)
-        if a.worth ~= b.worth then return a.worth > b.worth end
-        if (a.key == me) ~= (b.key == me) then return a.key == me end
-        return a.key < b.key
-    end)
+    -- most important first (a row's own order, else its provider's): the strip shows as many as fit
+    table.sort(out, function(a, b) if a.rank ~= b.rank then return a.rank < b.rank end return a.i < b.i end)
     return out
 end
 
-local function charCell(i)
-    local f = H.chars.cells[i]
+local function statCell(i)
+    local f = H.stats.cells[i]
     if f then return f end
-    f = rowButton(H.chars, 48)
+    f = rowButton(H.stats, 48)
     f.bg = UI.Fill(f, { 0, 0, 0, 0.18 })
-    f.name = UI.Text(f, 11, C.text)
-    f.name:SetPoint("TOPLEFT", 8, -5)
-    f.name:SetPoint("RIGHT", -6, 0)
-    f.main = UI.Text(f, 13, C.text)
-    f.main:SetPoint("TOPLEFT", f.name, "BOTTOMLEFT", 0, -3)
+    f.label = UI.Text(f, 9, C.muted)
+    f.label:SetPoint("TOPLEFT", 8, -5)
+    f.label:SetPoint("RIGHT", -6, 0)
+    f.main = UI.Text(f, 15, C.text)
+    f.main:SetPoint("TOPLEFT", f.label, "BOTTOMLEFT", 0, -3)
     f.main:SetPoint("RIGHT", -6, 0)
-    f.facts = UI.Text(f, 10, C.muted)
-    f.facts:SetPoint("TOPLEFT", f.main, "BOTTOMLEFT", 0, -3)
-    f.facts:SetPoint("RIGHT", -6, 0)
-    H.chars.cells[i] = f
+    f.sub = UI.Text(f, 10, C.dim)
+    f.sub:SetPoint("TOPLEFT", f.main, "BOTTOMLEFT", 0, -3)
+    f.sub:SetPoint("RIGHT", -6, 0)
+    H.stats.cells[i] = f
     return f
 end
 
-local function classHex(class)
-    local cc = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-    if cc and cc.r then return string.format("|cff%02x%02x%02x", cc.r * 255, cc.g * 255, cc.b * 255) end
-    return nil
-end
-
-local function drawChars(w, chars)
-    local MAX = math.max(1, math.floor((w - 2 * PAD + 8) / 128))
-    local more = #chars > MAX and (#chars - MAX + 1) or 0
-    local n = more > 0 and MAX or #chars
+local function drawStats(w, stats)
+    local MAX = math.max(1, math.floor((w - 2 * PAD + 8) / (CELL_MIN + 8)))
+    local n = math.min(#stats, MAX)
     local cw = math.floor((w - 2 * PAD - (n - 1) * 8) / math.max(n, 1))
-    H.charsShown = {}
+    H.statsShown = {}
     for i = 1, n do
-        local f = charCell(i)
+        local st, f = stats[i], statCell(i)
+        H.statsShown[i] = st
         f:ClearAllPoints()
-        f:SetPoint("TOPLEFT", H.chars, "TOPLEFT", PAD + (i - 1) * (cw + 8), -26)
+        f:SetPoint("TOPLEFT", H.stats, "TOPLEFT", PAD + (i - 1) * (cw + 8), -26)
         f:SetWidth(cw)
-        f.page, f.tab = "inventory", function() local m = KM.mods.Inventory; if m and m.SelectTab then m.SelectTab("overview") end end
-        if more > 0 and i == n then
-            local rest = {}
-            for j = n, #chars do rest[#rest + 1] = chars[j] end
-            f.name:SetText("+" .. more .. " more")
-            setColor(f.name, C.muted)
-            f.main:SetText("")
-            f.facts:SetText("hover for the list")
-            f.tip = function(tt)
-                for _, ch in ipairs(rest) do
-                    tt:AddDoubleLine((ch.key:gsub("%-.*$", "")), ch.primary and ch.primary.text or "", 1, 1, 1, 1, 1, 1)
-                end
-            end
-        else
-            local ch = chars[i]
-            H.charsShown[#H.charsShown + 1] = ch
-            local name = ch.key:gsub("%-.*$", "")
-            local hex = classHex(ch.class)
-            f.name:SetText((hex and (hex .. name .. "|r") or name) .. (ch.level and ("  |cff8c8c8c" .. ch.level .. "|r") or ""))
-            setColor(f.name, C.text)
-            f.main:SetText(ch.primary and ch.primary.text or "-")
-            setColor(f.main, ch.primary and ch.primary.color or C.dim)
-            local parts = {}
-            for _, fact in ipairs(ch.facts) do
-                if fact.text and fact.text ~= "" then
-                    parts[#parts + 1] = fact.color and (UI.Hex(fact.color) .. fact.text .. "|r") or fact.text
-                end
-            end
-            f.facts:SetText(#parts > 0 and table.concat(parts, ", ") or "")
-            f.tip = function(tt)
-                tt:AddLine(ch.key, C.accent[1], C.accent[2], C.accent[3])
-                if ch.primary and ch.primary.tip then tt:AddLine(ch.primary.tip, 1, 1, 1, true) end
-                for _, fact in ipairs(ch.facts) do tt:AddLine(fact.tip or fact.text, 1, 1, 1, true) end
-                tt:AddLine("Click: Inventory.", 0.6, 0.6, 0.6)
-            end
-        end
+        f.page, f.tab, f.tip = st.page, st.tab, st.tip
+        f.label:SetText(tostring(st.label):upper())
+        f.main:SetText(st.value)
+        setColor(f.main, st.color or C.text)
+        f.sub:SetText(st.sub or "")
         f:Show()
     end
-    for i = n + 1, #H.chars.cells do H.chars.cells[i]:Hide() end
-    H.chars.right:SetText(#chars > 0 and (#chars .. (#chars == 1 and " character" or " characters")) or "")
+    for i = n + 1, #H.stats.cells do H.stats.cells[i]:Hide() end
+    H.stats.right:SetText("")
 end
 
 ---------------------------------------------------------------------------
@@ -555,21 +516,22 @@ local function refresh(c)
     H.notes:SetText(table.concat(lines, "\n"))
     local notesH = #lines > 0 and (#lines * 14 + 2) or 0
 
-    local chars = charList()
-    local charsH = #chars > 0 and CHARS_H or 0
-    local below = SOURCES_H + GAP + (charsH > 0 and (charsH + GAP) or 0) + (notesH > 0 and (notesH + 6) or 0)
+    local since = KM.Now() - 30 * DAY
+    local stats = statList(since)
+    local statsH = #stats > 0 and STATS_H or 0
+    local below = SOURCES_H + GAP + (statsH > 0 and (statsH + GAP) or 0) + (notesH > 0 and (notesH + 6) or 0)
     local chartH = math.max(150, Hh - y - GAP - below)
 
     H.chart:ClearAllPoints(); H.chart:SetPoint("TOPLEFT", c, "TOPLEFT", 0, -y); H.chart:SetSize(LW, chartH)
     H.att:ClearAllPoints(); H.att:SetPoint("TOPLEFT", c, "TOPLEFT", LW + GAP, -y); H.att:SetSize(RIGHT_W, chartH)
     y = y + chartH + GAP
     H.src:ClearAllPoints(); H.src:SetPoint("TOPLEFT", c, "TOPLEFT", 0, -y); H.src:SetSize(LW, SOURCES_H)
-    H.best:ClearAllPoints(); H.best:SetPoint("TOPLEFT", c, "TOPLEFT", LW + GAP, -y); H.best:SetSize(RIGHT_W, SOURCES_H)
+    H.top:ClearAllPoints(); H.top:SetPoint("TOPLEFT", c, "TOPLEFT", LW + GAP, -y); H.top:SetSize(RIGHT_W, SOURCES_H)
     y = y + SOURCES_H + GAP
-    H.chars:SetShown(charsH > 0)
-    if charsH > 0 then
-        H.chars:ClearAllPoints(); H.chars:SetPoint("TOPLEFT", c, "TOPLEFT", 0, -y); H.chars:SetSize(W, charsH)
-        y = y + charsH + GAP
+    H.stats:SetShown(statsH > 0)
+    if statsH > 0 then
+        H.stats:ClearAllPoints(); H.stats:SetPoint("TOPLEFT", c, "TOPLEFT", 0, -y); H.stats:SetSize(W, statsH)
+        y = y + statsH + GAP
     end
     H.notes:ClearAllPoints(); H.notes:SetPoint("TOPLEFT", c, "TOPLEFT", 2, -(y - 4))
     H.notes:SetShown(notesH > 0)
@@ -577,11 +539,11 @@ local function refresh(c)
     drawChart(LW, chartH)
     drawAttention(RIGHT_W, chartH)
     drawIncome(LW)
-    drawBest(RIGHT_W, SOURCES_H)
-    if charsH > 0 then drawChars(W, chars) end
+    drawTop(RIGHT_W, SOURCES_H, since)
+    if statsH > 0 then drawStats(W, stats) end
 end
 
-KM.RegisterPage({ id = "home", group = "home", label = "Home", icon = "Interface\\Icons\\INV_Crown_01", order = 1,
+KM.RegisterPage({ id = "home", group = "home", label = "Home", icon = "Interface\\Icons\\INV_Misc_Coin_02", order = 1,
     title = "King Maker", subtitle = function()
         return "Welcome back, " .. KM.PlayerName() .. ". Your gold at a glance."
     end, build = build, refresh = refresh })

@@ -82,9 +82,68 @@ function API.LastScan()
     return ns.db and ns.db.lastScan
 end
 
+---------------------------------------------------------------------------
+-- The neutral auction house (Gadgetzan, Booty Bay, Everlook)
+---------------------------------------------------------------------------
+
+-- A scan at a neutral auction house goes into its own book, db.neutral = { prices, lastScan, lastQuick, lastDeep }
+-- (the same shapes as the faction ones), so every value in King Maker (crafting, inventory, profit) keeps using your
+-- own side's prices. Neutral scans fire NEUTRAL_RESULTS instead of SCAN_RESULTS (Price History stays faction only)
+-- and aren't shared with the guild. ns.house is the house of the scan running (or the last one).
+ns.house = "faction"
+
+-- Called as a scan starts: which book it writes to.
+function ns.StartHouse()
+    ns.house = KM.AuctionHouse and KM.AuctionHouse() or "faction"
+    return ns.house
+end
+
+-- The book a scan writes to: db (faction) or db.neutral.
+function ns.Book(house)
+    if (house or ns.house) == "neutral" then return ns.db.neutral end
+    return ns.db
+end
+
+-- A scan's results, to the callback that matches its house.
+function ns.FireResults(results, kind, method)
+    if ns.house == "neutral" then ns.Fire("NEUTRAL_RESULTS", results, kind, method)
+    else ns.Fire("SCAN_RESULTS", results, kind, method) end
+end
+
+-- After a scan: only faction prices go to the guild.
+function ns.ShareAfterScan()
+    if ns.house ~= "neutral" and ns.SharePrices then ns.SharePrices() end
+end
+
+-- The neutral auction house's price: lowest buyout, scanned at, listed, market price (nil without one).
+function API.GetNeutralPrice(itemID)
+    local p = ns.db and ns.db.neutral.prices[itemID]
+    if p then return p.p, p.t, p.q, p.m end
+    return nil
+end
+
+function API.GetAllNeutralPrices() return ns.db and ns.db.neutral.prices or {} end
+function API.LastNeutralScan() return ns.db and ns.db.neutral.lastScan end
+
+-- Whether you've ever scanned a neutral auction house (the neutral views stay hidden until you have).
+function API.HasNeutral() return ns.db ~= nil and next(ns.db.neutral.prices) ~= nil end
+
+-- Which house the auction house you're at is: "neutral" or "faction".
+function API.AuctionHouse() return KM.AuctionHouse() end
+
+-- Neutral against faction for one item, by market price (else lowest): neutral, faction, (neutral - faction) / faction.
+function ns.Compare(id)
+    local n = ns.db.neutral.prices[id]
+    local f = ns.db.prices[id]
+    local nv = n and (n.m or n.p)
+    local fv = f and (f.m or f.p)
+    if not (nv and fv and fv > 0) then return nv, fv, nil end
+    return nv, fv, (nv - fv) / fv
+end
+
 function ns.Store(itemID, copper, quantity)
     if not (itemID and copper and copper > 0) then return false end
-    ns.db.prices[itemID] = { p = copper, t = ns.Now(), q = quantity }
+    ns.Book().prices[itemID] = { p = copper, t = ns.Now(), q = quantity }
     return true
 end
 
@@ -157,10 +216,14 @@ function ns.InitDB()
     local db = ScannerKingDB
     db.prices = db.prices or {}
     db.items = db.items or {} -- name, icon and category per item, for the price list
+    db.neutral = db.neutral or {} -- 2.18.0: the neutral auction house's own prices and scan times
+    db.neutral.prices = db.neutral.prices or {}
+    if db.house ~= "neutral" and db.house ~= "faction" then db.house = nil end -- /sk house: nil = tell by the zone
     db.ui = db.ui or {}
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     if db.ui.tooltip == nil then db.ui.tooltip = true end
     if db.ui.sources == nil then db.ui.sources = true end -- tooltip: Vendor, Drops, Used in
+    if db.ui.neutral == nil then db.ui.neutral = true end -- tooltip: the neutral auction house's price, once you have one
     db.ui.tip = db.ui.tip or {} -- tooltip rows: best crafts, craft cost, recipe items, disenchant, short
     for k, v in pairs({ crafts = false, make = true, pattern = true, de = true, short = false }) do
         if db.ui.tip[k] == nil then db.ui.tip[k] = v end
@@ -210,6 +273,24 @@ SlashCmdList.SCANNERKING = function(msg)
         else
             KM.Print(ns, "/sk tip crafts|make|pattern|de|short [on|off]")
         end
+    elseif cmd == "house" then
+        local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
+        if arg == "neutral" or arg == "faction" then ns.db.house = arg
+        elseif arg == "auto" then ns.db.house = nil end
+        KM.Print(ns, "Auction house: " .. (ns.db.house and (ns.db.house .. " (set by you; /sk house auto to tell by the zone)")
+            or ("told by the zone (here: " .. KM.AuctionHouse() .. ")")) .. ". Neutral = Gadgetzan, Booty Bay, Everlook.")
+    elseif cmd == "neutral" then
+        local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
+        if arg == "clear" then
+            wipe(ns.db.neutral.prices)
+            ns.db.neutral.lastScan, ns.db.neutral.lastQuick, ns.db.neutral.lastDeep = nil, nil, nil
+            KM.Print(ns, "Neutral auction house prices cleared.")
+            ns.Fire("PRICES_UPDATED", "neutral")
+        else
+            if arg == "on" then ns.db.ui.neutral = true elseif arg == "off" then ns.db.ui.neutral = false
+            else ns.db.ui.neutral = not ns.db.ui.neutral end
+            KM.Print(ns, "Neutral auction house prices in item tooltips " .. (ns.db.ui.neutral and "on." or "off."))
+        end
     elseif cmd == "sources" then
         local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
         if arg == "on" then ns.db.ui.sources = true elseif arg == "off" then ns.db.ui.sources = false
@@ -248,6 +329,13 @@ SlashCmdList.SCANNERKING = function(msg)
             .. ". Last quick scan: " .. (ns.db.lastQuick and API.PriceAge(ns.db.lastQuick) or "never") .. "."
             .. (wait and (wait == 0 and " Full scan ready." or (" Full scan ready in " .. math.ceil(wait / 60) .. " min.")) or "")
             .. ((s and s.t > 0) and (" Newest scan you hold: " .. (s.by or "?") .. ", " .. API.PriceAge(s.t) .. ".") or ""))
+        if API.HasNeutral() then
+            local nn = 0
+            for _ in pairs(ns.db.neutral.prices) do nn = nn + 1 end
+            local nb = ns.db.neutral
+            KM.Print(ns, "Neutral auction house: " .. nn .. " prices. Last full scan: " .. (nb.lastDeep and API.PriceAge(nb.lastDeep) or "never")
+                .. ". Last quick scan: " .. (nb.lastQuick and API.PriceAge(nb.lastQuick) or "never") .. ".")
+        end
     else
         KM.Print(ns, "/sk show   open the Prices page (or /km prices)")
         KM.Print(ns, "/sk scan   Scan (at the auction house): a full scan when the game allows one (every 15 min), else a quick scan")
@@ -258,6 +346,8 @@ SlashCmdList.SCANNERKING = function(msg)
         KM.Print(ns, "/sk sources [on|off]   vendor price, drops and recipes in item tooltips")
         KM.Print(ns, "/sk tip crafts|make|pattern|de|short [on|off]   more tooltip rows; short = details with Shift")
         KM.Print(ns, "/sk status   how many prices you have and how old")
+        KM.Print(ns, "/sk neutral [on|off|clear]   neutral auction house prices in tooltips; clear forgets them")
+        KM.Print(ns, "/sk house auto|neutral|faction   which auction house you're at (told by the zone unless you set it)")
         KM.Print(ns, "/sk sync [on|off]   share prices with your guild now, or turn sharing on/off")
         KM.Print(ns, "/sk sync pull   ask the guild for a newer scan than yours (done by itself at login)")
         KM.Print(ns, "/sk sync loot [on|off]   ask the guild for prices of what you loot")

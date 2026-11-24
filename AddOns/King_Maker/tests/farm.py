@@ -325,7 +325,6 @@ t = texts(L); assert any("Settings > Farm Tracker" in x for x in t) and "Forget 
 fk("button"); assert "/km button" in last(L)
 fk("status"); assert "mobs seen" in last(L)
 fk("help"); assert any("/fk mini" in o and "/farm" in o for o in outputs(L))
-fk("white"); assert KM.CurrentPage() == "whites"
 fk("mob 299"); assert KM.CurrentPage() == "mobs" and ns.CurrentMob() == 299
 assert not KM.errorShown, last(L)
 print("SHELL OK")
@@ -384,40 +383,10 @@ L.eval("FarmKing").ShowItem(2318); assert KM.IsShown("mobs") and ids(ns) == [113
 L.execute('SIDE("All mobs"):Click()'); assert len(ids(ns)) == 3
 print("HUNT OK")
 
-# White Items: white items with an auction price that some mob drops, by price x sqrt(spawn points)
-L.execute("""
-local now = ScannerKing.Now()
-ScannerKingDB.prices[2318] = { p = 100, m = 120, t = now, q = 50 }   -- Light Leather: wolves (2 spawns) and boars (1)
-ScannerKingDB.prices[2589] = { p = 400, t = now, q = 10 }            -- Linen Cloth: the gnoll (1 spawn)
-ScannerKingDB.prices[8000] = { p = 9000, t = now }                   -- Rare Gem: blue, not listed
-ScannerKingDB.prices[4865] = { p = 50, t = now }                     -- Ruined Pelt: grey, not listed
-ScannerKingDB.prices[5000] = { p = 50, t = now }                     -- Quest Fang: quest item, not listed
-""")
-w = sorted(ns.WhiteItems()[0].values(), key=lambda e: -e.score)
-assert [e.id for e in w] == [2589, 2318], [e.id for e in w]
-assert w[0].score == 100 and w[1].score == round(114 * 3 ** 0.5 / 380 * 100) and w[1].spawns == 3 and w[1].mobs == 2 and w[1].listed == 50
-KM.Show("whites")
-assert not KM.errorShown, last(L)
-t = texts(L); assert "BEST CHANCE" in t and any("Score: price x square root" in x for x in t) and any("Linen Cloth" in x for x in t), t
-assert [e.id for e in ns.WhiteList().values()] == [2589, 2318]
-wrow = None
-for r_ in ns.whiteTable.rows.values():
-    if r_.data and r_.data.id == 2318: wrow = r_
-assert wrow and wrow.cells.score.text == "|cffffd100" + str(w[1].score) + "|r"
-# sort by price, cheapest first after a second click
-ns.whiteTable.headers["price"].scripts.OnClick(ns.whiteTable.headers["price"])
-assert [e.id for e in ns.WhiteList().values()] == [2589, 2318]
-ns.whiteTable.headers["price"].scripts.OnClick(ns.whiteTable.headers["price"])
-assert [e.id for e in ns.WhiteList().values()] == [2318, 2589]
-# click an item: every mob that drops it, on the Mob Farming page; click a mob: its page
-for r_ in ns.whiteTable.rows.values():
-    if r_.data and r_.data.id == 2318: wrow = r_
-wrow.Click(wrow, "LeftButton")
-assert KM.CurrentPage() == "mobs" and ids(ns) == [113, 299]
-r = row(ns, "hunt", 299); r.Click(r, "LeftButton"); assert "Young Wolf" in texts(L)
-KM.Show("whites"); assert any("Score: price x square root" in x for x in texts(L))
+# 2.18.0: White Items is gone
+fk("white"); assert KM.CurrentPage() != "whites" and not KM.errorShown, last(L)
 assert L.eval("FarmKing.IsDrop(2318)") and not L.eval("FarmKing.IsDrop(12345)")
-print("WHITE OK")
+print("DROPS OK")
 
 # Moving 1.x data in from a Farm_King stub folder: the shape is kept, the old button settings go
 OLD = ("FarmKingDB = { mobs = { [299] = { k = 3, c = 90, i = { [2318] = { 1, 2 } }, z = {}, p = {}, name = 'Young Wolf' } }, "

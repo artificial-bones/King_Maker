@@ -25,7 +25,7 @@ local TABS = { { id = "summary", label = "Summary" }, { id = "sale", label = "Sa
 local DEFAULT_SORT = { sale = { "t", true }, buy = { "t", true }, expired = { "t", true }, items = { "profit", true },
     unsold = { "lost", true }, buyers = { "mails", true } }
 
-local page, tabs, periodButtons, charBtn, sideBtn, footer
+local page, tabs, periodButtons, charBtn, sideBtn, houseBtn, footer
 local summaryView, tiles, goldText, bars, stratTable
 local listView, tables = nil, {}
 local tab, strategyFilter, whoFilter = "summary", nil, nil
@@ -50,6 +50,10 @@ local function since()
 end
 
 local function onlyChar() return ns.db.ui.mine and ns.Char() or nil end
+-- The auction house picked (2.18.0): nil = all of them. Only once there's neutral auction house mail.
+local function house() return ns.HasNeutral() and ns.db.ui.house or nil end
+local HOUSE_LABEL = { faction = "Faction AH", neutral = "Neutral AH" }
+local HOUSE_NEXT = { all = "faction", faction = "neutral", neutral = nil }
 
 ---------------------------------------------------------------------------
 -- Choosing an item's strategy
@@ -110,8 +114,8 @@ local function through(r)
 end
 
 local function refreshSummary()
-    local s = ns.Summary(since(), onlyChar())
-    local bw = ns.BoughtWorth(since(), onlyChar())
+    local s = ns.Summary(since(), onlyChar(), house())
+    local bw = ns.BoughtWorth(since(), onlyChar(), house())
     local function tone(v) return v < 0 and C.bad or (v > 0 and C.good or C.text) end
     local net = s.profit + bw.worth
     local diff = bw.worth - bw.held
@@ -123,7 +127,7 @@ local function refreshSummary()
         bw.held > 0 and tone(diff) or C.text)
     tiles.sales:Set("Sales", tostring(s.sales), s.expired > 0 and (s.expired .. " expired") or nil)
     local bits = {}
-    local b = ns.Buyers(since(), onlyChar()).rows[1]
+    local b = ns.Buyers(since(), onlyChar(), nil, house()).rows[1]
     if b then
         table.insert(bits, "Best buyer: " .. b.who .. ", " .. b.mails .. " sale" .. (b.mails == 1 and "" or "s")
             .. string.format(" (%.0f%%)", b.share * 100) .. " for " .. ns.Money(b.gold))
@@ -148,7 +152,7 @@ local function refreshSummary()
     if ns.pnlBtn and ns.pnlBtn:IsShown() then goldText:SetPoint("RIGHT", ns.pnlBtn, "LEFT", -8, 0) end
 
     -- Profit per day: green up from the middle line, red down.
-    local days = ns.Daily(DAYS, onlyChar())
+    local days = ns.Daily(DAYS, onlyChar(), house())
     local top = 1
     for _, d in ipairs(days) do top = math.max(top, math.abs(d.profit)) end
     for i, d in ipairs(days) do
@@ -269,7 +273,7 @@ function ns.Sorter(page2)
 end
 
 local function build()
-    local s = ns.Summary(since(), onlyChar())
+    local s = ns.Summary(since(), onlyChar(), house())
     current = {}
     if tab == "items" then
         for _, r in ipairs(s.items) do
@@ -281,11 +285,11 @@ local function build()
             end
         end
     elseif tab == "unsold" then
-        for _, r in ipairs(ns.NotSelling(since(), onlyChar())) do
+        for _, r in ipairs(ns.NotSelling(since(), onlyChar(), house())) do
             if not strategyFilter or r.strategy == strategyFilter then table.insert(current, r) end
         end
     elseif tab == "buyers" then
-        local b = ns.Buyers(since(), onlyChar(), sellers and "buy" or "sale")
+        local b = ns.Buyers(since(), onlyChar(), sellers and "buy" or "sale", house())
         for _, r in ipairs(b.rows) do table.insert(current, r) end
         current.unknown = b.unknown
     else
@@ -321,7 +325,9 @@ function ns.ClearPL() wipe(plCache) end
 
 local function cell(e, key)
     if key == "t" then return when(e.t) end
-    if key == "name" and tab ~= "buyers" then return ns.ItemText(e.item, e.name) end
+    if key == "name" and tab ~= "buyers" then
+        return ns.ItemText(e.item, e.name) .. ((isEntries[tab] and e.h == "n" and not house()) and grey(" N") or "")
+    end
     if key == "strategy" then return (tab == "items" or tab == "unsold") and e.strategy or (ns.strategyOf[e] or "") end
     if tab == "buyers" then
         if key == "who" then return e.regular and ("|cffffd100" .. e.who .. "|r") or e.who end
@@ -464,6 +470,7 @@ local function rowEnter(r)
     if e.item and GameTooltip.SetItemByID then pcall(GameTooltip.SetItemByID, GameTooltip, e.item)
     else GameTooltip:AddLine(ns.ItemText(e.item, e.name)) end
     if tab == "unsold" then unsoldTip(e) end
+    if isEntries[tab] and e.h == "n" then GameTooltip:AddLine("Neutral auction house (15% cut)", 0.7, 0.7, 0.7) end
     if tab == "sale" then
         local x = ns.SalePL(e)
         if x then
@@ -506,6 +513,10 @@ local function refresh()
     tabs:Select(tab)
     for _, b in ipairs(periodButtons) do b:SetActive(b.days == ns.db.ui.period) end
     charBtn:SetLabel(ns.db.ui.mine and "This character" or "All characters")
+    houseBtn:SetShown(ns.HasNeutral())
+    houseBtn:SetLabel(HOUSE_LABEL[house() or ""] or "All houses")
+    sideBtn:ClearAllPoints()
+    sideBtn:SetPoint("LEFT", houseBtn:IsShown() and houseBtn or charBtn, "RIGHT", 6, 0)
     sideBtn:SetShown(tab == "buyers")
     sideBtn:SetLabel(sellers and "Sellers" or "Buyers")
     summaryView:SetShown(tab == "summary")
@@ -556,20 +567,20 @@ local function buildSummary(parent)
     tiles.net:SetTip("Where you'd stand if you sold everything you bought in this period and still hold: net cash plus what those items fetch today (market price after the 5% cut). A week of stocking up no longer reads as a loss: only a drop in price does.")
     tiles.profit:SetTip("Gold in from auction sales minus gold out on auction purchases and lost deposits. Mats you bought and haven't sold yet count against it. Gold mailed between your characters isn't counted.")
     tiles.income:SetTip(function(tt)
-        local s = ns.Summary(since(), onlyChar())
+        local s = ns.Summary(since(), onlyChar(), house())
         tt:AddLine("What your auctions sold for in this period, after the auction house's 5% cut.", 1, 1, 1, true)
         tt:AddDoubleLine("Sold for", ns.Money(s.gross), 0.8, 0.8, 0.8, 1, 1, 1)
         tt:AddDoubleLine("Auction house cut", "-" .. ns.Money(s.cut), 0.8, 0.8, 0.8, 1, 1, 1)
         tt:AddDoubleLine("Income", ns.Money(s.income), 0.8, 0.8, 0.8, 1, 1, 1)
     end)
     tiles.spent:SetTip(function(tt)
-        local s = ns.Summary(since(), onlyChar())
+        local s = ns.Summary(since(), onlyChar(), house())
         tt:AddLine("Gold you paid for auction house purchases in this period. Deposits lost on auctions that came back are counted apart.", 1, 1, 1, true)
         tt:AddDoubleLine("Purchases (" .. s.bought .. " bought)", ns.Money(s.spent), 0.8, 0.8, 0.8, 1, 1, 1)
         tt:AddDoubleLine("Deposits lost", ns.Money(s.lost), 0.8, 0.8, 0.8, 1, 1, 1)
     end)
     tiles.sales:SetTip(function(tt)
-        local s = ns.Summary(since(), onlyChar())
+        local s = ns.Summary(since(), onlyChar(), house())
         local ended = s.sales + s.expired
         tt:AddLine("Auctions that sold in this period (one mail each), and the ones that came back expired or cancelled.", 1, 1, 1, true)
         tt:AddDoubleLine("Sold", s.sales .. " (" .. s.units .. " units)", 0.8, 0.8, 0.8, 1, 1, 1)
@@ -577,7 +588,7 @@ local function buildSummary(parent)
         if ended > 0 then tt:AddDoubleLine("Sell-through", string.format("%.0f%%", s.sales / ended * 100), 0.8, 0.8, 0.8, 1, 1, 1) end
     end)
     tiles.held:SetTip(function(tt)
-        local bw = ns.BoughtWorth(since(), onlyChar())
+        local bw = ns.BoughtWorth(since(), onlyChar(), house())
         tt:AddLine("What you bought in this period and still have (counted on your characters by the Inventory module, newest purchases first), at today's market price after the cut.", 1, 1, 1, true)
         tt:AddDoubleLine("Cost of what you hold", ns.Money(bw.held), 0.8, 0.8, 0.8, 1, 1, 1)
         tt:AddDoubleLine("Worth now", ns.Money(bw.worth), 0.8, 0.8, 0.8, 1, 1, 1)
@@ -598,7 +609,7 @@ local function buildSummary(parent)
     goldText:SetPoint("LEFT", 2, 0)
     goldHolder:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        local top = ns.Buyers(since(), onlyChar()).rows
+        local top = ns.Buyers(since(), onlyChar(), nil, house()).rows
         GameTooltip:AddLine("Your best buyers")
         for i = 1, math.min(5, #top) do
             GameTooltip:AddDoubleLine(top[i].who .. "  (" .. top[i].mails .. ")", ns.Money(top[i].gold), 1, 1, 1, 1, 1, 1)
@@ -737,8 +748,20 @@ local function buildPage(c)
         ns.Refresh()
     end)
     sideBtn:SetPoint("LEFT", charBtn, "RIGHT", 6, 0)
+    -- Neutral auction house (2.18.0): every house, yours or the goblins'. Hidden until there's neutral mail.
+    houseBtn = UI.Button(c, "All houses", 100, 24, function()
+        ns.db.ui.house = HOUSE_NEXT[ns.db.ui.house or "all"]
+        for _, t in pairs(tables) do t.offset = 0 end
+        ns.Refresh()
+    end)
+    houseBtn:SetPoint("LEFT", charBtn, "RIGHT", 6, 0)
+    houseBtn:Hide()
+    UI.Tip(houseBtn, function(tt)
+        tt:AddLine("Which auction house")
+        tt:AddLine("Every auction house, only your faction's, or only the neutral ones (Gadgetzan, Booty Bay, Everlook: 15% cut). Click to switch.", 1, 1, 1, true)
+    end)
     UI.Tip(sideBtn, function(tt) tt:AddLine("Buyers or sellers"); tt:AddLine("The people who buy from you, or the people you buy from. Click to switch.", 1, 1, 1, true) end)
-    ns.charBtn, ns.sideBtn = charBtn, sideBtn
+    ns.charBtn, ns.sideBtn, ns.houseBtn = charBtn, sideBtn, houseBtn
 
     periodButtons = {}
     local prev
@@ -917,6 +940,44 @@ KM.RegisterHomeCard({ kind = "chart", id = "ledger-daily", order = 21, label = "
                 GameTooltip:AddDoubleLine("Sales after the cut", KM.Money(d.income), 0.8, 0.8, 0.8, 1, 1, 1)
             end }
     end })
+
+-- Home's numbers: how well your auctions sell, and (without Profit & Loss) auction profit and the top items.
+KM.RegisterHomeCard({ kind = "stats", id = "ledger", order = 40, get = function(since)
+    if not ns.db then return nil end
+    local s = ns.Summary(since)
+    local out = {}
+    if not pnlTracks() and (s.sales > 0 or s.spent > 0) then
+        out[#out + 1] = { order = 20, label = "Auction profit", value = (s.profit > 0 and "+" or (s.profit < 0 and "-" or "")) .. KM.MoneyShort(math.abs(s.profit), true),
+            color = s.profit > 0 and C.good or (s.profit < 0 and C.bad or C.text), sub = s.sales .. " sale" .. (s.sales == 1 and "" or "s"), page = "ledger",
+            tip = "Auction gold in minus auction gold out, last 30 days: sales after the cut, minus purchases, minus deposits lost." }
+    end
+    if s.sales + s.expired > 0 then
+        local pct = math.floor(s.sales / (s.sales + s.expired) * 100 + 0.5)
+        out[#out + 1] = { label = "Sell-through", value = pct .. "%", color = pct >= 60 and C.good or (pct < 35 and C.bad or C.warn),
+            sub = s.sales .. " sold, " .. s.expired .. " expired", page = "ledger",
+            tip = "Of the auctions that ended in the last 30 days, how many sold rather than expired or were cancelled. Low: prices too high or too many listed."
+                .. (s.lost > 0 and (" Deposits lost: " .. KM.Money(s.lost) .. ".") or "") }
+    end
+    if s.sales > 0 then
+        out[#out + 1] = { order = 70, label = "Average sale", value = KM.MoneyShort(s.income / s.sales, true),
+            sub = s.lost > 0 and (KM.MoneyShort(s.lost, true) .. " deposits lost") or (KM.MoneyShort(s.income, true) .. " in all"), page = "ledger",
+            tip = "What one auction sale brought on average after the 5% cut, last 30 days (" .. KM.Money(s.income) .. " from " .. s.sales .. " sales)." }
+    end
+    return out
+end })
+
+KM.RegisterHomeCard({ kind = "top", id = "ledger", order = 20, get = function(since)
+    if not ns.db or pnlTracks() then return nil end
+    local out = {}
+    for _, r in ipairs(ns.Summary(since).items) do
+        if r.profit > 0 and r.item then
+            out[#out + 1] = { item = r.item, value = r.profit, sub = r.units > 0 and ("x" .. r.units) or nil, page = "ledger",
+                tip = KM.Money(r.profit) .. " auction profit on " .. r.sales .. " sale" .. (r.sales == 1 and "" or "s") .. ", last 30 days. Click for the Sales Ledger." }
+            if #out >= 6 then break end
+        end
+    end
+    return out
+end })
 
 KM.RegisterSettings({ id = "mail", label = "Sales Ledger", order = 15, rows = {
     { type = "header", label = "Sales Ledger" },

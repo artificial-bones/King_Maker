@@ -388,7 +388,8 @@ assert len(quick) > 10, "they're still in the crown's menu"
 assert H.tiles[1].labelText == "Net worth" and H.tiles[1].shown, "net worth leads the hero row"
 assert H.src.empty.text.startswith("Nothing earned"), H.src.empty.text
 assert H.graph.empty.text.startswith("Your net worth over time"), H.graph.empty.text
-assert [b.label for b in H.bestItems.values()] == ["Quests"], "only the shipped quest data has a best yet"
+assert list(H.topItems.values()) == [] and H.top.empty.text.startswith("Nothing sold"), "nothing sold yet"
+assert not H.stats.shown, "nothing to count yet: no strip of zeros"
 first = H.attItems[1]
 assert first.text.startswith("No prices yet") and first.page == "prices", first.text
 L.execute("KMT.home.att.rows[1]:Click()")
@@ -469,19 +470,56 @@ for i, r in enumerate(rows, start=1):
 inc = [(r.label, r.value) for r in H.incomeRows.values()]
 assert inc[0][0] == "Farming" and inc[0][1] == 600000 and sum(v for _, v in inc) == 600000 + 190000 + 47500, inc
 assert H.src.split.segs[1].shown and H.src.bars.rows[1].label.text == "Farming" and "in 30 days" in H.src.right.text
-# best right now: the farm; the characters, richest first, with their rest and cooldowns
-assert any(b.label == "Farm" and b.value.endswith("/hr") for b in H.bestItems.values())
-chars = list(H.charsShown.values())
-assert chars[0].key == "Jay-Forever" and "g|r" in chars[0].primary.text, chars[0].primary.text
-assert any(f.text == "1 cd ready" for f in chars[0].facts.values())
-old = [c for c in chars if c.key == "Old Timer-Forever"][0]
-assert any(f.text == "full rest" for f in old.facts.values())
+# 2.18.0: no Best right now or Characters; the numbers, 30 days, in their place
+stats = {st.label: st for st in H.statsShown.values()}
+assert H.stats.shown and list(stats)[0] == "Net worth change", list(stats)
+nw = stats["Net worth change"]
+assert nw.value[0] in "+-" and "%" in nw.sub and "14 Oct" in nw.tip and nw.page == "inventory", (nw.value, nw.sub)
+assert stats["Sell-through"].value == "50%" and stats["Sell-through"].sub == "2 sold, 2 expired", stats["Sell-through"].sub
+# Profit & Loss is on (its journal has no sales here), so the cash Auction profit steps aside; the rest by importance
+assert list(stats) == ["Net worth change", "Sell-through", "Farming", "Average sale"], list(stats)
+assert stats["Farming"].value.endswith("/hr") and stats["Farming"].page == "farming"
+cell = H.stats.cells[1]
+assert cell.label.text == "NET WORTH CHANGE" and cell.main.text == nw.value
+L.execute("KMT.home.stats.cells[1]:Click()"); assert KM.CurrentPage() == "inventory", "a number opens its page"
+KM.Show("home")
+# top items: without Profit & Loss tracking, the Sales Ledger's best auction earners
+L.execute("MailKingDB.entries[1].item = 2589; MailKingDB.entries[2].item = 2770; KMT.realTracking = ProfitKing.IsTracking; ProfitKing.IsTracking = function() return false end")
+KM.Show("prices"); KM.Show("home")
+top = list(H.topItems.values())
+assert [t.item for t in top] == [2589, 2770] and top[0].value == 190000 and top[0].sub == "x20", [(t.item, t.value) for t in top]
+assert H.top.rows[1].shown and H.top.rows[1].value.text and H.top.empty.text == ""
+assert "Auction profit" in [st.label for st in H.statsShown.values()], "without P&L the cash profit shows"
+L.execute("ProfitKing.IsTracking = KMT.realTracking")
 assert "A note from another addon." in H.notes.text
 # the page stays inside the container: the last card ends above its bottom
-bottom = max(-c.point[4] + c.h for c in (H.chart, H.src, H.chars))
+bottom = max(-c.point[4] + c.h for c in (H.chart, H.src, H.top, H.stats))
 assert bottom <= 557, bottom
 assert not KM.errorShown, last(L)
 print("HOME OK")
+
+# UI.Table: ties keep their order (table.sort isn't stable), and the wheel at either end changes nothing (2.18.0:
+# rows with the same sale time or no price swapped on every redraw, so the list looked like it kept scrolling)
+L.execute("""
+local UI = KingMaker.UI
+TT = UI.Table(UIParent, { { key = "k", label = "K", w = 0, sort = function(r) return r.k end } }, 20, {})
+TT:SetSize(300, 20 + 5 * 20)
+TT:SetSort("k", true)
+local rows = {}
+for i = 1, 40 do rows[i] = { id = i, k = (i <= 20) and 5 or nil } end
+TT:SetRows(rows, function(r, row, cells) cells.k:SetText(tostring(row.id)) end)
+function TT_IDS() local t = {} for i, r in ipairs(TT.data) do t[i] = r.id end return table.concat(t, ",") end
+""")
+before = L.eval("TT_IDS()")
+for _ in range(5): L.execute("TT.scripts.OnMouseWheel(TT, 1)")      # up, at the top
+assert L.eval("TT.offset") == 0 and L.eval("TT_IDS()") == before, "scrolling up at the top changes nothing"
+for _ in range(30): L.execute("TT.scripts.OnMouseWheel(TT, -1)")    # down, past the bottom
+off = L.eval("TT.offset"); assert off == 40 - L.eval("TT.visible"), off
+L.execute("TT.scripts.OnMouseWheel(TT, -1)")
+assert L.eval("TT.offset") == off and L.eval("TT_IDS()") == before, "and down at the bottom too"
+L.execute("TT:Redraw(); TT:Redraw()")
+assert L.eval("TT_IDS()") == before, "redraws keep tied rows where they were"
+print("TABLE SCROLL OK")
 
 # --- version check: guildmates tell each other their King Maker version ------------------------------------------
 L, KM = fresh(only=[], seed="IN_GUILD = true")

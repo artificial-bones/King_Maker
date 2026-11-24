@@ -86,7 +86,7 @@ end
 local function results()
     local r = {}
     for id in pairs(seen) do
-        local pr = ns.db.prices[id]
+        local pr = ns.Book().prices[id]
         if pr then r[id] = { p = pr.p, q = pr.q } end
     end
     return r
@@ -95,15 +95,16 @@ end
 local function finish()
     if not scanning then return end
     scanning, phase, current = false, nil, nil
-    if pages > 0 then ns.db.lastScan = ns.Now() end
-    ns.db.lastQuick = ns.Now()
+    local book = ns.Book()
+    if pages > 0 then book.lastScan = ns.Now() end
+    book.lastQuick = ns.Now()
     resetButton()
     progress("Scan done: " .. found .. " prices")
-    KM.Print(ns, "Scan done: " .. found .. " items priced.")
-    ns.Fire("SCAN_RESULTS", results(), kind)
+    KM.Print(ns, "Scan done: " .. found .. " items priced" .. (ns.house == "neutral" and " (neutral auction house)." or "."))
+    ns.FireResults(results(), kind)
     ns.Fire("SCAN_FINISHED", found)
-    ns.Fire("PRICES_UPDATED")
-    if found > 0 and ns.SharePrices then ns.SharePrices() end
+    ns.Fire("PRICES_UPDATED", ns.house)
+    if found > 0 then ns.ShareAfterScan() end
 end
 
 local function stop(reason)
@@ -111,11 +112,11 @@ local function stop(reason)
     scanning, phase, current = false, nil, nil
     resetButton()
     KM.Print(ns, reason)
-    if found > 0 then ns.Fire("SCAN_RESULTS", results(), kind) end
+    if found > 0 then ns.FireResults(results(), kind) end
     ns.Fire("SCAN_FINISHED", found)
     if found > 0 then
-        ns.Fire("PRICES_UPDATED")
-        if ns.SharePrices then ns.SharePrices() end
+        ns.Fire("PRICES_UPDATED", ns.house)
+        ns.ShareAfterScan()
     end
 end
 
@@ -295,6 +296,7 @@ function API.Scan(opts)
         return
     end
     kind = type(opts) == "table" and opts.kind or "material"
+    ns.StartHouse()
     if not scanButton and ns.ahParent and buttons[ns.ahParent] then scanButton = buttons[ns.ahParent].scan end
     scanning, found, seen, pages, phase = true, 0, {}, 0, nil
     scanList = ns.WatchedItems()
@@ -331,11 +333,13 @@ end
 -- The resting label of the Scan buttons: what a click does right now.
 function ns.ScanCaption()
     local mode = ns.ScanMode()
-    if mode == "full" then return "Full scan" end
+    local neutral = mode and KM.IsNeutralAH()
+    if mode == "full" then return neutral and "Neutral full scan" or "Full scan" end
     local wait = ns.FullScanWait and ns.FullScanWait()
     if mode == "quick" and wait and wait > 0 and modernAH() then
-        return "Quick (full in " .. math.max(1, math.ceil(wait / 60)) .. "m)"
+        return (neutral and "Neutral quick (" or "Quick (full in ") .. math.max(1, math.ceil(wait / 60)) .. "m)"
     end
+    if neutral then return "Neutral quick scan" end
     return mode and "Quick scan" or "Scan"
 end
 
@@ -399,8 +403,13 @@ function ns.ScanTooltip(tt)
         end
         tt:AddLine("Quick scan: " .. table.concat(parts, ", ") .. ". Lowest prices only.", 1, 1, 1, true)
     end
-    local db = ns.db
-    tt:AddLine("Last full scan: " .. (db.lastDeep and API.PriceAge(db.lastDeep) or "never")
+    local neutral = mode and KM.IsNeutralAH()
+    if neutral then
+        tt:AddLine("This is a neutral auction house (Gadgetzan, Booty Bay, Everlook). Its prices go into a list of their own: "
+            .. "see them on the Prices page under Neutral. Crafting, Inventory and Profit & Loss keep using your faction's prices.", 0.55, 0.8, 1, true)
+    end
+    local db = neutral and ns.db.neutral or ns.db
+    tt:AddLine((neutral and "Neutral: last full scan " or "Last full scan: ") .. (db.lastDeep and API.PriceAge(db.lastDeep) or "never")
         .. ".  Last quick scan: " .. (db.lastQuick and API.PriceAge(db.lastQuick) or "never") .. ".", 0.7, 0.7, 0.7, true)
 end
 

@@ -3,7 +3,7 @@ local ns = KM.Module("Farm")
 local UI = KM.UI
 local C = UI.C
 
--- The Mob Farming page of the King Maker window (Farming > Mob Farming). White Items is its own page (White.lua).
+-- The Mob Farming page of the King Maker window (Farming > Mob Farming).
 --   Top:    what to price in (grey to epic drops, coin, guild data) and how many kills a mob needs before it's
 --           ranked; then the search box (Mobs or Items), "near my level" and the farm tracker toggle.
 --   Left:   Best farms, Favorites, Recent kills, Tracked, This zone, All mobs, then every zone.
@@ -375,7 +375,6 @@ end
 
 function ns.Refresh()
     KM.Refresh("mobs")
-    KM.Refresh("whites")
 end
 
 function ns.ShowList()
@@ -617,6 +616,6 @@ KM.RegisterSettings({ id = "farm", label = "Farm", order = 40, rows = {
     { type = "header", label = "Farm tracker" },
     { type = "text", label = "The farm tracker is King Maker's Farm Tracker now, for mobs and gathering alike, with every session saved to the Farming Ledger: Settings > Farm Tracker, or /farm." },
     { type = "header", label = "Commands" },
-    { type = "text", label = "/fk   open Mob Farming\n/fk white   White Items\n/fk mini on|off   the Farm Tracker (also /farm)\n"
+    { type = "text", label = "/fk   open Mob Farming\n/fk mini on|off   the Farm Tracker (also /farm)\n"
         .. "/fk share on|off   answer guildmates' requests\n/fk forget guild   drop guildmates' data\n/fk status   what's been recorded" },
 } })

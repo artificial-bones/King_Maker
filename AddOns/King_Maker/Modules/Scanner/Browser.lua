@@ -13,6 +13,11 @@ local C = UI.C
 --   left       categories (wheel scrolls them when a Deep Scan brings more than fit)
 --   right      the list: item, market price, lowest buyout, listed, scanned
 --
+-- The neutral auction house (2.18.0): once you've scanned one (or while you stand at one), Faction AH / Neutral AH
+-- buttons appear by the search box. Neutral shows its own prices against your faction's: a Faction and a Diff column,
+-- and tiles (and sidebar entries) for what's cheaper there to bring home and what pays more there even after its 15%
+-- cut. Players who never use a neutral auction house see the page exactly as before.
+--
 -- Also here: the crown's quick actions, tooltip line, status line, the Home tile and the Settings section.
 
 local CAT_W, CAT_H, CAT_ROWS = 150, 22, 18
@@ -21,6 +26,21 @@ local TILE_W, TILE_H = 182, 60
 local page
 local category, catOffset = "All", 0
 local list = {}
+local house = "faction" -- which auction house's prices the page shows
+local BUY, SELL = "Buy on neutral", "Sell on neutral" -- the neutral view's deal filters (sidebar and tiles)
+local FACTION_CUT, NEUTRAL_CUT = 0.95, 0.85
+
+local function prices() return ns.Book(house).prices end
+local function neutralShown() return API.HasNeutral() or (ns.AHOpen and ns.AHOpen() and KM.IsNeutralAH()) end
+
+-- Is it a deal across the houses? "buy": cheaper on neutral than what it sells for at home after the 5% cut;
+-- "sell": pays more on neutral after its 15% cut than at home after 5%.
+local function deal(nv, fv)
+    if not (nv and fv) then return nil end
+    if fv * FACTION_CUT > nv then return BUY end
+    if nv * NEUTRAL_CUT > fv * FACTION_CUT then return SELL end
+    return nil
+end
 
 ---------------------------------------------------------------------------
 -- Item info: name, icon and category, cached so the list works offline too
@@ -50,19 +70,20 @@ local function info(id)
     return c
 end
 
-local function count()
+local function count(h)
     local n = 0
-    for _ in pairs(ns.db.prices) do n = n + 1 end
+    for _ in pairs(ns.Book(h or house).prices) do n = n + 1 end
     return n
 end
 
 local function categories()
     local seen, cats = {}, {}
-    for id in pairs(ns.db.prices) do
+    for id in pairs(prices()) do
         local cat = info(id).cat or "Other"
         if not seen[cat] then seen[cat] = true; table.insert(cats, cat) end
     end
     table.sort(cats)
+    if house == "neutral" then table.insert(cats, 1, SELL); table.insert(cats, 1, BUY) end
     table.insert(cats, 1, "All")
     return cats
 end
@@ -73,17 +94,24 @@ local SORT = {
     price = function(e) return e.p end,
     qty = function(e) return e.q end,
     age = function(e) return e.t end,
+    faction = function(e) return e.f end,
+    diff = function(e) return e.diff end,
 }
 
 local function build(text, sortBy, sortDesc)
     wipe(list)
     text = (text or ""):lower()
-    for id, pr in pairs(ns.db.prices) do
+    local neutral = house == "neutral"
+    for id, pr in pairs(prices()) do
         local i = info(id)
         local name = i.name or ("Item " .. id)
-        if (category == "All" or (i.cat or "Other") == category)
-            and (text == "" or name:lower():find(text, 1, true)) then
-            table.insert(list, { id = id, name = name, icon = i.icon, p = pr.p, m = pr.m, q = pr.q, t = pr.t, from = pr.from })
+        local nv, fv, diff
+        if neutral then nv, fv, diff = ns.Compare(id) end
+        local inCat = category == "All" or (i.cat or "Other") == category
+        if neutral and (category == BUY or category == SELL) then inCat = deal(nv, fv) == category end
+        if inCat and (text == "" or name:lower():find(text, 1, true)) then
+            table.insert(list, { id = id, name = name, icon = i.icon, p = pr.p, m = pr.m, q = pr.q, t = pr.t, from = pr.from,
+                f = fv, diff = diff })
         end
     end
     local get = SORT[sortBy] or SORT.price
@@ -119,7 +147,39 @@ function ns.PricesKnownTip(tt)
     tt:AddDoubleLine("Scanned by a guildmate", KM.Commas(guild), 0.8, 0.8, 0.8, 1, 1, 1)
 end
 
+local function refreshNeutralTiles(c)
+    local nb = ns.db.neutral
+    c.tiles[1]:Set("Neutral prices", KM.Commas(count("neutral")), nb.lastQuick and ("quick scan " .. API.PriceAge(nb.lastQuick)) or "no quick scan yet")
+    c.tiles[2]:Set("Last neutral full scan", nb.lastDeep and API.PriceAge(nb.lastDeep) or "never",
+        nb.lastDeep and "market prices from it" or "full scan at Gadgetzan, Booty Bay or Everlook", nb.lastDeep and C.text or C.dim)
+    local buy, sell = 0, 0
+    for id in pairs(nb.prices) do
+        local nv, fv = ns.Compare(id)
+        local d = deal(nv, fv)
+        if d == BUY then buy = buy + 1 elseif d == SELL then sell = sell + 1 end
+    end
+    c.tiles[3]:Set(BUY, KM.Commas(buy), "cheaper than at home, after the cut", buy > 0 and C.good or C.dim)
+    c.tiles[4]:Set(SELL, KM.Commas(sell), "pay more there, even after 15%", sell > 0 and C.accent or C.dim)
+end
+
+local TIPS = {
+    faction = {
+        function(tt) ns.PricesKnownTip(tt) end,
+        "When you last ran a full scan: it downloads every auction and is the only scan that gives market prices. The game allows one every 15 minutes. Yellow once it's over a day old.",
+        "Items with a market price: the average of the cheapest 15-30% listed, so one cheap or silly listing doesn't move it. Only a full scan (yours or a guildmate's) works one out; a quick scan finds the lowest buyout only.",
+        "When on, the Trade Goods and watched-item prices you scan go to guildmates running King Maker after each scan, and theirs come to you; for each item the newest price wins. Change it in Settings > Scanner.",
+    },
+    neutral = {
+        "Items you've priced at a neutral auction house (Gadgetzan, Booty Bay, Everlook). They're kept apart from your faction's: crafting, Inventory and Profit & Loss never use them, and they aren't shared with the guild.",
+        "When you last ran a full scan at a neutral auction house. Scan there as you would at home; the game's 15-minute wait for a full scan is shared with your faction's.",
+        "Items cheaper on the neutral auction house than they sell for at your faction's after its 5% cut: buy there, bring them home, sell. Click to list them.",
+        "Items that sell for more on the neutral auction house even after its 15% cut than at home after 5%. Click to list them. Its deposits are higher too.",
+    },
+}
+
 local function refreshTiles(c)
+    for i, t in ipairs(c.tiles) do t:SetTip(TIPS[house][i]) end
+    if house == "neutral" then return refreshNeutralTiles(c) end
     local n = count()
     local quick = ns.db.lastQuick
     c.tiles[1]:Set("Prices known", KM.Commas(n), quick and ("quick scan " .. API.PriceAge(quick)) or "no quick scan yet")
@@ -135,6 +195,14 @@ local function refreshTiles(c)
         or (s.t > 0 and ("newest scan: " .. (KM.IsMe(s.by) and "yours" or (s.by or "?")) .. ", " .. API.PriceAge(s.t)))
         or "newest price wins"
     c.tiles[4]:Set("Guild sharing", ns.db.sync.guild and "On" or "Off", sub, ns.db.sync.guild and C.text or C.dim)
+end
+
+-- The Diff cell: neutral against faction, green when it's cheaper there.
+local function diffText(diff)
+    if not diff then return "|cff808080-|r" end
+    local pct = math.floor(diff * 100 + 0.5)
+    local col = pct < 0 and C.good or (pct > 0 and C.warn or C.muted)
+    return UI.Hex(col) .. (pct > 0 and "+" or "") .. pct .. "%|r"
 end
 
 local function refreshCategories(c)
@@ -165,24 +233,43 @@ local function fillRow(r, e, cells)
     cells.price:SetText(API.FormatMoney(e.p))
     cells.qty:SetText(e.q and KM.Commas(e.q) or "")
     cells.age:SetText(UI.Hex(C.muted) .. API.PriceAge(e.t) .. (e.from and (" (" .. e.from .. ")") or "") .. "|r")
+    if cells.faction then
+        cells.faction:SetText(e.f and API.FormatMoney(e.f) or "|cff808080-|r")
+        cells.diff:SetText(diffText(e.diff))
+    end
 end
 
+local function shownTable(c) return house == "neutral" and c.ntable or c.table end
+
 local function footerText(c)
-    local tbl, total = c.table, count()
+    local tbl, total = shownTable(c), count()
     local shown = math.min(#list, tbl.visible or #list)
+    local book = ns.Book(house)
     c.footer:SetText((#list > 0 and ((tbl.offset + 1) .. "-" .. (tbl.offset + shown) .. " of " .. #list) or "No items")
         .. (#list ~= total and (" (" .. total .. " in all)") or "")
-        .. ".  Last full scan: " .. scanAge(ns.db.lastDeep) .. ".  Last quick scan: " .. scanAge(ns.db.lastQuick) .. ".")
+        .. (house == "neutral" and ".  Neutral: last full scan " or ".  Last full scan: ") .. scanAge(book.lastDeep)
+        .. ".  Last quick scan: " .. scanAge(book.lastQuick) .. ".")
 end
 
 local function refresh(c)
     if not ns.db then return end
+    local showHouses = neutralShown()
+    if not showHouses then house = "faction" end
+    c.houseFaction:SetShown(showHouses)
+    c.houseNeutral:SetShown(showHouses)
+    c.houseFaction:SetActive(house == "faction")
+    c.houseNeutral:SetActive(house == "neutral")
+    c.table:SetShown(house ~= "neutral")
+    c.ntable:SetShown(house == "neutral")
+    local tbl = shownTable(c)
     refreshTiles(c)
     refreshCategories(c)
-    build(c.search:GetText(), c.table.sortKey, c.table.sortDesc)
-    c.table.emptyText = count() == 0 and "No prices yet. Open the auction house and click Scan."
+    build(c.search:GetText(), tbl.sortKey, tbl.sortDesc)
+    tbl.emptyText = count() == 0 and (house == "neutral" and "No neutral prices yet. Scan at the auction house in Gadgetzan, Booty Bay or Everlook."
+        or "No prices yet. Open the auction house and click Scan.")
+        or (category == BUY or category == SELL) and "Nothing here: scan both auction houses to compare them."
         or "Nothing matches. Names load as you browse; try again in a moment."
-    c.table:SetRows(list, fillRow)
+    tbl:SetRows(list, fillRow)
     local at = ns.AHOpen and ns.AHOpen()
     c.scan:SetEnabled2(at and not API.IsScanning())
     ns.RefreshScanCaption(c.scan)
@@ -197,16 +284,38 @@ local function buildPage(c)
         t:SetPoint("TOPLEFT", (i - 1) * (TILE_W + 10), 0)
         c.tiles[i] = t
     end
-    c.tiles[1]:SetTip(function(tt) ns.PricesKnownTip(tt) end)
-    c.tiles[2]:SetTip("When you last ran a full scan: it downloads every auction and is the only scan that gives market prices. The game allows one every 15 minutes. Yellow once it's over a day old.")
-    c.tiles[3]:SetTip("Items with a market price: the average of the cheapest 15-30% listed, so one cheap or silly listing doesn't move it. Only a full scan (yours or a guildmate's) works one out; a quick scan finds the lowest buyout only.")
-    c.tiles[4]:SetTip("When on, the Trade Goods and watched-item prices you scan go to guildmates running King Maker after each scan, and theirs come to you; for each item the newest price wins. Change it in Settings > Scanner.")
+    for i, t in ipairs(c.tiles) do t:SetTip(TIPS.faction[i]) end
+    -- On the neutral view, Buy on neutral and Sell on neutral list those items.
+    for i, cat in pairs({ [3] = BUY, [4] = SELL }) do
+        c.tiles[i]:SetScript("OnMouseUp", function()
+            if house ~= "neutral" then return end
+            category = category == cat and "All" or cat
+            shownTable(c).offset = 0
+            refresh(c)
+        end)
+    end
 
     -- Toolbar: search left, scans right.
     c.search = UI.EditBox(c, 240, 24, "Search prices", function()
         if c.table then c.table.offset = 0; refresh(c) end
     end)
     c.search:SetPoint("TOPLEFT", 0, -(TILE_H + 12))
+    -- Faction AH / Neutral AH: only once there are neutral prices (or you're at a neutral auction house).
+    local function pick(h)
+        if house == h then return end
+        house, category, catOffset = h, "All", 0
+        refresh(c)
+    end
+    c.houseFaction = UI.Button(c, "Faction AH", 92, 24, function() pick("faction") end, "ghost")
+    c.houseFaction:SetPoint("LEFT", c.search, "RIGHT", 12, 0)
+    UI.Tip(c.houseFaction, function(tt) tt:AddLine("Faction AH"); tt:AddLine("Your own side's auction house: the prices King Maker values everything with.", 1, 1, 1, true) end)
+    c.houseNeutral = UI.Button(c, "Neutral AH", 92, 24, function() pick("neutral") end, "ghost")
+    c.houseNeutral:SetPoint("LEFT", c.houseFaction, "RIGHT", 4, 0)
+    UI.Tip(c.houseNeutral, function(tt)
+        tt:AddLine("Neutral AH")
+        tt:AddLine("Gadgetzan, Booty Bay and Everlook: open to both factions, with a 15% cut. Its prices against yours, "
+            .. "and what's worth carrying from one to the other. Scanning there fills it.", 1, 1, 1, true)
+    end)
     c.scan = UI.Button(c, "Scan", 150, 24, function() API.SmartScan(); refresh(c) end, "primary")
     c.scan:SetPoint("TOPRIGHT", 0, -(TILE_H + 12))
     UI.Tip(c.scan, function(tt) ns.ScanTooltip(tt) end)
@@ -256,6 +365,29 @@ local function buildPage(c)
     c.table.fill = fillRow
     c.table.onRedraw = function() footerText(c) end
 
+    -- The neutral list: its prices, then your faction's and the difference.
+    local ncols = {
+        { key = "name", label = "Item", w = 176, sort = SORT.name, desc = false },
+        { key = "market", label = "Market", w = 92, justify = "RIGHT", sort = SORT.market,
+          tip = "The neutral auction house's market price, from a full scan there." },
+        { key = "price", label = "Lowest", w = 92, justify = "RIGHT", sort = SORT.price,
+          tip = "The cheapest buyout on the neutral auction house, each." },
+        { key = "faction", label = "Faction", w = 92, justify = "RIGHT", sort = SORT.faction,
+          tip = "Your own auction house's price (market, else lowest), for comparison." },
+        { key = "diff", label = "Diff", w = 54, justify = "RIGHT", sort = SORT.diff,
+          tip = "Neutral against faction. Green: cheaper on neutral. Remember the cuts: 15% when you sell on neutral, 5% at home." },
+        { key = "qty", label = "Listed", w = 54, justify = "RIGHT", sort = SORT.qty,
+          tip = "How many were for sale on the neutral auction house." },
+        { key = "age", label = "Scanned", w = 0, sort = SORT.age, tip = "How old the neutral price is." },
+    }
+    c.ntable = UI.Table(c, ncols, 22, { icon = true, noSort = true, onSort = function() refresh(c) end })
+    c.ntable:SetPoint("TOPLEFT", side, "TOPRIGHT", 12, 0)
+    c.ntable:SetPoint("BOTTOMRIGHT", 0, 22)
+    c.ntable:SetSort("diff", false)
+    c.ntable.fill = fillRow
+    c.ntable.onRedraw = function() footerText(c) end
+    c.ntable:Hide()
+
     c.footer = UI.Text(c, 10, C.muted)
     c.footer:SetPoint("BOTTOMLEFT", side, "BOTTOMRIGHT", 12, -16)
     c.footer:SetPoint("RIGHT", c, "RIGHT", 0, 0)
@@ -273,10 +405,11 @@ ns.PricesPage = function() return page end
 ns.PriceList = function() return list end
 
 KM.RegisterPage({
-    id = "prices", group = "ah", label = "Prices", icon = "Interface\\Icons\\INV_Misc_Coin_02", order = 10,
+    id = "prices", group = "ah", label = "Prices", icon = "Interface\\Icons\\INV_Misc_Note_01", order = 10,
     title = "Prices",
     subtitle = function()
         if API.IsScanning() then return "Scanning the auction house..." end
+        if house == "neutral" then return "The neutral auction house's prices against your faction's. Its cut is 15%." end
         return "Every auction price you or your guild have scanned. Market prices come from full scans."
     end,
     build = buildPage, refresh = refresh,
@@ -327,6 +460,11 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
       get = function() return ns.db.ui.tip.de end, set = function(v) ns.db.ui.tip.de = v end },
     { type = "check", label = "Short tooltip: details with Shift", tip = "Only the verdict, the price and how many you own; hold Shift for everything else.",
       get = function() return ns.db.ui.tip.short end, set = function(v) ns.db.ui.tip.short = v end },
+    { type = "header", label = "Neutral auction house" },
+    { type = "check", label = "Neutral prices in item tooltips", tip = "Once you've scanned the auction house in Gadgetzan, Booty Bay or Everlook: a Neutral AH line with its price and how it compares with your faction's. Nothing shows until you have.",
+      get = function() return ns.db.ui.neutral end, set = function(v) ns.db.ui.neutral = v end },
+    { type = "button", label = "Forget neutral prices", tip = "Clears every price from the neutral auction house. Your faction's prices stay.",
+      func = function() SlashCmdList.SCANNERKING("neutral clear") end },
     { type = "header", label = "Guild" },
     { type = "check", label = "Share prices with my guild", tip = "Your Trade Goods prices go to guildmates running King Maker after each scan; theirs come to you, and when you log in a guildmate online who holds a newer scan catches you up. The newest price wins.",
       get = function() return ns.db.sync.guild end, set = function(v) ns.db.sync.guild = v end },
@@ -342,6 +480,7 @@ KM.RegisterSettings({ id = "scanner", label = "Scanner", order = 10, rows = {
     { type = "text", label = "/sk   open the Prices page\n/sk scan   Scan (at the auction house): full when the game allows it, else quick\n"
         .. "/sk deep   force a full scan (progress window)\n/sk material   force a quick scan of Trade Goods and watched items\n"
         .. "/sk market   the same plus Crafting Profits' ticked professions\n/sk tooltip on|off   prices in tooltips\n/sk sources on|off   vendor, drops and recipes in tooltips\n/sk tip crafts|make|pattern|de|short   more tooltip rows\n"
+        .. "/sk neutral on|off|clear   neutral prices in tooltips; forget them\n/sk house auto|neutral|faction   which auction house you're at\n"
         .. "/sk sync [on|off]   share now, or turn sharing on/off\n/sk sync pull   ask for a newer scan\n/sk sync loot on|off   ask for prices of what you loot\n/sk sync full on|off   share every item of full scans\n/sk status   how many prices and how old" },
 } })
 
@@ -363,5 +502,12 @@ end })
 
 local f = CreateFrame("Frame")
 KM.Register(f, "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED")
-f:SetScript("OnEvent", function() C_Timer.After(0.5, function() KM.Refresh() end) end)
+f:SetScript("OnEvent", function(_, event)
+    -- At an auction house, the page shows that house's prices.
+    if event == "AUCTION_HOUSE_SHOW" and ns.db then
+        local h = KM.AuctionHouse()
+        if h ~= house then house, category, catOffset = h, "All", 0 end
+    end
+    C_Timer.After(0.5, function() KM.Refresh() end)
+end)
 

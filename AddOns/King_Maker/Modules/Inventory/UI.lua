@@ -365,7 +365,7 @@ local function fillItem(r, e, cells)
         cells.value:SetText(grey("no price"))
     else
         cells.each:SetText((e.src == "vendor" and (GREY .. "(v)|r ") or "") .. money(e.each))
-        cells.value:SetText(money(e.value))
+        cells.value:SetText(KM.MoneyShort(e.value)) -- the last column: compact, so big stacks fit
     end
     if short then
         local p = pnl(e)
@@ -495,7 +495,10 @@ local function itemTip(r)
         local bits = {}
         for _, p in ipairs(ns.PLACES) do
             local n = e.where[c[1]][p]
-            if n then table.insert(bits, (p == "ah" and "on AH" or ns.PLACE_NAMES[p]:lower()) .. " " .. n) end
+            if n then
+                local nn = p == "ah" and ns.NeutralAH(c[1], e.item) or 0
+                table.insert(bits, (p == "ah" and "on AH" or ns.PLACE_NAMES[p]:lower()) .. " " .. n .. (nn > 0 and (" (" .. nn .. " neutral)") or ""))
+            end
         end
         GameTooltip:AddDoubleLine(ns.CharText(c[1]) .. "  " .. c[2], table.concat(bits, ", "), 1, 1, 1, 0.8, 0.8, 0.8)
     end
@@ -583,21 +586,21 @@ local function buildItems(parent)
         col("ah", "On AH", 46, "Your auctions still up, as of when you last looked."),
         col("total", "Total", 44),
         col("chars", "Chars", 40, "How many characters hold it. Hover an item for who."),
-        col("each", "Each", 88, "The Scanner module's price: market or lowest buyout, as picked under Valued at. (v): a vendor price, as the auction house has none."),
+        col("each", "Each", 76, "The Scanner module's price: market or lowest buyout, as picked under Valued at. (v): a vendor price, as the auction house has none."),
         col("value", "Worth", 0, "Total x Each, at full price (no auction house cut taken off)."),
     }
     local withPnL = ProfitKing and ProfitKing.Basis and true or false
     if withPnL then
         -- 2.8: what they cost you and what selling them would make, from Profit & Loss (Chars moves to the tooltip)
         cols = {
-            col("name", "Item", 126),
-            col("bags", "Bags", 36),
-            col("bank", "Bank", 36, "As of when each bank was last opened (and the warband bank)."),
-            col("mail", "Mail", 34, "Attached to mail in the mailbox."),
-            col("ah", "On AH", 42, "Your auctions still up, as of when you last looked."),
-            col("total", "Total", 40),
-            col("each", "Each", 66, "The Scanner module's price: market or lowest buyout, as picked under Valued at. (v): a vendor price, as the auction house has none."),
-            col("avgCost", "Avg cost", 66, "Profit & Loss: what the units you hold cost you, on average (by the method you chose there)."),
+            col("name", "Item", 112),
+            col("bags", "Bags", 34),
+            col("bank", "Bank", 34, "As of when each bank was last opened (and the warband bank)."),
+            col("mail", "Mail", 32, "Attached to mail in the mailbox."),
+            col("ah", "On AH", 40, "Your auctions still up, as of when you last looked."),
+            col("total", "Total", 38),
+            col("each", "Each", 62, "The Scanner module's price: market or lowest buyout, as picked under Valued at. (v): a vendor price, as the auction house has none."),
+            col("avgCost", "Avg cost", 62, "Profit & Loss: what the units you hold cost you, on average (by the method you chose there)."),
             col("ifSold", "If sold", 70, "Profit & Loss: what these units would make if you sold them now, after the 5% cut, minus what they cost. Units with no lot (untraced) are left out."),
             col("value", "Worth", 0, "Total x Each, at full price (no auction house cut taken off)."),
         }
@@ -847,17 +850,21 @@ KM.RegisterHomeCard({ kind = "chart", id = "networth", order = 10, label = "Net 
             end }
     end })
 
--- Home's character strip: each character's gold (on them and in the mailbox) and what their items are worth.
-KM.RegisterHomeCard({ kind = "chars", id = "inventory", order = 10, get = function()
+-- Home's numbers: how much net worth changed over the period (from the first day recorded in it).
+KM.RegisterHomeCard({ kind = "stats", id = "networth", order = 10, get = function(since)
     if not ns.db then return nil end
-    local out = {}
-    for _, c in ipairs(ns.Characters()) do
-        if c.who ~= ns.WARBAND then
-            out[c.who] = { primary = true, text = KM.MoneyShort(c.gold + c.mail), worth = c.worth, class = c.class, level = c.level,
-                tip = "Gold " .. KM.Money(c.gold + c.mail) .. ", items " .. KM.Money(c.assets) .. ", net worth " .. KM.Money(c.worth) .. "." }
-        end
-    end
-    return out
+    local days = math.max(1, math.floor((KM.Now() - since) / 86400 + 0.5))
+    local first
+    for _, p in ipairs(ns.Series(days + 1)) do if p.known then first = p; break end end
+    if not first or first.day >= math.floor(KM.Now() / 86400) then return nil end -- needs a day before today
+    local now = ns.NetWorth().total
+    local d = now - first.total
+    local pct = first.total > 0 and math.floor(d / first.total * 100 + 0.5) or nil
+    return { { label = "Net worth change", value = (d > 0 and "+" or (d < 0 and "-" or "")) .. KM.MoneyShort(math.abs(d), true),
+        color = d > 0 and C.good or (d < 0 and C.bad or C.text),
+        sub = (pct and ((pct > 0 and "+" or "") .. pct .. "%, ") or "") .. "now " .. KM.MoneyShort(now, true), page = "inventory",
+        tip = "Your net worth now against " .. (date and date("%d %b", first.day * 86400) or "the first day recorded") .. " ("
+            .. KM.Money(first.total) .. "): gold on every character and in mailboxes, plus what their items are worth. Click for Inventory." } }
 end })
 
 KM.RegisterSettings({ id = "inventory", label = "Inventory", order = 30, rows = function()

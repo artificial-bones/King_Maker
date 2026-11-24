@@ -78,10 +78,15 @@ end
 -- Rows for one profession id, or every selected profession when profID is nil,
 -- most profitable first. Returns rows and how many are above the red line.
 -- opts.recipes: "mine" only recipes you have, "missing" only patterns you don't.
+-- opts.search: only items whose name has this text in it (any case, plain text, not a pattern).
 function ns.Rank(profID, mode, opts)
     local rows = {}
+    local q = opts and opts.search
+    q = q and q:match("^%s*(.-)%s*$"):lower()
+    if q == "" then q = nil end
     for _, r in ipairs(ns.Recipes()) do
-        if (profID and r.prof == profID) or (not profID and ns.Selected(r.prof)) then
+        if ((profID and r.prof == profID) or (not profID and ns.Selected(r.prof)))
+            and (not q or ns.ItemName(r.item):lower():find(q, 1, true)) then
             local row = ns.Evaluate(r, mode, opts)
             local which = opts and opts.recipes
             local keep = (which == "mine" and row.has) or (which == "missing" and not row.has) or (which ~= "mine" and which ~= "missing")

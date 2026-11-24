@@ -233,6 +233,31 @@ function ns.Selected(profID)
     return ns.db.profs[profID] == true
 end
 
+function ns.AllSelected()
+    for _, p in ipairs(ns.PROFESSIONS) do if not ns.db.profs[p.id] then return false end end
+    return true
+end
+
+-- Every profession picked (the default, and where the page's All tab goes back to).
+function ns.SelectAll()
+    for _, p in ipairs(ns.PROFESSIONS) do ns.db.profs[p.id] = true end
+end
+
+-- A profession tab clicked (2.18.0): with all of them picked, it picks just that one; after that each click turns
+-- that profession on or off. Turning the last one off goes back to all, so the list is never empty.
+function ns.ClickProf(profID)
+    local profs = ns.db.profs
+    if ns.AllSelected() then
+        for k in pairs(profs) do profs[k] = nil end
+        profs[profID] = true
+    elseif profs[profID] then
+        profs[profID] = nil
+        if not next(profs) then ns.SelectAll() end
+    else
+        profs[profID] = true
+    end
+end
+
 -- Every item a scan for these professions ({ [profID] = true }) needs a price for.
 function ns.ItemsToScan(profs)
     profs = profs or ns.db.profs
@@ -271,7 +296,11 @@ function ns.InitDB()
         if ns.RECIPES and ns.SameRecipe(ns.RECIPES[spell], l) then db.learned[spell] = nil end
     end
     db.chars = db.chars or {}          -- per character: recipes known, and your own have/don't-have marks
-    db.recipes = db.recipes or "all"   -- show "all" recipes, only "mine", or only patterns "missing"
+    db.recipes = db.recipes or "all"   -- show "all" recipes (unlearned greyed out) or only "mine" (Hide unlearned)
+    if db.recipes == "missing" then db.recipes = "all" end -- 2.18.0 dropped "Patterns I lack": all, greyed out
+    if not next(db.profs) then                            -- 2.18.0: every profession by default, never none
+        for _, p in ipairs(ns.PROFESSIONS) do db.profs[p.id] = true end
+    end
     db.ui = db.ui or {}
     db.ui.button, db.ui.buttonAngle = nil, nil -- 1.x minimap button: the King Maker crown replaces it
     ns.db = db
@@ -324,7 +353,7 @@ SlashCmdList.MARKETKING = function(msg)
             ns.Char().owned = {}
             KM.Print(ns, "Cleared your have/don't-have marks; back to what your trade skill windows show.")
         else
-            ns.db.recipes = (rest == "all" or rest == "mine" or rest == "missing") and rest or "all"
+            ns.db.recipes = (rest == "mine" or rest == "hide") and "mine" or "all"
         end
         ns.Refresh()
     elseif cmd == "button" then
@@ -333,6 +362,6 @@ SlashCmdList.MARKETKING = function(msg)
         KM.Print(ns, "/mk   open Crafting Profits (or /km crafting)")
         KM.Print(ns, "/mk scan   Scan at the auction house: prices the professions ticked on Crafting Profits")
         KM.Print(ns, "/mk mode [buy|mine]   Buy mats (the materials are a cost) or Use my mats (you already have them)")
-        KM.Print(ns, "/mk recipes [all|mine|missing]   which recipes to show; /mk recipes reset clears your marks")
+        KM.Print(ns, "/mk recipes [all|mine]   show every recipe, or hide unlearned ones; /mk recipes reset clears your marks")
     end
 end

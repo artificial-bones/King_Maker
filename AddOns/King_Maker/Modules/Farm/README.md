@@ -11,7 +11,6 @@ times what it sells for, priced by King Maker's **Scanner** (Scanner King).
 | What | Where |
 |---|---|
 | The mob list and a mob's page | King Maker window, **Farming > Mob Farming** (`/fk`, `/km mobs`) |
-| White Items | **Farming > White Items** (`/fk white`) |
 | The farm tracker | King Maker's **Farm Tracker**: the crown's **Farm Tracker** quick action, the button on Mob Farming, `/farm` or `/fk mini` |
 | Mobs in your zone | Right-click the King Maker crown: **This zone's mobs** |
 | Settings | **Settings > Farm**: guild sharing, Min kills, near my level (the tracker's are under **Settings > Farm Tracker**) |
@@ -103,25 +102,6 @@ item you're looking at.
   dot for its name and value) and **Ask guild**.
 - **< Back** returns to the list; the arrows step through it.
 
-## White Items
-
-The **White Items** page (Farming > White Items, or `/fk white`) helps you find
-white items worth hunting. It lists every white item that the Scanner has an
-auction price for and that some mob is known to drop, with:
-
-- **Price**: what one sells for at the auction house, after the 5% cut,
-- **Listed**: how many are up for sale (lots listed means competition),
-- **Mobs** and **Spawns**: how many mobs drop it and their spawn points
-  together (QuestieDB's, or the spots you've seen them),
-- **Best chance**: the best drop chance from your and your guild's kills,
-- **Score**: price times the square root of spawn points, with the best item
-  at 100. Plenty of mobs to farm counts, but a cheap drop can't win on numbers
-  alone.
-
-Click a column to sort by it. Click an item for every mob that drops it
-(highest level first, on Mob Farming), and a mob for its page. A Deep Scan
-prices every item, so run one first.
-
 ## Farm tracker
 
 Since King Maker 2.6 the farm tracker box is King Maker's **Farm Tracker**: one
@@ -157,7 +137,6 @@ Drop data is shared on request, so it costs nothing until someone asks:
 | Command | What it does |
 |---|---|
 | `/fk` | Open or close Mob Farming |
-| `/fk white` | Open White Items |
 | `/fk mob <npcID>` | Open a mob's page |
 | `/fk status` | What's been recorded, and whether QuestieDB was found |
 | `/fk share on` / `off` | Answer guildmates' requests for your drop data |

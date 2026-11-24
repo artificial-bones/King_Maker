@@ -782,18 +782,21 @@ function ns.Sources(since, charKey, pool)
     return out
 end
 
--- Per item in the period: { item, sold (units), realized, sales } merged with what you hold.
+-- Per item in the period: { item, sold (units), realized, sales, proceeds (everything the sales brought), matchedQ
+-- (units a lot covered), basis, heldAvg (seconds, over the covered units) } merged with what you hold.
 function ns.ByItem(since, charKey, pool)
     pool = pool or ns.MyPool()
     local by = {}
     local function row(id)
         local r = by[id]
-        if not r then r = { item = id, sold = 0, sales = 0 }; by[id] = r end
+        if not r then r = { item = id, sold = 0, sales = 0, proceeds = 0, matchedQ = 0, secs = 0 }; by[id] = r end
         return r
     end
     for _, x in ipairs(ns.Trades(since, charKey, pool)) do
         local r = row(x.item)
         r.sold, r.sales = r.sold + x.q, r.sales + 1
+        r.proceeds = r.proceeds + (x.proceeds or 0)
+        r.matchedQ, r.secs = r.matchedQ + (x.matchedQ or 0), r.secs + (x.secs or 0)
         if x.pl then r.realized = (r.realized or 0) + x.pl; r.basis = (r.basis or 0) + x.basis end
     end
     for _, h in ipairs(ns.Holdings(pool, charKey)) do
@@ -804,6 +807,9 @@ function ns.ByItem(since, charKey, pool)
     local out = {}
     for _, r in pairs(by) do
         r.roi = (r.realized and (r.basis or 0) > 0) and r.realized / r.basis or nil
+        r.avgPrice = r.sold > 0 and r.proceeds / r.sold or nil
+        r.avgCost = r.matchedQ > 0 and (r.basis or 0) / r.matchedQ or nil
+        r.heldAvg = r.matchedQ > 0 and r.secs > 0 and r.secs / r.matchedQ or nil
         if r.sold > 0 or (r.hold or 0) > 0 then out[#out + 1] = r end
     end
     table.sort(out, function(a, b)
